@@ -1,0 +1,284 @@
+{
+  "name": "testform",
+  "displayName": "Testform",
+  "description": "Declarative Test-as-Code orchestration for Git: Gherkin IntelliSense, variables autoload, native Test Explorer, state management, and quality gates.",
+  "version": "0.1.0",
+  "publisher": "fromeroc9",
+  "license": "GPL-3.0-or-later",
+  "author": "Flavio Romero <flavio.arc9@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fromeroc9/testform-vscode.git"
+  },
+  "icon": "assets/logo.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "Programming Languages",
+    "Linters",
+    "Formatters",
+    "Snippets"
+  ],
+  "keywords": [
+    "testform",
+    "test-as-code",
+    "gherkin",
+    "bdd",
+    "testing",
+    "terraform",
+    "qa",
+    "test-management"
+  ],
+  "main": "./dist/client.js",
+  "activationEvents": [
+    "onLanguage:gherkin",
+    "onLanguage:testform-gherkin",
+    "workspaceContains:**/main.yml",
+    "workspaceContains:**/main.yaml",
+    "workspaceContains:**/testform.yml",
+    "workspaceContains:**/testform.yaml",
+    "workspaceContains:**/*.case.feature",
+    "workspaceContains:**/*.run.feature",
+    "workspaceContains:**/*.plan.feature"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "testform-gherkin",
+        "aliases": [
+          "Testform Gherkin",
+          "testform"
+        ],
+        "extensions": [
+          ".case.feature",
+          ".run.feature",
+          ".plan.feature"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "testform-gherkin",
+        "scopeName": "source.feature.testform",
+        "path": "./syntaxes/testform-gherkin.tmLanguage.json"
+      },
+      {
+        "scopeName": "testform.injection",
+        "path": "./syntaxes/testform-injection.tmLanguage.json",
+        "injectTo": [
+          "text.gherkin.feature",
+          "source.feature"
+        ]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "testform-gherkin",
+        "path": "./snippets/gherkin.json"
+      },
+      {
+        "language": "gherkin",
+        "path": "./snippets/gherkin.json"
+      },
+      {
+        "language": "yaml",
+        "path": "./snippets/yaml.json"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": [
+          "main.yml",
+          "main.yaml",
+          "testform.yml",
+          "testform.yaml"
+        ],
+        "url": "./schemas/testform.schema.json"
+      },
+      {
+        "fileMatch": [
+          "variables.yml",
+          "variables.yaml",
+          "vars.yml",
+          "vars.yaml",
+          "*.vars.yml",
+          "*.vars.yaml"
+        ],
+        "url": "./schemas/variables.schema.json"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "testform-sidebar",
+          "title": "Testform",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "testform-sidebar": [
+        {
+          "id": "testform.views.state",
+          "name": "State Explorer",
+          "icon": "$(database)"
+        },
+        {
+          "id": "testform.views.modules",
+          "name": "Modules & .testform",
+          "icon": "$(package)"
+        },
+        {
+          "id": "testform.views.reports",
+          "name": "Reports & Analytics",
+          "icon": "$(graph)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "testform.init",
+        "title": "Testform: Initialize Workspace (init)",
+        "category": "Testform",
+        "icon": "$(repo-clone)"
+      },
+      {
+        "command": "testform.validate",
+        "title": "Testform: Validate Configuration & Scopes",
+        "category": "Testform",
+        "icon": "$(check)"
+      },
+      {
+        "command": "testform.plan",
+        "title": "Testform: Speculative Plan (plan)",
+        "category": "Testform",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "testform.apply",
+        "title": "Testform: Apply Changes (apply)",
+        "category": "Testform",
+        "icon": "$(play)"
+      },
+      {
+        "command": "testform.diff",
+        "title": "Testform: Show State Drift (diff)",
+        "category": "Testform",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "testform.report",
+        "title": "Testform: Generate Report",
+        "category": "Testform",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "testform.state.refresh",
+        "title": "Testform: Refresh State Explorer",
+        "category": "Testform",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "testform.modules.update",
+        "title": "Testform: Update Modules (init -upgrade)",
+        "category": "Testform",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "testform.format",
+        "title": "Testform: Format Document",
+        "category": "Testform"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "testform.state.refresh",
+          "when": "view == testform.views.state",
+          "group": "navigation"
+        },
+        {
+          "command": "testform.report",
+          "when": "view == testform.views.reports",
+          "group": "navigation"
+        },
+        {
+          "command": "testform.modules.update",
+          "when": "view == testform.views.modules",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "testform.plan",
+          "when": "resourceExtname == .feature",
+          "group": "testform@1"
+        },
+        {
+          "command": "testform.apply",
+          "when": "resourceExtname == .feature",
+          "group": "testform@2"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Testform",
+      "properties": {
+        "testform.executablePath": {
+          "type": "string",
+          "default": "testform",
+          "description": "Path to the testform executable binary. Defaults to globally installed 'testform'."
+        },
+        "testform.format.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Testform Gherkin formatter as the default formatter for .feature files."
+        },
+        "testform.diagnostics.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable real-time syntax and variable resolution diagnostics."
+        },
+        "testform.testController.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable native VS Code Test Controller integration (Test Explorer tree and gutter run icons)."
+        },
+        "testform.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the Testform Language Server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.19",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.3"
+  }
+}

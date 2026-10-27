@@ -1,0 +1,62 @@
+{
+  "Testform TestCase": {
+    "prefix": "tf-testcase",
+    "body": [
+      "@testcase",
+      "Feature: ${1:Feature Name}",
+      "",
+      "  @${2:tc-1} @smoke",
+      "  Scenario: ${3:Scenario Title}",
+      "    Given ${4:the user is on \"\\${var.app_url}\"}",
+      "    When ${5:the user performs an action}",
+      "    Then ${6:the system responds successfully}"
+    ],
+    "description": "Create a standard Testform Testcase scenario"
+  },
+  "Testform TestRun": {
+    "prefix": "tf-testrun",
+    "body": [
+      "@testrun",
+      "Feature: ${1:Execution Run}",
+      "",
+      "  @${2:tr-1}",
+      "  Scenario: ${3:Run Suite}",
+      "    * mark status = ${4|unexecuted,passed,failed,skipped,blocked|}",
+      "    Given execute target \"@${5:tc-1}\""
+    ],
+    "description": "Create a Testform Testrun scenario"
+  },
+  "Testform TestPlan": {
+    "prefix": "tf-testplan",
+    "body": [
+      "@testplan",
+      "Feature: ${1:Master Test Plan}",
+      "",
+      "  @${2:tp-1}",
+      "  Scenario: ${3:Quality Gate Acceptance}",
+      "    Given include testrun \"@${4:tr-1}\""
+    ],
+    "description": "Create a Testform Testplan scenario"
+  },
+  "Testform Mark Status": {
+    "prefix": "tf-mark",
+    "body": [
+      "* mark status = ${1|passed,failed,skipped,blocked,unexecuted|}"
+    ],
+    "description": "Insert Testform DSL execution status marker"
+  },
+  "Testform Variable Reference": {
+    "prefix": "tf-var",
+    "body": [
+      "\\${var.${1:variable_name}}"
+    ],
+    "description": "Insert Testform variable interpolation marker"
+  },
+  "Testform Local Reference": {
+    "prefix": "tf-local",
+    "body": [
+      "\\${local.${1:local_name}}"
+    ],
+    "description": "Insert Testform local interpolation marker"
+  }
+}

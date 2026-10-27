@@ -1,0 +1,177 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Testform Gherkin",
+  "scopeName": "source.feature.testform",
+  "patterns": [
+    {
+      "name": "comment.line.number-sign.gherkin",
+      "match": "#.*$"
+    },
+    {
+      "include": "#expressions"
+    },
+    {
+      "include": "#dsl-status"
+    },
+    {
+      "include": "#tags"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#steps"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#tables"
+    },
+    {
+      "include": "#docstrings"
+    }
+  ],
+  "repository": {
+    "expressions": {
+      "patterns": [
+        {
+          "name": "meta.interpolation.testform",
+          "match": "\\$\\{([^}]+)\\}",
+          "captures": {
+            "0": { "name": "punctuation.definition.template-expression.begin.testform" },
+            "1": {
+              "patterns": [
+                {
+                  "name": "variable.other.testform.var",
+                  "match": "\\bvar\\.[a-zA-Z0-9_]+"
+                },
+                {
+                  "name": "variable.other.testform.local",
+                  "match": "\\blocal\\.[a-zA-Z0-9_]+"
+                },
+                {
+                  "name": "variable.other.testform.data",
+                  "match": "\\bdata\\.[a-zA-Z0-9_]+(\\.[a-zA-Z0-9_]+)*"
+                },
+                {
+                  "name": "variable.other.testform.env",
+                  "match": "\\benv\\.[a-zA-Z0-9_]+"
+                },
+                {
+                  "name": "support.function.testform",
+                  "match": "\\b(lower|upper|trim|replace|split|join|length|coalesce|default|jsonencode|jsondecode|abs|min|max)\\b"
+                },
+                {
+                  "name": "string.quoted.double.testform",
+                  "match": "\"[^\"]*\""
+                },
+                {
+                  "name": "constant.numeric.testform",
+                  "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+                },
+                {
+                  "name": "constant.language.boolean.testform",
+                  "match": "\\b(true|false)\\b"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "tags": {
+      "patterns": [
+        {
+          "name": "entity.name.tag.scope.testform",
+          "match": "@(testcase|testrun|testplan)\\b"
+        },
+        {
+          "name": "entity.name.tag.identity.testform",
+          "match": "@(tc|tr|tp)-[0-9a-zA-Z_-]+"
+        },
+        {
+          "name": "entity.name.tag.directive.testform",
+          "match": "@(module|depends_on|target)\\b"
+        },
+        {
+          "name": "entity.name.tag.gherkin",
+          "match": "@[a-zA-Z0-9_-]+"
+        }
+      ]
+    },
+    "dsl-status": {
+      "patterns": [
+        {
+          "match": "(^\\s*(?:\\*\\s*)?mark\\s+status\\s*=\\s*)(passed|failed|skipped|blocked|unexecuted)\\b",
+          "captures": {
+            "1": { "name": "keyword.other.testform.mark" },
+            "2": { "name": "constant.language.status.testform" }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.feature.gherkin",
+          "match": "^\\s*(Feature|Rule|Background|Scenario Outline|Scenario|Examples?)\\s*:"
+        }
+      ]
+    },
+    "steps": {
+      "patterns": [
+        {
+          "name": "keyword.control.step.gherkin",
+          "match": "^\\s*(Given|When|Then|And|But|\\*)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.gherkin",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "include": "#expressions"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.gherkin",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "include": "#expressions"
+            }
+          ]
+        }
+      ]
+    },
+    "tables": {
+      "patterns": [
+        {
+          "name": "keyword.operator.table.gherkin",
+          "match": "\\|"
+        }
+      ]
+    },
+    "docstrings": {
+      "patterns": [
+        {
+          "name": "string.quoted.triple.gherkin",
+          "begin": "^\\s*(\"\"\"|```)",
+          "end": "^\\s*(\"\"\"|```)",
+          "patterns": [
+            {
+              "include": "#expressions"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

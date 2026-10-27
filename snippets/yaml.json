@@ -1,0 +1,42 @@
+{
+  "Testform Manifest (main.yml)": {
+    "prefix": "tf-main",
+    "body": [
+      "testform:",
+      "  required_version: \">= 1.0.0\"",
+      "  backend:",
+      "    local:",
+      "      path: \"testform.state\"",
+      "",
+      "provider:",
+      "  local: {}",
+      "",
+      "variable:",
+      "  ${1:app_url}:",
+      "    type: string",
+      "    default: \"${2:https://example.com}\"",
+      "",
+      "local:",
+      "  ${3:base_url}: \"\\${var.${1:app_url}}\"",
+      "",
+      "scopes:",
+      "  testcase:",
+      "    match: \"*.case.feature\"",
+      "  testrun:",
+      "    match: \"*.run.feature\"",
+      "  testplan:",
+      "    match: \"*.plan.feature\""
+    ],
+    "description": "Scaffold a complete Testform root main.yml manifest"
+  },
+  "Testform Variable Block": {
+    "prefix": "tf-var-block",
+    "body": [
+      "${1:var_name}:",
+      "  type: ${2|string,number,boolean,list,map|}",
+      "  description: \"${3:Description}\"",
+      "  default: \"${4:value}\""
+    ],
+    "description": "Insert a Testform variable declaration block"
+  }
+}

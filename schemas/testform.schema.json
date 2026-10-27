@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Testform Configuration Manifest",
+  "description": "Configuration schema for Testform declarative Test-as-Code root manifests (main.yml, testform.yml)",
+  "type": "object",
+  "properties": {
+    "testform": {
+      "type": "object",
+      "description": "Testform core engine configuration",
+      "properties": {
+        "required_version": {
+          "type": "string",
+          "description": "Version constraint string (e.g. >= 1.0.0)"
+        },
+        "backend": {
+          "type": "object",
+          "description": "State storage backend configuration",
+          "properties": {
+            "local": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "default": "testform.state",
+                  "description": "Relative path to local state ledger file"
+                }
+              }
+            },
+            "s3": {
+              "type": "object",
+              "properties": {
+                "bucket": { "type": "string" },
+                "key": { "type": "string" },
+                "region": { "type": "string" },
+                "dynamodb_table": { "type": "string" }
+              },
+              "required": ["bucket", "key"]
+            },
+            "gcs": {
+              "type": "object",
+              "properties": {
+                "bucket": { "type": "string" },
+                "prefix": { "type": "string" }
+              },
+              "required": ["bucket"]
+            },
+            "azurerm": {
+              "type": "object",
+              "properties": {
+                "storage_account_name": { "type": "string" },
+                "container_name": { "type": "string" },
+                "key": { "type": "string" }
+              },
+              "required": ["storage_account_name", "container_name", "key"]
+            },
+            "http": {
+              "type": "object",
+              "properties": {
+                "address": { "type": "string" }
+              },
+              "required": ["address"]
+            }
+          }
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "description": "Configured execution or sync providers",
+      "properties": {
+        "local": {
+          "type": "object",
+          "description": "Local offline provider"
+        },
+        "github": {
+          "type": "object",
+          "description": "GitHub Projects & Issues provider",
+          "properties": {
+            "owner": { "type": "string" },
+            "repo": { "type": "string" },
+            "project_number": { "type": "integer" }
+          }
+        },
+        "gitlab": {
+          "type": "object",
+          "description": "GitLab Issues provider"
+        }
+      }
+    },
+    "variable": {
+      "type": "object",
+      "description": "Input variable declarations",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["string", "number", "boolean", "list", "map"]
+          },
+          "description": { "type": "string" },
+          "default": {},
+          "enum": {
+            "type": "array"
+          },
+          "validation": {
+            "type": "object",
+            "properties": {
+              "condition": { "type": "string" },
+              "error_message": { "type": "string" }
+            },
+            "required": ["condition", "error_message"]
+          }
+        }
+      }
+    },
+    "local": {
+      "type": "object",
+      "description": "Local computed values evaluated within expressions",
+      "additionalProperties": {}
+    },
+    "locals": {
+      "type": "object",
+      "description": "Local computed values evaluated within expressions",
+      "additionalProperties": {}
+    },
+    "scopes": {
+      "type": "object",
+      "description": "Scope matching patterns for feature file classification",
+      "properties": {
+        "testcase": {
+          "type": "object",
+          "properties": {
+            "match": { "type": "string", "default": "*.case.feature" }
+          }
+        },
+        "testrun": {
+          "type": "object",
+          "properties": {
+            "match": { "type": "string", "default": "*.run.feature" }
+          }
+        },
+        "testplan": {
+          "type": "object",
+          "properties": {
+            "match": { "type": "string", "default": "*.plan.feature" }
+          }
+        }
+      }
+    },
+    "data": {
+      "type": "object",
+      "description": "Data source declarations"
+    },
+    "modules": {
+      "type": "object",
+      "description": "Reusable testform modules"
+    }
+  }
+}

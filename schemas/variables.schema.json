@@ -1,0 +1,7 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Testform Variables Schema",
+  "description": "Schema for variables.yml, vars.yml, and *.vars.yml files",
+  "type": "object",
+  "additionalProperties": true
+}
