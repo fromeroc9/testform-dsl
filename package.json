@@ -34,7 +34,6 @@
   "main": "./dist/client.js",
   "activationEvents": [
     "onLanguage:gherkin",
-    "onLanguage:testform-gherkin",
     "workspaceContains:**/main.yml",
     "workspaceContains:**/main.yaml",
     "workspaceContains:**/testform.yml",
