@@ -40,6 +40,7 @@
     "workspaceContains:**/*.case.feature",
     "workspaceContains:**/*.run.feature",
     "workspaceContains:**/*.plan.feature",
+    "onView:testform.views.specs",
     "onView:testform.views.state",
     "onView:testform.views.modules",
     "onView:testform.views.reports"
@@ -90,13 +91,6 @@
           "light": "./assets/cucumber.svg",
           "dark": "./assets/cucumber.svg"
         }
-      }
-    ],
-    "iconThemes": [
-      {
-        "id": "testform-icons",
-        "label": "Testform Icons",
-        "path": "./icons/icon-theme.json"
       }
     ],
     "grammars": [
@@ -207,6 +201,11 @@
     "views": {
       "testform-sidebar": [
         {
+          "id": "testform.views.specs",
+          "name": "Test Cases, Runs & Plans",
+          "icon": "$(list-tree)"
+        },
+        {
           "id": "testform.views.state",
           "name": "State Explorer",
           "icon": "$(database)"
@@ -308,6 +307,18 @@
         "icon": "$(json)"
       },
       {
+        "command": "testform.state.showResource",
+        "title": "Testform: Show Resource CLI Details",
+        "category": "Testform",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "testform.specs.refresh",
+        "title": "Testform: Refresh Test Specs",
+        "category": "Testform",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "testform.state.taint",
         "title": "Taint Resource",
         "category": "Testform",
@@ -358,6 +369,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "testform.specs.refresh",
+          "when": "view == testform.views.specs",
+          "group": "navigation@1"
+        },
         {
           "command": "testform.state.refresh",
           "when": "view == testform.views.state",

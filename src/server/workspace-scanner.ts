@@ -93,13 +93,33 @@ export class WorkspaceScanner {
                 if (!fObj) return;
                 if (Array.isArray(fObj)) {
                   for (const f of fObj) {
-                    if (typeof f === 'string') this.customFields.set(f.toLowerCase(), { name: f });
-                    else if (f && typeof f === 'object' && f.name) this.customFields.set(f.name.toLowerCase(), f);
+                    if (typeof f === 'string') {
+                      this.customFields.set(f.toLowerCase(), { name: f });
+                    } else if (f && typeof f === 'object' && f.name) {
+                      const rawEnum = f.enum ?? f.values ?? f.options;
+                      const enumArr = Array.isArray(rawEnum) ? rawEnum.map(String) : undefined;
+                      this.customFields.set(f.name.toLowerCase(), {
+                        name: f.name,
+                        source: f.source,
+                        required: !!f.required,
+                        default: f.default,
+                        enum: enumArr
+                      });
+                    }
                   }
                 } else if (typeof fObj === 'object') {
                   for (const [k, v] of Object.entries(fObj)) {
                     if (typeof v === 'object' && v !== null) {
-                      this.customFields.set(k.toLowerCase(), { name: k, ...(v as any) });
+                      const vo = v as any;
+                      const rawEnum = vo.enum ?? vo.values ?? vo.options;
+                      const enumArr = Array.isArray(rawEnum) ? rawEnum.map(String) : undefined;
+                      this.customFields.set(k.toLowerCase(), {
+                        name: vo.name ?? k,
+                        source: vo.source,
+                        required: !!vo.required,
+                        default: vo.default,
+                        enum: enumArr
+                      });
                     } else {
                       this.customFields.set(k.toLowerCase(), { name: k });
                     }
@@ -107,11 +127,31 @@ export class WorkspaceScanner {
                 }
               };
 
+              extractFields(parsed.fields);
               extractFields(resBlock.fields);
               extractFields(resBlock.global?.fields);
               extractFields(resBlock.testcase?.fields);
               extractFields(resBlock.testrun?.fields);
               extractFields(resBlock.testplan?.fields);
+            } else if (parsed.fields) {
+              const extractFields = (fObj: any) => {
+                if (!fObj || typeof fObj !== 'object') return;
+                for (const [k, v] of Object.entries(fObj)) {
+                  if (typeof v === 'object' && v !== null) {
+                    const vo = v as any;
+                    const rawEnum = vo.enum ?? vo.values ?? vo.options;
+                    const enumArr = Array.isArray(rawEnum) ? rawEnum.map(String) : undefined;
+                    this.customFields.set(k.toLowerCase(), {
+                      name: vo.name ?? k,
+                      source: vo.source,
+                      required: !!vo.required,
+                      default: vo.default,
+                      enum: enumArr
+                    });
+                  }
+                }
+              };
+              extractFields(parsed.fields);
             }
           }
         } catch {

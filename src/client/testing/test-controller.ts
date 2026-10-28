@@ -499,39 +499,34 @@ export class TestformTestController implements vscode.Disposable {
         const statusOptions: StatusOption[] = [
           {
             label: '$(pass-filled) passed',
-            description: 'PASSED',
-            detail: 'El escenario se ejecutó con éxito y todas las aserciones pasaron.',
+            detail: 'Scenario executed successfully and all assertions passed.',
             status: 'passed'
           },
           {
             label: '$(error) failed',
-            description: 'FAILED',
-            detail: 'Fallo de aserción o defecto detectado en la prueba.',
+            detail: 'Assertion failure or execution error detected.',
             status: 'failed'
           },
           {
             label: '$(stop) blocked',
-            description: 'BLOCKED',
-            detail: 'Ejecución bloqueada por un fallo en una dependencia previa.',
+            detail: 'Execution blocked due to a preceding dependency failure.',
             status: 'blocked'
           },
           {
             label: '$(debug-step-over) skipped',
-            description: 'SKIPPED',
-            detail: 'Ejecución omitida deliberadamente.',
+            detail: 'Execution skipped deliberately.',
             status: 'skipped'
           },
           {
             label: '$(history) pending',
-            description: 'PENDING',
-            detail: 'Escenario pendiente de ejecución o en desarrollo.',
+            detail: 'Scenario pending execution or currently in development.',
             status: 'pending'
           }
         ];
 
         const selected = await vscode.window.showQuickPick(statusOptions, {
-          placeHolder: `Selecciona el resultado de ejecución para: ${item.label}`,
-          title: `Testform: Registrar Estado del Escenario`
+          placeHolder: `Select execution status for: ${item.label}`,
+          title: `Testform: Record Execution Status`
         });
 
         if (!selected) {
@@ -559,7 +554,7 @@ export class TestformTestController implements vscode.Disposable {
         if (chosenStatus === 'passed') {
           run.passed(item);
         } else if (chosenStatus === 'failed') {
-          run.failed(item, new vscode.TestMessage(`Escenario marcado como fallido (failed) por el usuario.`));
+          run.failed(item, new vscode.TestMessage(`Scenario marked as failed by user.`));
         } else if (chosenStatus === 'skipped' || chosenStatus === 'blocked') {
           run.skipped(item);
         } else {
@@ -571,24 +566,21 @@ export class TestformTestController implements vscode.Disposable {
 
         const featureOptions: vscode.QuickPickItem[] = [
           {
-            label: '$(play) Ejecutar apply con estados actuales',
-            description: 'testform apply --auto-approve',
-            detail: 'Reconcilia el ledger respetando los estados (* mark status) ya definidos en el archivo.'
+            label: '$(play) Apply current state',
+            detail: 'Reconcile state ledger preserving existing marks (* mark status) defined in file.'
           },
           {
-            label: '$(pass-filled) Marcar todos como PASSED y aplicar',
-            description: 'mark all passed',
-            detail: 'Establece todos los escenarios de esta suite como passed y ejecuta apply.'
+            label: '$(pass-filled) Mark all as passed and apply',
+            detail: 'Set all scenarios in this suite to passed and run apply.'
           },
           {
-            label: '$(history) Resetear todos a PENDING y aplicar',
-            description: 'mark all pending',
-            detail: 'Reinicia todos los escenarios a pending y ejecuta apply.'
+            label: '$(history) Reset all to pending and apply',
+            detail: 'Reset all scenarios in this suite to pending and run apply.'
           }
         ];
 
         const featChoice = await vscode.window.showQuickPick(featureOptions, {
-          placeHolder: `Selecciona la acción para la suite: ${item.label}`,
+          placeHolder: `Select execution mode for suite: ${item.label}`,
           title: `Testform Suite: ${item.label}`
         });
 
@@ -597,9 +589,9 @@ export class TestformTestController implements vscode.Disposable {
           continue;
         }
 
-        if (featChoice.description === 'mark all passed') {
+        if (featChoice.label.includes('passed')) {
           await this.updateAllScenarioMarksInDocument(uri, 'passed');
-        } else if (featChoice.description === 'mark all pending') {
+        } else if (featChoice.label.includes('pending')) {
           await this.updateAllScenarioMarksInDocument(uri, 'pending');
         }
 
@@ -620,7 +612,7 @@ export class TestformTestController implements vscode.Disposable {
                 run.passed(child);
               } else if (status === 'failed') {
                 hasFailures = true;
-                run.failed(child, new vscode.TestMessage('Testcase fallido en el ledger de Testform.'));
+                run.failed(child, new vscode.TestMessage('Testcase failed in Testform run ledger.'));
               } else if (status === 'skipped' || status === 'blocked') {
                 run.skipped(child);
               } else {
@@ -635,7 +627,7 @@ export class TestformTestController implements vscode.Disposable {
         reportChildren(item);
 
         if (hasFailures) {
-          run.failed(item, new vscode.TestMessage('Uno o más escenarios en la suite fallaron.'));
+          run.failed(item, new vscode.TestMessage('One or more scenarios in the suite failed.'));
         } else {
           run.passed(item);
         }

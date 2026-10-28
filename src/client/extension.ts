@@ -8,6 +8,7 @@ import {
   TransportKind
 } from 'vscode-languageclient/node';
 import { runTestformCommand } from './terminal';
+import { SpecsTreeProvider } from './views/specs-view';
 import { StateTreeProvider } from './views/state-view';
 import { ModulesTreeProvider } from './views/modules-view';
 import { ReportsTreeProvider } from './views/reports-view';
@@ -88,6 +89,10 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(manifestWatcher);
 
   // 3. Tree Views
+  const specsProvider = new SpecsTreeProvider();
+  vscode.window.registerTreeDataProvider('testform.views.specs', specsProvider);
+  context.subscriptions.push(specsProvider);
+
   const stateProvider = new StateTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.state', stateProvider);
 
@@ -375,6 +380,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('testform.modules.update', () => {
       runTestformCommand('init');
       modulesProvider.refresh();
+    }),
+    vscode.commands.registerCommand('testform.specs.refresh', () => {
+      specsProvider.refresh();
+      vscode.window.showInformationMessage('Test Specs view refreshed.');
     }),
     vscode.commands.registerCommand('testform.modules.refresh', () => {
       modulesProvider.refresh();

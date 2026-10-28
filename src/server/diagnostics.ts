@@ -186,5 +186,81 @@ export function validateTextDocument(
     }
   }
 
+  // 6. Validate DSL Field: * field <name> = <value>
+  const requiredFields = [...scanner.customFields.values()].filter(f => f.required);
+  let currentScenarioLine = -1;
+  let currentScenarioFields = new Set<string>();
+
+  const checkRequiredFields = () => {
+    if (currentScenarioLine >= 0 && uri.includes('.case.')) {
+      for (const rf of requiredFields) {
+        if (!currentScenarioFields.has(rf.name.toLowerCase())) {
+          diagnostics.push({
+            severity: DiagnosticSeverity.Warning,
+            range: {
+              start: { line: currentScenarioLine, character: 0 },
+              end: { line: currentScenarioLine, character: lines[currentScenarioLine]?.length || 10 }
+            },
+            message: `Missing required field: '* field ${rf.name} = ...' is required by workspace configuration.`,
+            source: 'Testform'
+          });
+        }
+      }
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
+    if (trimmed.startsWith('#')) continue;
+
+    // Detect scenario header to track required fields
+    if (/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):/i.test(trimmed)) {
+      checkRequiredFields();
+      currentScenarioLine = i;
+      currentScenarioFields = new Set<string>();
+      continue;
+    }
+
+    const fieldMatch = trimmed.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
+    if (fieldMatch) {
+      const fieldName = fieldMatch[1].trim();
+      const rawVal = fieldMatch[2].trim().replace(/^["']|["']$/g, '');
+      const lowerField = fieldName.toLowerCase();
+      currentScenarioFields.add(lowerField);
+
+      const customDef = scanner.customFields.get(lowerField);
+      let allowedEnums: string[] | undefined = customDef?.enum;
+
+      if (!allowedEnums) {
+        if (lowerField === 'priority') {
+          allowedEnums = ['Critical', 'High', 'Medium', 'Low'];
+        } else if (lowerField === 'severity') {
+          allowedEnums = ['Blocker', 'Critical', 'Major', 'Minor', 'Trivial'];
+        }
+      }
+
+      if (allowedEnums && allowedEnums.length > 0) {
+        const isAllowed = allowedEnums.some(e => e.toLowerCase() === rawVal.toLowerCase());
+        if (!isAllowed) {
+          const valStartChar = rawLine.lastIndexOf(fieldMatch[2].trim());
+          const startChar = valStartChar >= 0 ? valStartChar : rawLine.indexOf('=') + 1;
+          diagnostics.push({
+            severity: DiagnosticSeverity.Error,
+            range: {
+              start: { line: i, character: startChar },
+              end: { line: i, character: rawLine.length }
+            },
+            message: `Invalid value '${rawVal}' for field '${fieldName}'. Allowed values are: ${allowedEnums.map(e => `'${e}'`).join(', ')}.`,
+            source: 'Testform'
+          });
+        }
+      }
+    }
+  }
+
+  // Check last scenario in file
+  checkRequiredFields();
+
   return diagnostics;
 }

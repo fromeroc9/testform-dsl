@@ -302,30 +302,32 @@ export function provideCompletions(
   // 5.2 Suggest field names after "field "
   const fieldNameMatch = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]*)$/i);
   if (fieldNameMatch) {
-    const knownFields = [
-      { name: 'priority', desc: 'Prioridad del escenario (High, Medium, Low, Critical)' },
-      { name: 'severity', desc: 'Severidad del defecto o riesgo (Blocker, Critical, Major, Minor)' },
-      { name: 'component', desc: 'Módulo o componente del sistema probado' },
-      { name: 'assignee', desc: 'Responsable o tester asignado' },
-      { name: 'labels', desc: 'Etiquetas adicionales de clasificación' }
-    ];
-
-    for (const f of knownFields) {
+    // 1. Defined fields in main.yml / workspace
+    for (const [name, info] of scanner.customFields.entries()) {
+      const enumDetail = info.enum && info.enum.length > 0 ? ` [${info.enum.join(' | ')}]` : '';
       items.push({
-        label: f.name,
+        label: name,
         kind: CompletionItemKind.Property,
-        detail: f.desc,
-        insertText: `${f.name} = `
+        detail: `Testform Field: ${name}${info.required ? ' (required)' : ''}${enumDetail}`,
+        insertText: `${name} = `
       });
     }
 
-    for (const [name, info] of scanner.customFields.entries()) {
-      if (!knownFields.some(k => k.name.toLowerCase() === name.toLowerCase())) {
+    // 2. Default standard fields if not already declared
+    const defaultKnown = [
+      { name: 'priority', desc: 'Execution priority [Critical | High | Medium | Low]' },
+      { name: 'severity', desc: 'Defect impact [Blocker | Critical | Major | Minor | Trivial]' },
+      { name: 'component', desc: 'System component or domain' },
+      { name: 'assignee', desc: 'Responsible tester or owner' }
+    ];
+
+    for (const f of defaultKnown) {
+      if (!scanner.customFields.has(f.name.toLowerCase())) {
         items.push({
-          label: name,
+          label: f.name,
           kind: CompletionItemKind.Property,
-          detail: `Custom field: ${name} (${info.source || 'step'})`,
-          insertText: `${name} = `
+          detail: f.desc,
+          insertText: `${f.name} = `
         });
       }
     }
@@ -336,6 +338,17 @@ export function provideCompletions(
   const fieldValueMatch = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*([a-zA-Z0-9_.-]*)$/i);
   if (fieldValueMatch) {
     const fieldName = fieldValueMatch[1].toLowerCase();
+    const custom = scanner.customFields.get(fieldName);
+
+    if (custom && custom.enum && custom.enum.length > 0) {
+      return custom.enum.map(e => ({
+        label: e,
+        kind: CompletionItemKind.Value,
+        detail: `Allowed Value for '${custom.name}': ${e}`,
+        insertText: e
+      }));
+    }
+
     if (fieldName === 'priority') {
       return ['Critical', 'High', 'Medium', 'Low'].map(v => ({
         label: v,
@@ -350,16 +363,6 @@ export function provideCompletions(
         kind: CompletionItemKind.Value,
         detail: `Severity: ${v}`,
         insertText: v
-      }));
-    }
-
-    const custom = scanner.customFields.get(fieldName);
-    if (custom && custom.enum && custom.enum.length > 0) {
-      return custom.enum.map(e => ({
-        label: e,
-        kind: CompletionItemKind.Value,
-        detail: `Allowed Value: ${e}`,
-        insertText: e
       }));
     }
   }
