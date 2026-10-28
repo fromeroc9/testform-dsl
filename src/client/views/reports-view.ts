@@ -1,21 +1,76 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { runTestformCommand } from '../terminal';
+
+interface ReportMeta {
+  slug: string;
+  label: string;
+  description: string;
+  icon: string;
+}
+
+const CORE_REPORTS: ReportMeta[] = [
+  {
+    slug: 'testcase-summary',
+    label: 'Resumen de Casos de Prueba',
+    description: 'Métricas de estado, ejecución y porcentaje de éxito',
+    icon: 'checklist'
+  },
+  {
+    slug: 'testrun-summary',
+    label: 'Resumen de Test Runs',
+    description: 'Resumen de ejecuciones y ciclos activos/cerrados',
+    icon: 'play-circle'
+  },
+  {
+    slug: 'testrun-detailed',
+    label: 'Detalle de Ejecución de Corridas',
+    description: 'Detalle caso por caso, prioridades y asignados',
+    icon: 'list-ordered'
+  },
+  {
+    slug: 'testplan-summary',
+    label: 'Resumen de Planes de Prueba',
+    description: 'Progreso y vinculación de corridas por plan',
+    icon: 'notebook'
+  },
+  {
+    slug: 'coverage',
+    label: 'Matriz de Cobertura',
+    description: 'Cobertura por tags, componentes y requerimientos',
+    icon: 'pie-chart'
+  },
+  {
+    slug: 'matrix',
+    label: 'Matriz de Trazabilidad',
+    description: 'Matriz cruzada de requerimientos y casos',
+    icon: 'table'
+  },
+  {
+    slug: 'audit',
+    label: 'Auditoría y Calidad',
+    description: 'Cumplimiento de políticas y control de gobernanza',
+    icon: 'shield'
+  }
+];
 
 export class ReportTreeItem extends vscode.TreeItem {
   constructor(
-    public readonly reportName: string,
+    public readonly slug: string,
+    public readonly reportTitle: string,
+    public readonly reportDescription: string,
+    public readonly iconName: string,
     public readonly isCustom: boolean = false
   ) {
-    super(reportName, vscode.TreeItemCollapsibleState.None);
+    super(reportTitle, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'testformReport';
-    this.description = isCustom ? '(Custom: .testform/reports)' : '(Core)';
-    this.iconPath = isCustom ? new vscode.ThemeIcon('extensions') : new vscode.ThemeIcon('graph');
+    this.description = isCustom ? `[Custom] ${slug}` : slug;
+    this.tooltip = `${reportTitle}\n${reportDescription}\n\nComando: testform report ${slug}`;
+    this.iconPath = new vscode.ThemeIcon(iconName);
     this.command = {
       command: 'testform.report.trigger',
       title: 'Generate Report',
-      arguments: [reportName]
+      arguments: [slug]
     };
   }
 }
@@ -37,16 +92,9 @@ export class ReportsTreeProvider implements vscode.TreeDataProvider<ReportTreeIt
   getChildren(element?: ReportTreeItem): Thenable<ReportTreeItem[]> {
     if (element) return Promise.resolve([]);
 
-    const coreReports = [
-      'testcase-summary',
-      'testrun-summary',
-      'testplan-summary',
-      'coverage',
-      'matrix',
-      'audit'
-    ];
-
-    const items: ReportTreeItem[] = coreReports.map(r => new ReportTreeItem(r, false));
+    const items: ReportTreeItem[] = CORE_REPORTS.map(
+      r => new ReportTreeItem(r.slug, r.label, r.description, r.icon, false)
+    );
 
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
@@ -57,9 +105,17 @@ export class ReportsTreeProvider implements vscode.TreeDataProvider<ReportTreeIt
           const entries = fs.readdirSync(reportsDir, { withFileTypes: true });
           for (const e of entries) {
             if (e.isFile() && (e.name.endsWith('.ts') || e.name.endsWith('.js'))) {
-              const baseName = e.name.replace(/\.(format\.)?(ts|js)$/, '');
-              if (!coreReports.includes(baseName)) {
-                items.push(new ReportTreeItem(baseName, true));
+              const slug = e.name.replace(/\.(format\.)?(ts|js)$/, '');
+              if (!CORE_REPORTS.some(c => c.slug === slug)) {
+                items.push(
+                  new ReportTreeItem(
+                    slug,
+                    `Reporte Personalizado (${slug})`,
+                    `Reporte cargado desde .testform/reports/${e.name}`,
+                    'extensions',
+                    true
+                  )
+                );
               }
             }
           }

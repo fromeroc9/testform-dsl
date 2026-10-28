@@ -206,13 +206,13 @@ export function activate(context: vscode.ExtensionContext) {
       runTestformCommand(`state show ${address}`);
     }),
     vscode.commands.registerCommand('testform.modules.update', () => {
-      runTestformCommand('init -upgrade');
+      runTestformCommand('init');
       modulesProvider.refresh();
     }),
     vscode.commands.registerCommand('testform.format', () => {
       vscode.commands.executeCommand('editor.action.formatDocument');
     }),
-    vscode.commands.registerCommand('testform.report.trigger', async (reportName: string) => {
+    vscode.commands.registerCommand('testform.report.trigger', async (reportSlug: string) => {
       const format = await vscode.window.showQuickPick(
         [
           { label: 'markdown', description: 'Markdown format (.md)' },
@@ -221,32 +221,52 @@ export function activate(context: vscode.ExtensionContext) {
           { label: 'json', description: 'JSON raw report data (.json)' },
           { label: 'csv', description: 'CSV data export (.csv)' }
         ],
-        { placeHolder: `Select export format for "${reportName}"` }
+        { placeHolder: `Select export format for report "${reportSlug}"` }
       );
 
       if (format) {
-        runTestformCommand(`report ${reportName} -format=${format.label}`);
+        runTestformCommand(`report ${reportSlug} -format=${format.label}`);
       }
     }),
     vscode.commands.registerCommand('testform.report', async () => {
       const reportTypes = [
-        'testcase-summary',
-        'testrun-summary',
-        'testplan-summary',
-        'coverage',
-        'matrix',
-        'audit'
+        { label: 'Resumen de Casos de Prueba', description: 'testcase-summary' },
+        { label: 'Resumen de Test Runs', description: 'testrun-summary' },
+        { label: 'Detalle de Ejecución de Corridas', description: 'testrun-detailed' },
+        { label: 'Resumen de Planes de Prueba', description: 'testplan-summary' },
+        { label: 'Matriz de Cobertura', description: 'coverage' },
+        { label: 'Matriz de Trazabilidad', description: 'matrix' },
+        { label: 'Auditoría y Calidad', description: 'audit' }
       ];
 
       const selected = await vscode.window.showQuickPick(reportTypes, {
-        placeHolder: 'Select report type to generate'
+        placeHolder: 'Selecciona el tipo de informe a generar'
       });
 
       if (selected) {
-        vscode.commands.executeCommand('testform.report.trigger', selected);
+        vscode.commands.executeCommand('testform.report.trigger', selected.description);
       }
     })
   );
+
+  // 6. Content-based Testform YAML language auto-detection
+  const detectTestformYaml = (doc: vscode.TextDocument) => {
+    if (doc.languageId === 'testform-yaml') return;
+    const lower = doc.fileName.toLowerCase();
+    if (!lower.endsWith('.yml') && !lower.endsWith('.yaml')) return;
+    if (lower.endsWith('.vars.yml') || lower.endsWith('.vars.yaml')) return;
+
+    try {
+      const text = doc.getText();
+      const hasTestformBlock = /^\s*(version|provider|backend|variable|locals|resource|data|module|output|policy)\s*:/m.test(text);
+      if (hasTestformBlock) {
+        vscode.languages.setTextDocumentLanguage(doc, 'testform-yaml');
+      }
+    } catch {}
+  };
+
+  vscode.workspace.textDocuments.forEach(detectTestformYaml);
+  context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(detectTestformYaml));
 }
 
 export function deactivate(): Thenable<void> | undefined {

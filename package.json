@@ -124,10 +124,6 @@
       {
         "language": "testform-yaml",
         "path": "./snippets/yaml.json"
-      },
-      {
-        "language": "yaml",
-        "path": "./snippets/yaml.json"
       }
     ],
     "yamlValidation": [

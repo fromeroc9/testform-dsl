@@ -7,7 +7,6 @@
       "iconPath": "../assets/cucumber.svg"
     }
   },
-  "file": "_testform",
   "fileExtensions": {
     "feature": "_cucumber"
   },

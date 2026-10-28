@@ -38,38 +38,36 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
   provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
     const fileName = path.basename(uri.fsPath).toLowerCase();
 
-    // Only decorate YAML configuration files (no intrusive decorations or colors on feature files)
+    // Only inspect YAML files
     if (!fileName.endsWith('.yml') && !fileName.endsWith('.yaml')) {
       return undefined;
     }
 
-    // Root manifests always get TF
-    const ROOT_CONFIGS = new Set([
-      'main.yml', 'main.yaml',
-      'testform.yml', 'testform.yaml',
-      'variable.yml', 'variable.yaml', 'variables.yml', 'variables.yaml',
-      'locals.yml', 'locals.yaml', 'local.yml', 'local.yaml',
-      'resource.yml', 'resource.yaml',
-      'data.yml', 'data.yaml',
-      'output.yml', 'output.yaml', 'outputs.yml', 'outputs.yaml'
-    ]);
-
-    if (ROOT_CONFIGS.has(fileName) || fileName.endsWith('.vars.yml') || fileName.endsWith('.vars.yaml')) {
+    // Auto-loaded *.vars.yml files
+    if (fileName.endsWith('.vars.yml') || fileName.endsWith('.vars.yaml')) {
       return {
         badge: 'TF',
-        tooltip: 'Testform Configuration'
+        tooltip: 'Testform Variables Value File'
       };
     }
 
-    // In a Testform workspace, check if any YAML file declares Testform blocks (Terraform-style)
+    // Always decorate root entrypoints
+    if (fileName === 'main.yml' || fileName === 'main.yaml' || fileName === 'testform.yml' || fileName === 'testform.yaml') {
+      return {
+        badge: 'TF',
+        tooltip: 'Testform Manifest'
+      };
+    }
+
+    // Terraform-style Block Inspection: inspect content for Testform reserved blocks
     if (this.isTestformProject) {
       try {
         const content = fs.readFileSync(uri.fsPath, 'utf8');
-        const hasTestformBlock = /^(version|provider|backend|variable|locals|local|resource|data|modules|module|output|outputs)\s*:/m.test(content);
+        const hasTestformBlock = /^\s*(version|provider|backend|variable|locals|resource|data|module|output|policy)\s*:/m.test(content);
         if (hasTestformBlock) {
           return {
             badge: 'TF',
-            tooltip: 'Testform Configuration'
+            tooltip: 'Testform Configuration Block'
           };
         }
       } catch {}
@@ -78,4 +76,3 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
     return undefined;
   }
 }
-

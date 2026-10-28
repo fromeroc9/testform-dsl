@@ -229,8 +229,10 @@ export class WorkspaceScanner {
 
               for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
+                // Strip comments and @depends_on references so dependencies aren't treated as declared scenario IDs
+                const lineWithoutDepends = line.replace(/#.*$/, '').replace(/@depends_on\s*\([^)]*\)/gi, '');
                 // Match identity tags: @tc-1, @tr-1, @tp-1
-                const idMatch = line.match(/@(tc|tr|tp)-([0-9]+)/i);
+                const idMatch = lineWithoutDepends.match(/@(tc|tr|tp)-([0-9]+)/i);
                 if (idMatch) {
                   const prefix = idMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp';
                   const idNumber = parseInt(idMatch[2], 10);

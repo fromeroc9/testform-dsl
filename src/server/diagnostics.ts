@@ -123,7 +123,9 @@ export function validateTextDocument(
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const idMatches = [...line.matchAll(/@(tc|tr|tp)-([0-9]+)/gi)];
+    // Strip comments and @depends_on references so dependencies aren't treated as declared scenario IDs
+    const lineWithoutDepends = line.replace(/#.*$/, '').replace(/@depends_on\s*\([^)]*\)/gi, '');
+    const idMatches = [...lineWithoutDepends.matchAll(/@(tc|tr|tp)-([0-9]+)/gi)];
     for (const idMatch of idMatches) {
       const tag = idMatch[0].toLowerCase();
       if (seenTagsInFile.has(tag)) {

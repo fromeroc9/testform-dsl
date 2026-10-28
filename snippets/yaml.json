@@ -1,6 +1,6 @@
 {
   "Testform Root Manifest Template": {
-    "prefix": "testform-init-manifest",
+    "prefix": "tf-init-manifest",
     "body": [
       "version: \"1.0\"",
       "provider: local",
