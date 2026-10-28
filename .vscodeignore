@@ -5,4 +5,4 @@ esbuild.js
 .gitignore
 *.log
 *.vsix
-
+node_modules/**
