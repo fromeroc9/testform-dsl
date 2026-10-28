@@ -36,7 +36,7 @@
             },
             {
               "name": "support.function.testform",
-              "match": "\\b(lower|upper|trim|replace|split|join|length|coalesce|default|jsonencode|jsondecode)\\b"
+              "match": "\\b(lower|upper|trim|trimprefix|trimsuffix|startswith|endswith|replace|split|join|format|substr|contains|coalesce|lookup|length|element|slice|merge|env|uuid|timestamp|jsonencode|jsondecode|file|abs|min|max|floor|ceil)\\b"
             }
           ]
         }

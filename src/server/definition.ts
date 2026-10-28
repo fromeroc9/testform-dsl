@@ -89,14 +89,30 @@ export function provideDefinition(
   if (dependsOnMatch) {
     const targetMatches = [...dependsOnMatch[1].matchAll(/["']([^"']+)["']/g)];
     for (const tm of targetMatches) {
-      const address = tm[1];
-      const targetScenario = scanner.config.scenarioAddresses.get(address) || scanner.config.scenarios.get(address);
-      if (targetScenario) {
-        const uri = pathToFileURL(targetScenario.sourceFile).href;
-        return Location.create(uri, {
-          start: { line: targetScenario.line, character: 0 },
-          end: { line: targetScenario.line, character: 100 }
-        });
+      const address = tm[1].trim();
+      if (!address) continue;
+
+      if (address.startsWith('@')) {
+        // Internal reference to tag in the current feature file
+        const lines = document.getText().split(/\r?\n/);
+        for (let i = 0; i < lines.length; i++) {
+          if (new RegExp(`^\\s*${address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(lines[i])) {
+            return Location.create(document.uri, {
+              start: { line: i, character: 0 },
+              end: { line: i, character: 100 }
+            });
+          }
+        }
+      } else {
+        // External reference by address
+        const targetScenario = scanner.config.scenarioAddresses.get(address) || scanner.config.scenarios.get(address);
+        if (targetScenario) {
+          const uri = pathToFileURL(targetScenario.sourceFile).href;
+          return Location.create(uri, {
+            start: { line: targetScenario.line, character: 0 },
+            end: { line: targetScenario.line, character: 100 }
+          });
+        }
       }
     }
   }

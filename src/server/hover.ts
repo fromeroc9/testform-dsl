@@ -134,26 +134,56 @@ export function provideHover(
   // 2. Hover on @depends_on("...")
   const dependsOnMatch = lineText.match(/@depends_on\s*\(\s*([^)]+)\s*\)/);
   if (dependsOnMatch) {
-    // Check if cursor is on one of the targets
     const targetMatches = [...dependsOnMatch[1].matchAll(/["']([^"']+)["']/g)];
     for (const tm of targetMatches) {
-      const address = tm[1];
-      const targetScenario = scanner.config.scenarioAddresses.get(address) || scanner.config.scenarios.get(address);
-      if (targetScenario) {
-        const fileName = targetScenario.sourceFile.split(/[/\\]/).pop();
-        return {
-          contents: {
-            kind: MarkupKind.Markdown,
-            value: [
-              `### Testform Dependency: \`${targetScenario.tag}\``,
-              `**Scenario:** ${targetScenario.title}`,
-              `**Scope:** \`${targetScenario.scope}\``,
-              `**Address:** \`${targetScenario.address}\``,
-              `---`,
-              `*Target Defined in:* \`${fileName}\` (line ${targetScenario.line + 1})`
-            ].join('\n\n')
+      const address = tm[1].trim();
+      if (!address) continue;
+
+      if (address.startsWith('@')) {
+        // Internal dependency within current feature file
+        const lines = document.getText().split(/\r?\n/);
+        for (let i = 0; i < lines.length; i++) {
+          if (new RegExp(`^\\s*${address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(lines[i])) {
+            let title = address;
+            for (let j = i; j < Math.min(lines.length, i + 5); j++) {
+              const tmTitle = lines[j].match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario)\s*:\s*(.*)$/i);
+              if (tmTitle) {
+                title = tmTitle[1].trim();
+                break;
+              }
+            }
+            return {
+              contents: {
+                kind: MarkupKind.Markdown,
+                value: [
+                  `### 🔗 Dependencia Interna: \`${address}\``,
+                  `**Escenario:** ${title}`,
+                  `**Tipo:** Referencia interna en este mismo archivo feature`,
+                  `---`,
+                  `*Ubicación:* Línea ${i + 1}`
+                ].join('\n\n')
+              }
+            };
           }
-        };
+        }
+      } else {
+        const targetScenario = scanner.config.scenarioAddresses.get(address) || scanner.config.scenarios.get(address);
+        if (targetScenario) {
+          const fileName = targetScenario.sourceFile.split(/[/\\]/).pop();
+          return {
+            contents: {
+              kind: MarkupKind.Markdown,
+              value: [
+                `### 🔗 Dependencia Externa: \`${targetScenario.tag}\``,
+                `**Escenario:** ${targetScenario.title}`,
+                `**Resource Scope:** \`${targetScenario.scope}\``,
+                `**Dirección en Ledger:** \`${targetScenario.address}\``,
+                `---`,
+                `*Definido en:* \`${fileName}\` (línea ${targetScenario.line + 1})`
+              ].join('\n\n')
+            }
+          };
+        }
       }
     }
   }
@@ -169,12 +199,12 @@ export function provideHover(
         contents: {
           kind: MarkupKind.Markdown,
           value: [
-            `### Testform Scenario Identity: \`${scenario.tag}\``,
-            `**Title:** ${scenario.title}`,
-            `**Scope:** \`${scenario.scope}\``,
-            `**Ledger Address:** \`${scenario.address}\``,
+            `### 🏷️ Identificador de Escenario: \`${scenario.tag}\``,
+            `**Título:** ${scenario.title}`,
+            `**Resource Scope:** \`${scenario.scope}\``,
+            `**Dirección de Estado:** \`${scenario.address}\``,
             `---`,
-            `*File:* \`${fileName}\` (line ${scenario.line + 1})`
+            `*Archivo:* \`${fileName}\` (línea ${scenario.line + 1})`
           ].join('\n\n')
         }
       };
@@ -185,20 +215,54 @@ export function provideHover(
   const statusMatch = lineText.match(/mark\s+status\s*=\s*([a-zA-Z]+)/i);
   if (statusMatch) {
     const status = statusMatch[1].toLowerCase();
-    const STATUS_DOCS: Record<string, string> = {
-      passed: 'Test passed successfully. Reconciles state ledger to mark resource passed.',
-      failed: 'Test failed. Signals assertion error in testrun and halts execution pipeline if critical.',
-      pending: 'Test is scheduled but pending execution. Leaves ledger in pending state.',
-      skipped: 'Test execution was skipped due to unsatisfied conditions or tag filters.',
-      blocked: 'Test is blocked by a prerequisite or unresolved dependency in @depends_on.',
-      unexecuted: 'Initial state before execution run is applied.'
+    const STATUS_INFO: Record<string, { badge: string; desc: string; ledger: string }> = {
+      passed: {
+        badge: '✅ PASSED',
+        desc: 'El escenario se ejecutó con éxito y todas las aserciones fueron satisfechas.',
+        ledger: 'Reconcilia el recurso en testform.state marcándolo como exitoso.'
+      },
+      failed: {
+        badge: '❌ FAILED',
+        desc: 'Fallo de aserción o error de ejecución detectado en el caso de prueba.',
+        ledger: 'Registra el error en el ledger y detiene la cadena de dependencias subsiguiente.'
+      },
+      pending: {
+        badge: '⏳ PENDING',
+        desc: 'Escenario planificado pero pendiente de ejecución o en desarrollo.',
+        ledger: 'Mantiene el recurso en estado pendiente sin romper quality gates de desarrollo.'
+      },
+      skipped: {
+        badge: '⏭️ SKIPPED',
+        desc: 'Ejecución omitida deliberadamente (por filtros de tags o condiciones previas).',
+        ledger: 'Se preserva el registro sin alterar el resultado consolidado del suite.'
+      },
+      blocked: {
+        badge: '🚫 BLOCKED',
+        desc: 'Ejecución bloqueada debido al fallo de una dependencia declarada en @depends_on.',
+        ledger: 'Impide la ejecución de este caso hasta que el prerrequisito sea subsanado.'
+      },
+      unexecuted: {
+        badge: '⚪ UNEXECUTED',
+        desc: 'Estado inicial previo a la reconciliación o ejecución del testrun.',
+        ledger: 'Estado por defecto en planes especulativos sin ejecución.'
+      }
     };
+
+    const info = STATUS_INFO[status] || {
+      badge: `🏷️ ${status.toUpperCase()}`,
+      desc: `Estado de ejecución asignado a este escenario.`,
+      ledger: `Actualiza el ledger de estado en testform.state.`
+    };
+
     return {
       contents: {
         kind: MarkupKind.Markdown,
         value: [
-          `### Testform Execution Status: \`${status}\``,
-          STATUS_DOCS[status] || `Declared execution outcome status for this scenario.`
+          `### ${info.badge} — Reconciliación de Estado Testform`,
+          `**Significado:** ${info.desc}`,
+          `**Efecto en el Ledger (\`testform.state\`):** ${info.ledger}`,
+          `---`,
+          `*Sintaxis DSL:* \`* mark status = ${status}\``
         ].join('\n\n')
       }
     };

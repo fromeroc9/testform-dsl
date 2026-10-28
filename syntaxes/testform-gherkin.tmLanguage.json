@@ -11,6 +11,9 @@
       "include": "#expressions"
     },
     {
+      "include": "#outline-params"
+    },
+    {
       "include": "#dsl-status"
     },
     {
@@ -115,11 +118,22 @@
     "dsl-status": {
       "patterns": [
         {
-          "match": "(^\\s*(?:\\*\\s*)?mark\\s+status\\s*=\\s*)(passed|failed|skipped|blocked|pending|unexecuted)\\b",
+          "match": "(^\\s*\\*\\s+)?\\b(mark)\\b\\s+\\b(status)\\b\\s*(=)\\s*\\b(passed|failed|skipped|blocked|pending|unexecuted)\\b",
           "captures": {
-            "1": { "name": "keyword.other.testform.mark" },
-            "2": { "name": "constant.language.status.testform" }
+            "1": { "name": "keyword.control.step.gherkin" },
+            "2": { "name": "keyword.control.testform.mark" },
+            "3": { "name": "support.type.property-name.testform" },
+            "4": { "name": "keyword.operator.assignment.testform" },
+            "5": { "name": "constant.language.status.testform" }
           }
+        }
+      ]
+    },
+    "outline-params": {
+      "patterns": [
+        {
+          "name": "variable.parameter.outline.gherkin",
+          "match": "<[a-zA-Z0-9_.-]+>"
         }
       ]
     },
@@ -148,6 +162,9 @@
           "patterns": [
             {
               "include": "#expressions"
+            },
+            {
+              "include": "#outline-params"
             }
           ]
         },
@@ -158,6 +175,9 @@
           "patterns": [
             {
               "include": "#expressions"
+            },
+            {
+              "include": "#outline-params"
             }
           ]
         }

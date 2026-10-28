@@ -191,6 +191,11 @@
               },
               "description": { "type": "string" },
               "default": {},
+              "sensitive": {
+                "type": "boolean",
+                "default": false,
+                "description": "Mask variable value in logs and CLI output"
+              },
               "enum": { "type": "array" },
               "validation": {
                 "type": "object",

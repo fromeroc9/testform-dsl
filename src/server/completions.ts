@@ -8,7 +8,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
 
-const BUILTIN_FUNCTIONS = [
+export const BUILTIN_FUNCTIONS = [
   // Strings
   { name: 'lower', desc: 'Converts a given string to lowercase.', snippet: 'lower(${1:string})' },
   { name: 'upper', desc: 'Converts a given string to uppercase.', snippet: 'upper(${1:string})' },
@@ -181,7 +181,18 @@ export function provideCompletions(
     return items;
   }
 
-  // 5. DSL Mark Status: mark status =
+  // 5. DSL Mark Status Step completion
+  if (/^\s*\*\s*(m|ma|mar|mark)?\s*$/i.test(lineText)) {
+    items.push({
+      label: 'mark status = ...',
+      kind: CompletionItemKind.Snippet,
+      detail: 'Testform DSL: Asignar resultado de ejecución',
+      insertTextFormat: InsertTextFormat.Snippet,
+      insertText: 'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+    });
+    return items;
+  }
+
   if (/mark\s+status\s*=\s*[a-zA-Z]*$/i.test(lineText)) {
     const statuses = ['passed', 'failed', 'pending', 'skipped', 'blocked', 'unexecuted'];
     return statuses.map(s => ({
@@ -192,10 +203,80 @@ export function provideCompletions(
     }));
   }
 
-  // 6. Depends on addresses completion inside @depends_on("...")
+  // 6. Scenario Outline Table Parameters Completion: <param
+  const outlineParamMatch = lineText.match(/<([a-zA-Z0-9_.-]*)$/);
+  if (outlineParamMatch) {
+    const docText = document.getText();
+    const lines = docText.split(/\r?\n/);
+    let examplesHeaders: string[] = [];
+
+    // Search forwards for Examples: table in this scenario
+    for (let i = position.line; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if ((line.startsWith('Scenario:') || line.startsWith('Scenario Outline:') || line.startsWith('Escenario:') || line.startsWith('Esquema del escenario:')) && i !== position.line) {
+        break;
+      }
+      if (line.startsWith('Examples:') || line.startsWith('Ejemplos:')) {
+        if (i + 1 < lines.length) {
+          const headerRow = lines[i + 1].trim();
+          if (headerRow.startsWith('|')) {
+            examplesHeaders = headerRow.split('|').map(s => s.trim()).filter(Boolean);
+            break;
+          }
+        }
+      }
+    }
+
+    // Search backwards if not found
+    if (examplesHeaders.length === 0) {
+      for (let i = position.line; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line.startsWith('Examples:') || line.startsWith('Ejemplos:')) {
+          if (i + 1 < lines.length) {
+            const headerRow = lines[i + 1].trim();
+            if (headerRow.startsWith('|')) {
+              examplesHeaders = headerRow.split('|').map(s => s.trim()).filter(Boolean);
+              break;
+            }
+          }
+        }
+        if (line.startsWith('Scenario Outline:') || line.startsWith('Esquema del escenario:')) break;
+      }
+    }
+
+    for (const header of examplesHeaders) {
+      items.push({
+        label: `<${header}>`,
+        kind: CompletionItemKind.Variable,
+        detail: `Columna de Examples: ${header}`,
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: `**Parámetro de tabla:** \`<${header}>\`\n\nDefinido en la tabla \`Examples:\` de este Scenario Outline.`
+        },
+        insertText: `${header}>`
+      });
+    }
+
+    if (items.length > 0) return items;
+  }
+
+  // 7. Depends on addresses completion inside @depends_on("...")
   if (/@depends_on\([^)]*["'][^"']*$/.test(lineText)) {
+    // 7.1 Internal tags in the current document
+    const docText = document.getText();
+    const internalTags = [...docText.matchAll(/@(tc|tr|tp)-[0-9]+/gi)].map(m => m[0].toLowerCase());
+    const uniqueInternal = [...new Set(internalTags)];
+    for (const tag of uniqueInternal) {
+      items.push({
+        label: tag,
+        kind: CompletionItemKind.Reference,
+        detail: `Referencia interna en este feature (${tag})`,
+        insertText: tag
+      });
+    }
+
+    // 7.2 External scenario addresses
     for (const [address, info] of scanner.config.scenarioAddresses.entries()) {
-      // Suggest full relative address
       if (address.includes('/')) {
         items.push({
           label: address,
@@ -212,7 +293,7 @@ export function provideCompletions(
     return items;
   }
 
-  // 7. Identity Tag next-ID completion (@tc-, @tr-, @tp-)
+  // 8. Identity Tag next-ID completion (@tc-, @tr-, @tp-)
   const tcPrefixMatch = lineText.match(/@(tc|tr|tp)-([0-9]*)$/i);
   if (tcPrefixMatch) {
     const prefix = tcPrefixMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp';

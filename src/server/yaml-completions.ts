@@ -7,6 +7,7 @@ import {
 } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
+import { BUILTIN_FUNCTIONS } from './completions';
 
 interface YamlLineInfo {
   indent: number;
@@ -75,6 +76,18 @@ export function provideYamlCompletions(
       { label: 'testcase.', kind: CompletionItemKind.Module, detail: 'Testcase state attribute', insertText: 'testcase.' },
       { label: 'testrun.', kind: CompletionItemKind.Module, detail: 'Testrun state attribute', insertText: 'testrun.' }
     );
+
+    for (const fn of BUILTIN_FUNCTIONS) {
+      items.push({
+        label: fn.name,
+        kind: CompletionItemKind.Function,
+        detail: `Testform Function: ${fn.name}()`,
+        documentation: fn.desc,
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: fn.snippet
+      });
+    }
+
     return items;
   }
 
@@ -262,16 +275,23 @@ export function provideYamlCompletions(
     if (ancestry.length === 1) {
       return [
         {
-          label: '<var_name>:',
+          label: '<var_name>: (Bloque Completo)',
           kind: CompletionItemKind.Field,
-          detail: 'Declare new variable with schema',
+          detail: 'Declarar variable completa (type, default, description, sensitive, enum, validation)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: '${1:var_name}:\n  type: ${2|string,number,boolean,list,map|}\n  description: "${3:Description}"\n  default: "${4:value}"\n  sensitive: ${5|false,true|}\n  enum:\n    - "${6:option1}"\n    - "${7:option2}"\n  validation:\n    condition: "${8:condition}"\n    error_message: "${9:Error message}"'
+        },
+        {
+          label: '<var_name>: (Estándar)',
+          kind: CompletionItemKind.Field,
+          detail: 'Declarar variable con esquema estándar',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: '${1:var_name}:\n  type: ${2|string,number,boolean,list,map|}\n  description: "${3:Description}"\n  default: "${4:value}"'
         },
         {
           label: '<var_name>: "value"',
           kind: CompletionItemKind.Field,
-          detail: 'Declare simple scalar variable',
+          detail: 'Declarar variable escalar simple',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: '${1:var_name}: "${2:value}"'
         }
@@ -280,11 +300,12 @@ export function provideYamlCompletions(
     // Indent 4: Inside a specific variable definition
     if (ancestry.length >= 2) {
       return [
-        { label: 'type:', kind: CompletionItemKind.Property, detail: 'Data type', insertText: 'type: ' },
+        { label: 'type:', kind: CompletionItemKind.Property, detail: 'Data type (string, number, boolean, list, map)', insertText: 'type: ' },
         { label: 'description:', kind: CompletionItemKind.Property, detail: 'Documentation text', insertTextFormat: InsertTextFormat.Snippet, insertText: 'description: "${1:Variable description}"' },
         { label: 'default:', kind: CompletionItemKind.Property, detail: 'Default fallback value', insertTextFormat: InsertTextFormat.Snippet, insertText: 'default: "${1:value}"' },
+        { label: 'sensitive:', kind: CompletionItemKind.Property, detail: 'Mask variable from logs and console', insertText: 'sensitive: true' },
         { label: 'enum:', kind: CompletionItemKind.Property, detail: 'Allowed values list', insertTextFormat: InsertTextFormat.Snippet, insertText: 'enum:\n  - "${1:option1}"\n  - "${2:option2}"' },
-        { label: 'validation:', kind: CompletionItemKind.Property, detail: 'Validation rule', insertTextFormat: InsertTextFormat.Snippet, insertText: 'validation:\n  condition: "${1:condition}"\n  error_message: "${2:Error message}"' }
+        { label: 'validation:', kind: CompletionItemKind.Property, detail: 'Validation rule with condition and error message', insertTextFormat: InsertTextFormat.Snippet, insertText: 'validation:\n  condition: "${1:condition}"\n  error_message: "${2:Error message}"' }
       ];
     }
   }

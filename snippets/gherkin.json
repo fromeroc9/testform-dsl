@@ -11,32 +11,73 @@
       "    When ${5:the user performs an action}",
       "    Then ${6:the system responds successfully}"
     ],
-    "description": "Create a standard Testform Testcase scenario"
+    "description": "Create a standard Testform Testcase feature manifest"
+  },
+  "Testform Scenario": {
+    "prefix": "tf-scenario",
+    "body": [
+      "  @${1:tc-1} @${2:smoke}",
+      "  Scenario: ${3:Scenario Title}",
+      "    Given ${4:the user is on \"\\${local.login_url}\"}",
+      "    When ${5:the user performs an action}",
+      "    Then ${6:the system responds successfully}"
+    ],
+    "description": "Insert a single Testform Scenario"
+  },
+  "Testform Scenario Outline": {
+    "prefix": "tf-scenario-outline",
+    "body": [
+      "  @${1:tc-1} @${2:data_driven}",
+      "  Scenario Outline: ${3:Scenario Outline Title}",
+      "    Given ${4:the user is on \"\\${local.base_url}\"}",
+      "    When ${5:the user enters \"<${6:param1}>\" and \"<${7:param2}>\"}",
+      "    Then ${8:the system validates \"<${9:result}>\"}",
+      "",
+      "    Examples:",
+      "      | ${6:param1} | ${7:param2} | ${9:result} |",
+      "      | ${10:val1}   | ${11:val2}   | ${12:ok}     |"
+    ],
+    "description": "Insert a Testform Scenario Outline with Examples data table"
   },
   "Testform TestRun": {
     "prefix": "tf-testrun",
     "body": [
-      "@testrun",
-      "Feature: ${1:Execution Run}",
+      "@testrun @${1:tr-1}",
+      "Feature: ${2:Execution Run}",
       "",
-      "  @${2:tr-1}",
-      "  Scenario: ${3:Run Suite}",
-      "    * mark status = ${4|unexecuted,passed,failed,skipped,blocked|}",
-      "    Given execute target \"@${5:tc-1}\""
+      "  Rule: ${3:path/to.case.feature}",
+      "",
+      "    Scenario: ${3:path/to.case.feature}.@${4:tc-1}",
+      "      * mark status = ${5|unexecuted,passed,failed,pending,skipped,blocked|}"
     ],
-    "description": "Create a Testform Testrun scenario"
+    "description": "Create a complete Testform Testrun manifest"
+  },
+  "Testform TestRun Rule": {
+    "prefix": "tf-run-rule",
+    "body": [
+      "  Rule: ${1:path/to.case.feature}",
+      "",
+      "    Scenario: ${1:path/to.case.feature}.@${2:tc-1}",
+      "      * mark status = ${3|passed,pending,failed,skipped,blocked|}"
+    ],
+    "description": "Insert a TestRun Rule item referencing a testcase"
   },
   "Testform TestPlan": {
     "prefix": "tf-testplan",
     "body": [
-      "@testplan",
-      "Feature: ${1:Master Test Plan}",
+      "@testplan @${1:tp-1}",
+      "Feature: ${2:Master Test Plan}",
       "",
-      "  @${2:tp-1}",
-      "  Scenario: ${3:Quality Gate Acceptance}",
-      "    Given include testrun \"@${4:tr-1}\""
+      "  Rule: ${3:path/to.run.feature}"
     ],
-    "description": "Create a Testform Testplan scenario"
+    "description": "Create a Testform Testplan manifest"
+  },
+  "Testform Depends On": {
+    "prefix": "tf-depends",
+    "body": [
+      "@depends_on(\"${1:target}\")"
+    ],
+    "description": "Insert @depends_on dependency directive"
   },
   "Testform Mark Status": {
     "prefix": "tf-mark",
