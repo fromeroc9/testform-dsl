@@ -280,7 +280,7 @@ export function provideYamlCompletions(
       return items;
     }
 
-    if (currentSection === 'modules') {
+    if (currentSection === 'modules' || currentSection === 'module') {
       items.push({
         label: 'module_block:',
         kind: CompletionItemKind.Module,
@@ -378,11 +378,11 @@ export function provideYamlCompletions(
       insertText: 'variable:\n  ${1:app_url}:\n    type: string\n    description: "${2:Base Application URL}"\n    default: "${3:https://example.com}"'
     },
     {
-      label: 'local:',
+      label: 'locals:',
       kind: CompletionItemKind.Keyword,
-      detail: 'Local Computed Expressions Block',
+      detail: 'Local Computed Expressions Block (Terraform style)',
       insertTextFormat: InsertTextFormat.Snippet,
-      insertText: 'local:\n  ${1:base_url}: "${2:\\${var.app_url}}"'
+      insertText: 'locals:\n  ${1:base_url}: "${2:\\${var.app_url}}"'
     },
     {
       label: 'resource:',
@@ -406,11 +406,11 @@ export function provideYamlCompletions(
       insertText: 'data:\n  ${1:usuarios}:\n    file: "${2:fixtures/users.json}"'
     },
     {
-      label: 'modules:',
+      label: 'module:',
       kind: CompletionItemKind.Keyword,
-      detail: 'Feature Modules Declaration',
+      detail: 'Feature Module Declaration (Terraform style)',
       insertTextFormat: InsertTextFormat.Snippet,
-      insertText: 'modules:\n  ${1:auth_module}:\n    source: "${2:auth/login.case.feature}"\n    vars:\n      ${3:role}: "${4:standard_user}"\n    outputs:\n      ${5:login_title}:\n        value: "${6:\\${testcase.auth/login.case.feature.@tc-1.title}}"'
+      insertText: 'module:\n  ${1:auth_module}:\n    source: "${2:auth/login.case.feature}"\n    vars:\n      ${3:role}: "${4:standard_user}"\n    outputs:\n      ${5:login_title}:\n        value: "${6:\\${testcase.auth/login.case.feature.@tc-1.title}}"'
     },
     {
       label: 'outputs:',

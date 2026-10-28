@@ -211,12 +211,12 @@
     },
     "variables": { "$ref": "#/properties/variable" },
     "vars": { "$ref": "#/properties/variable" },
-    "local": {
+    "locals": {
       "type": "object",
-      "description": "Local computed values evaluated within expressions",
+      "description": "Local computed values evaluated within expressions (e.g. base_url: \"${var.app_url}\")",
       "additionalProperties": true
     },
-    "locals": { "$ref": "#/properties/local" },
+    "local": { "$ref": "#/properties/locals" },
     "resource": {
       "type": "object",
       "description": "Resource scope mapping, scaffolding patterns, and custom fields",
@@ -291,7 +291,7 @@
         }
       }
     },
-    "modules": {
+    "module": {
       "type": "object",
       "description": "Reusable Testform feature modules",
       "additionalProperties": {
@@ -325,6 +325,7 @@
         "required": ["source"]
       }
     },
+    "modules": { "$ref": "#/properties/module" },
     "outputs": {
       "type": "object",
       "description": "Root outputs accessible via 'testform output'",

@@ -7,6 +7,7 @@ export class WorkspaceScanner {
   private workspaceRoot: string;
   public config: TestformWorkspaceConfig;
   public installedModules: string[] = [];
+  public declaredModules: Map<string, { source: string; outputs: string[] }> = new Map();
   public customReports: string[] = [];
   public customPolicies: string[] = [];
 
@@ -28,6 +29,7 @@ export class WorkspaceScanner {
     this.config.variables.clear();
     this.config.locals.clear();
     this.config.dataSources.clear();
+    this.declaredModules.clear();
 
     // 1. Root main.yml / testform.yml (Base Level 0)
     this.scanBaseConfig();
@@ -58,8 +60,9 @@ export class WorkspaceScanner {
           const parsed = YAML.parse(content);
           if (parsed && typeof parsed === 'object') {
             this.parseVariableBlock(parsed.variable || parsed.variables || parsed.vars, fullPath, content);
-            this.parseLocalsBlock(parsed.local || parsed.locals, fullPath, content);
+            this.parseLocalsBlock(parsed.locals || parsed.local, fullPath, content);
             this.parseDataBlock(parsed.data, fullPath, content);
+            this.parseModulesBlock(parsed.module || parsed.modules, fullPath, content);
             const resBlock = parsed.resource || parsed.scopes;
             if (resBlock && typeof resBlock === 'object') {
               if (resBlock.testcase?.match) this.config.scopes.testcase = resBlock.testcase.match;
@@ -169,11 +172,14 @@ export class WorkspaceScanner {
                   if (parsed.variable || parsed.variables || parsed.vars) {
                     this.parseVariableBlock(parsed.variable || parsed.variables || parsed.vars, fullPath, content);
                   }
-                  if (parsed.local || parsed.locals) {
-                    this.parseLocalsBlock(parsed.local || parsed.locals, fullPath, content);
+                  if (parsed.locals || parsed.local) {
+                    this.parseLocalsBlock(parsed.locals || parsed.local, fullPath, content);
                   }
                   if (parsed.data) {
                     this.parseDataBlock(parsed.data, fullPath, content);
+                  }
+                  if (parsed.module || parsed.modules) {
+                    this.parseModulesBlock(parsed.module || parsed.modules, fullPath, content);
                   }
                 }
               } catch {}
@@ -368,6 +374,24 @@ export class WorkspaceScanner {
         };
         this.config.dataSources.set(key, dataInfo);
         this.config.dataSources.set(`${detectedType}.${key}`, dataInfo);
+      }
+    }
+  }
+
+  private parseModulesBlock(block: any, sourceFile: string, content: string): void {
+    if (!block || typeof block !== 'object') return;
+    for (const [key, mod] of Object.entries(block)) {
+      if (!mod || typeof mod !== 'object') continue;
+      const outputs: string[] = [];
+      if ((mod as any).outputs && typeof (mod as any).outputs === 'object') {
+        outputs.push(...Object.keys((mod as any).outputs));
+      }
+      this.declaredModules.set(key, {
+        source: (mod as any).source || '',
+        outputs
+      });
+      if (!this.installedModules.includes(key)) {
+        this.installedModules.push(key);
       }
     }
   }
