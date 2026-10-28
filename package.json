@@ -142,12 +142,38 @@
           "main.yaml",
           "testform.yml",
           "testform.yaml",
+          "variable.yml",
+          "variable.yaml",
+          "variables.yml",
+          "variables.yaml",
+          "locals.yml",
+          "locals.yaml",
+          "resource.yml",
+          "resource.yaml",
+          "data.yml",
+          "data.yaml",
+          "output.yml",
+          "output.yaml",
           "**/main.yml",
           "**/main.yaml",
           "**/testform.yml",
-          "**/testform.yaml"
+          "**/testform.yaml",
+          "**/variable.yml",
+          "**/variable.yaml",
+          "**/locals.yml",
+          "**/resource.yml",
+          "**/output.yml"
         ],
         "url": "./schemas/testform.schema.json"
+      },
+      {
+        "fileMatch": [
+          "*.vars.yml",
+          "*.vars.yaml",
+          "**/*.vars.yml",
+          "**/*.vars.yaml"
+        ],
+        "url": "./schemas/variables.schema.json"
       }
     ],
     "jsonValidation": [
@@ -156,18 +182,21 @@
           "main.yml",
           "main.yaml",
           "testform.yml",
-          "testform.yaml"
+          "testform.yaml",
+          "variable.yml",
+          "variable.yaml",
+          "locals.yml",
+          "resource.yml",
+          "output.yml"
         ],
         "url": "./schemas/testform.schema.json"
       },
       {
         "fileMatch": [
-          "variables.yml",
-          "variables.yaml",
-          "vars.yml",
-          "vars.yaml",
           "*.vars.yml",
-          "*.vars.yaml"
+          "*.vars.yaml",
+          "**/*.vars.yml",
+          "**/*.vars.yaml"
         ],
         "url": "./schemas/variables.schema.json"
       }

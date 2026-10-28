@@ -105,20 +105,69 @@ export function activate(context: vscode.ExtensionContext) {
   // 5. Register Commands
   context.subscriptions.push(
     vscode.commands.registerCommand('testform.menu', async () => {
-      const options = [
-        { label: '$(check) Validate Configuration', description: 'Validate syntax, scopes, and variables (testform validate)', cmd: 'testform.validate' },
-        { label: '$(git-compare) Speculative Plan', description: 'Preview execution diff without changes (testform plan)', cmd: 'testform.plan' },
-        { label: '$(play) Apply Changes', description: 'Reconcile tests and sync state ledger (testform apply)', cmd: 'testform.apply' },
-        { label: '$(diff) Show State Drift', description: 'Inspect differences against state ledger (testform diff)', cmd: 'testform.diff' },
-        { label: '$(eye) Inspect State / Plan', description: 'Inspect resources in state ledger (testform show)', cmd: 'testform.show' },
-        { label: '$(file-text) Generate Report', description: 'Interactive QA report export (Markdown, Word, Excel...)', cmd: 'testform.report' },
-        { label: '$(list-tree) Show Providers Tree', description: 'Display providers hierarchy and requirements', cmd: 'testform.providers' },
-        { label: '$(package) List Modules', description: 'Inspect declared Testform modules', cmd: 'testform.modules.list' },
-        { label: '$(refresh) Refresh State Explorer', description: 'Reload testform.state in the sidebar', cmd: 'testform.state.refresh' }
+      interface MenuOption extends vscode.QuickPickItem {
+        cmd: string;
+      }
+
+      const options: MenuOption[] = [
+        {
+          label: '$(check) Validate',
+          description: 'testform validate',
+          detail: 'Verifica la sintaxis de los manifiestos YAML, definiciones de scopes y variables sin ejecutar pruebas.',
+          cmd: 'testform.validate'
+        },
+        {
+          label: '$(git-compare) Plan',
+          description: 'testform plan',
+          detail: 'Genera una vista previa especulativa mostrando el diff de cambios contra el ledger sin modificar testform.state.',
+          cmd: 'testform.plan'
+        },
+        {
+          label: '$(play) Apply',
+          description: 'testform apply',
+          detail: 'Ejecuta las pruebas o reconcilia el estado actualizando testform.state.',
+          cmd: 'testform.apply'
+        },
+        {
+          label: '$(diff) Diff',
+          description: 'testform diff',
+          detail: 'Compara y detecta diferencias (drift) entre los archivos feature en disco y el estado registrado.',
+          cmd: 'testform.diff'
+        },
+        {
+          label: '$(eye) Show',
+          description: 'testform show',
+          detail: 'Inspecciona en formato legible los recursos y atributos guardados en el archivo de estado o plan.',
+          cmd: 'testform.show'
+        },
+        {
+          label: '$(file-text) Report',
+          description: 'testform report',
+          detail: 'Genera reportes interactivos de calidad (Markdown, Word .docx, Excel .xlsx, HTML, etc.).',
+          cmd: 'testform.report'
+        },
+        {
+          label: '$(list-tree) Providers',
+          description: 'testform providers',
+          detail: 'Muestra el árbol jerárquico de providers configurados y sus requerimientos.',
+          cmd: 'testform.providers'
+        },
+        {
+          label: '$(package) Modules',
+          description: 'testform modules',
+          detail: 'Lista los módulos de features declarados en el workspace y sus orígenes.',
+          cmd: 'testform.modules.list'
+        },
+        {
+          label: '$(refresh) Refresh State',
+          description: 'testform.state',
+          detail: 'Recarga el ledger de estado en el explorador de la barra lateral.',
+          cmd: 'testform.state.refresh'
+        }
       ];
 
       const selected = await vscode.window.showQuickPick(options, {
-        placeHolder: 'Testform Control Center - Select an action'
+        placeHolder: 'Testform Control Center - Selecciona un comando'
       });
 
       if (selected) {

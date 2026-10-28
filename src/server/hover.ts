@@ -38,7 +38,7 @@ export function provideHover(
                 `**Default:** \`${JSON.stringify(info.defaultValue ?? null)}\``,
                 info.description ? `**Description:** ${info.description}` : '',
                 `---`,
-                `*Autoloaded from:* \`${fileName}\` (${info.sourceFile})`
+                `*Declarado en:* \`${fileName}\` (${info.sourceFile})`
               ].filter(Boolean).join('\n\n')
             }
           };
@@ -46,7 +46,7 @@ export function provideHover(
           return {
             contents: {
               kind: MarkupKind.Markdown,
-              value: `⚠️ **Undefined Variable:** \`${varName}\`\n\nThis variable is referenced in Gherkin but not declared in any \`main.yml\`, \`variables.yml\` or domain configuration.`
+              value: `⚠️ **Variable no declarada:** \`${varName}\`\n\nEsta variable está referenciada pero no ha sido declarada en ningún bloque \`variable:\` del workspace.`
             }
           };
         }
@@ -67,7 +67,7 @@ export function provideHover(
                 `### Testform Local: \`${localName}\``,
                 `**Expression:** \`${info.expression}\``,
                 `---`,
-                `*Autoloaded from:* \`${fileName}\` (${info.sourceFile})`
+                `*Declarado en:* \`${fileName}\` (${info.sourceFile})`
               ].join('\n\n')
             }
           };
@@ -75,7 +75,7 @@ export function provideHover(
           return {
             contents: {
               kind: MarkupKind.Markdown,
-              value: `⚠️ **Undefined Local:** \`${localName}\`\n\nThis local value is referenced but not declared in any \`main.yml\`, \`locals.yml\` or domain configuration.`
+              value: `⚠️ **Local no definido:** \`${localName}\`\n\nEste valor local está referenciado pero no ha sido definido en ningún bloque \`locals:\` del workspace.`
             }
           };
         }

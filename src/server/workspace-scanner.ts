@@ -32,26 +32,20 @@ export class WorkspaceScanner {
     this.declaredModules.clear();
 
     // 1. Root main.yml / testform.yml (Base Level 0)
-    this.scanBaseConfig();
+    const baseFile = this.scanBaseConfig();
 
-    // 2. Standard Level 1: variables.yml / vars.yml & locals.yml
-    this.scanStandardConfigs();
+    // 2. Terraform-style Block Scanner: Scans all workspace YAMLs reading blocks regardless of filename
+    this.scanManifestFiles(baseFile);
 
-    // 2.1 Auto-load resource.yml / resource.yaml
-    this.scanResourceConfigs();
-
-    // 3. Domain Level 2: Project YAMLs
-    this.scanDomainConfigs();
-
-    // 4. Level 3: Auto-loaded *.vars.yml / *.vars.yaml files (sorted alphabetically)
+    // 3. Level 3: Auto-loaded *.vars.yml / *.vars.yaml files (sorted alphabetically)
     this.scanAutoVarFiles();
 
-    // 5. Scan .testform directory (modules, reports, policies)
+    // 4. Scan .testform directory (modules, reports, policies)
     this.scanDotTestform();
   }
 
-  private scanBaseConfig(): void {
-    const candidateFiles = ['main.yml', 'main.yaml', 'testform.yml', 'testform.yaml'];
+  private scanBaseConfig(): string | null {
+    const candidateFiles = ['main.yml', 'main.yaml', 'testform.yml', 'testform.yaml', 'testform.config.yml', 'testform.config.yaml'];
     for (const file of candidateFiles) {
       const fullPath = path.join(this.workspaceRoot, file);
       if (fs.existsSync(fullPath)) {
@@ -73,87 +67,22 @@ export class WorkspaceScanner {
         } catch {
           // ignore YAML syntax errors while editing
         }
-        break;
+        return fullPath;
       }
     }
+    return null;
   }
 
-  private scanStandardConfigs(): void {
-    // variables.yml / vars.yml
-    for (const name of ['variables.yml', 'variables.yaml', 'vars.yml', 'vars.yaml']) {
-      const fullPath = path.join(this.workspaceRoot, name);
-      if (fs.existsSync(fullPath)) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf8');
-          const parsed = YAML.parse(content);
-          const varsObj = parsed.variable || parsed.variables || parsed.vars || parsed;
-          this.parseVariableBlock(varsObj, fullPath, content);
-        } catch {}
-        break;
-      }
-    }
-
-    // locals.yml / local.yml
-    for (const name of ['locals.yml', 'locals.yaml', 'local.yml', 'local.yaml']) {
-      const fullPath = path.join(this.workspaceRoot, name);
-      if (fs.existsSync(fullPath)) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf8');
-          const parsed = YAML.parse(content);
-          const localsObj = parsed.local || parsed.locals || parsed;
-          this.parseLocalsBlock(localsObj, fullPath, content);
-        } catch {}
-        break;
-      }
-    }
-
-    // data.yml / data.yaml
-    for (const name of ['data.yml', 'data.yaml']) {
-      const fullPath = path.join(this.workspaceRoot, name);
-      if (fs.existsSync(fullPath)) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf8');
-          const parsed = YAML.parse(content);
-          const dataObj = parsed.data || parsed;
-          this.parseDataBlock(dataObj, fullPath, content);
-        } catch {}
-        break;
-      }
-    }
-  }
-
-  private scanResourceConfigs(): void {
-    for (const name of ['resource.yml', 'resource.yaml']) {
-      const fullPath = path.join(this.workspaceRoot, name);
-      if (fs.existsSync(fullPath)) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf8');
-          const parsed = YAML.parse(content);
-          const resBlock = parsed.resource || parsed;
-          if (resBlock && typeof resBlock === 'object') {
-            if (resBlock.testcase?.match) this.config.scopes.testcase = resBlock.testcase.match;
-            if (resBlock.testrun?.match) this.config.scopes.testrun = resBlock.testrun.match;
-            if (resBlock.testplan?.match) this.config.scopes.testplan = resBlock.testplan.match;
-          }
-        } catch {}
-        break;
-      }
-    }
-  }
-
-  private scanDomainConfigs(): void {
+  /**
+   * Scans all YAML files in the workspace (Terraform style).
+   * Reads and merges blocks (variable, locals, resource, data, module, output, policy)
+   * regardless of arbitrary file naming.
+   */
+  private scanManifestFiles(baseFile: string | null): void {
     const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', '.terraform', 'dist', 'coverage', '.system_generated']);
-    const RESERVED_ROOT_FILES = new Set([
-      'main.yml', 'main.yaml', 'testform.yml', 'testform.yaml',
-      'variables.yml', 'variables.yaml', 'vars.yml', 'vars.yaml',
-      'locals.yml', 'locals.yaml', 'local.yml', 'local.yaml',
-      'resource.yml', 'resource.yaml',
-      'data.yml', 'data.yaml', 'outputs.yml', 'outputs.yaml'
-    ]);
 
     const walk = (currentDir: string) => {
       try {
-        const isRoot = path.resolve(currentDir) === path.resolve(this.workspaceRoot);
         const entries = fs.readdirSync(currentDir, { withFileTypes: true });
         for (const entry of entries) {
           if (entry.isDirectory()) {
@@ -162,27 +91,58 @@ export class WorkspaceScanner {
             }
           } else if (entry.isFile()) {
             const lower = entry.name.toLowerCase();
-            if ((lower.endsWith('.yml') || lower.endsWith('.yaml')) && !(lower.endsWith('.vars.yml') || lower.endsWith('.vars.yaml'))) {
-              if (isRoot && RESERVED_ROOT_FILES.has(lower)) continue;
-              const fullPath = path.join(currentDir, entry.name);
-              try {
-                const content = fs.readFileSync(fullPath, 'utf8');
-                const parsed = YAML.parse(content);
-                if (parsed && typeof parsed === 'object') {
-                  if (parsed.variable || parsed.variables || parsed.vars) {
-                    this.parseVariableBlock(parsed.variable || parsed.variables || parsed.vars, fullPath, content);
-                  }
-                  if (parsed.locals || parsed.local) {
-                    this.parseLocalsBlock(parsed.locals || parsed.local, fullPath, content);
-                  }
-                  if (parsed.data) {
-                    this.parseDataBlock(parsed.data, fullPath, content);
-                  }
-                  if (parsed.module || parsed.modules) {
-                    this.parseModulesBlock(parsed.module || parsed.modules, fullPath, content);
-                  }
-                }
-              } catch {}
+            // Skip non-YAML files, *.vars.yml value files (handled in Level 3), and base config already parsed
+            if (!lower.endsWith('.yml') && !lower.endsWith('.yaml')) continue;
+            if (lower.endsWith('.vars.yml') || lower.endsWith('.vars.yaml')) continue;
+
+            const fullPath = path.join(currentDir, entry.name);
+            if (baseFile && path.resolve(fullPath) === path.resolve(baseFile)) continue;
+
+            try {
+              const content = fs.readFileSync(fullPath, 'utf8');
+              const parsed = YAML.parse(content);
+              if (!parsed || typeof parsed !== 'object') continue;
+
+              // 1. Variable block (variable: or variables: or naked object in variable.yml / variables.yml)
+              const varsObj = parsed.variable || parsed.variables || parsed.vars;
+              if (varsObj && typeof varsObj === 'object') {
+                this.parseVariableBlock(varsObj, fullPath, content);
+              } else if (lower.startsWith('variable.') || lower.startsWith('variables.') || lower.startsWith('vars.')) {
+                this.parseVariableBlock(parsed, fullPath, content);
+              }
+
+              // 2. Locals block (locals: or local: or naked object in locals.yml / local.yml)
+              const localsObj = parsed.locals || parsed.local;
+              if (localsObj && typeof localsObj === 'object') {
+                this.parseLocalsBlock(localsObj, fullPath, content);
+              } else if (lower.startsWith('locals.') || lower.startsWith('local.')) {
+                this.parseLocalsBlock(parsed, fullPath, content);
+              }
+
+              // 3. Resource block (resource: or scopes: or naked object in resource.yml)
+              const resBlock = parsed.resource || parsed.scopes;
+              const targetRes = (resBlock && typeof resBlock === 'object') ? resBlock : (lower.startsWith('resource.') ? parsed : null);
+              if (targetRes && typeof targetRes === 'object') {
+                if (targetRes.testcase?.match) this.config.scopes.testcase = targetRes.testcase.match;
+                if (targetRes.testrun?.match) this.config.scopes.testrun = targetRes.testrun.match;
+                if (targetRes.testplan?.match) this.config.scopes.testplan = targetRes.testplan.match;
+              }
+
+              // 4. Data block (data: or naked object in data.yml)
+              const dataObj = parsed.data;
+              if (dataObj && typeof dataObj === 'object') {
+                this.parseDataBlock(dataObj, fullPath, content);
+              } else if (lower.startsWith('data.')) {
+                this.parseDataBlock(parsed, fullPath, content);
+              }
+
+              // 5. Module block (module: or modules:)
+              const moduleObj = parsed.module || parsed.modules;
+              if (moduleObj && typeof moduleObj === 'object') {
+                this.parseModulesBlock(moduleObj, fullPath, content);
+              }
+            } catch {
+              // Ignore syntax errors while typing
             }
           }
         }

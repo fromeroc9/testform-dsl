@@ -342,6 +342,7 @@
         "required": ["value"]
       }
     },
+    "output": { "$ref": "#/properties/outputs" },
     "policy": {
       "type": "object",
       "description": "Governance and quality gate policy rules"

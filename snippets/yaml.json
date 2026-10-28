@@ -12,7 +12,7 @@
       "    description: \"${2:Base application URL}\"",
       "    default: \"${3:https://example.com}\"",
       "",
-      "local:",
+      "locals:",
       "  ${4:base_url}: \"\\${var.${1:app_url}}\"",
       "",
       "resource:",

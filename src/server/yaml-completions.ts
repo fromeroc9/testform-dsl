@@ -132,9 +132,17 @@ export function provideYamlCompletions(
       ];
     }
 
-    // CRITICAL FIX: If key is a dictionary parent (variable, resource, local, data, modules, outputs)
+    // CRITICAL FIX: If key is a dictionary parent (variable, locals, resource, data, module, output)
     // DO NOT emit properties inline on the same line! They require a line break + indent.
-    const DICTIONARY_PARENTS = new Set(['variable', 'variables', 'vars', 'local', 'locals', 'resource', 'scopes', 'data', 'modules', 'outputs', 'policy', 'fields', 'scaffold']);
+    const DICTIONARY_PARENTS = new Set([
+      'variable', 'variables', 'vars',
+      'locals', 'local',
+      'resource', 'scopes',
+      'data',
+      'module', 'modules',
+      'output', 'outputs',
+      'policy', 'fields', 'scaffold'
+    ]);
     if (DICTIONARY_PARENTS.has(key)) {
       return [];
     }
@@ -208,10 +216,10 @@ export function provideYamlCompletions(
         insertText: 'variable:\n  '
       },
       {
-        label: 'local:',
+        label: 'locals:',
         kind: CompletionItemKind.Struct,
-        detail: 'Local Computed Expressions Block',
-        insertText: 'local:\n  '
+        detail: 'Local Computed Expressions Block (Terraform-style)',
+        insertText: 'locals:\n  '
       },
       {
         label: 'resource:',
@@ -227,16 +235,16 @@ export function provideYamlCompletions(
         insertText: 'data:\n  '
       },
       {
-        label: 'modules:',
+        label: 'module:',
         kind: CompletionItemKind.Struct,
         detail: 'Feature Modules Block',
-        insertText: 'modules:\n  '
+        insertText: 'module:\n  '
       },
       {
-        label: 'outputs:',
+        label: 'output:',
         kind: CompletionItemKind.Struct,
-        detail: 'Global Root Outputs Block',
-        insertText: 'outputs:\n  '
+        detail: 'Root Output Values Declaration Block',
+        insertText: 'output:\n  '
       },
       {
         label: 'policy:',
@@ -409,8 +417,8 @@ export function provideYamlCompletions(
     }
   }
 
-  // Case F: Inside "modules"
-  if (rootSection === 'modules') {
+  // Case F: Inside "module" / "modules"
+  if (rootSection === 'module' || rootSection === 'modules') {
     if (ancestry.length === 1) {
       return [
         {
@@ -418,7 +426,7 @@ export function provideYamlCompletions(
           kind: CompletionItemKind.Field,
           detail: 'Reusable Testform Feature Module',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '${1:auth_module}:\n  source: "${2:auth/login.case.feature}"\n  vars:\n    ${3:role}: "${4:standard_user}"\n  outputs:\n    ${5:login_title}:\n      value: "${6:\\${testcase.auth/login.case.feature.@tc-1.title}}"'
+          insertText: '${1:auth_module}:\n  source: "${2:auth/login.case.feature}"\n  vars:\n    ${3:role}: "${4:standard_user}"\n  output:\n    ${5:login_title}:\n      value: "${6:\\${testcase.auth/login.case.feature.@tc-1.title}}"'
         }
       ];
     }
@@ -427,10 +435,11 @@ export function provideYamlCompletions(
         { label: 'source:', kind: CompletionItemKind.Property, detail: 'Path to feature file or directory', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: "${1:auth/login.case.feature}"' },
         { label: 'scenario:', kind: CompletionItemKind.Property, detail: 'Scenario identity tag filter', insertTextFormat: InsertTextFormat.Snippet, insertText: 'scenario: "${1:@tc-1}"' },
         { label: 'vars:', kind: CompletionItemKind.Property, detail: 'Input parameters passed to module', insertText: 'vars:\n  ' },
-        { label: 'outputs:', kind: CompletionItemKind.Property, detail: 'Exported outputs from module', insertText: 'outputs:\n  ' }
+        { label: 'output:', kind: CompletionItemKind.Property, detail: 'Exported output from module', insertText: 'output:\n  ' }
       ];
     }
-    if (ancestry[ancestry.length - 1] === 'outputs') {
+    const lastKey = ancestry[ancestry.length - 1];
+    if (lastKey === 'output' || lastKey === 'outputs') {
       return [
         {
           label: '<output_name>:',
@@ -443,8 +452,8 @@ export function provideYamlCompletions(
     }
   }
 
-  // Case G: Inside "outputs"
-  if (rootSection === 'outputs') {
+  // Case G: Inside "output" / "outputs"
+  if (rootSection === 'output' || rootSection === 'outputs') {
     if (ancestry.length === 1) {
       return [
         {

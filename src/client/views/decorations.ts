@@ -8,102 +8,70 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
   readonly onDidChangeFileDecorations: vscode.Event<vscode.Uri | vscode.Uri[] | undefined> =
     this._onDidChangeFileDecorations.event;
 
-  private scopes = {
-    testcase: '*.case.feature',
-    testrun: '*.run.feature',
-    testplan: '*.plan.feature'
-  };
+  private isTestformProject: boolean = false;
 
   constructor() {
-    this.refreshScopes();
-    // Watch for config changes
-    const watcher = vscode.workspace.createFileSystemWatcher('{**/main.yml,**/main.yaml,**/testform.yml,**/testform.yaml,**/resource.yml}');
-    watcher.onDidChange(() => {
-      this.refreshScopes();
-      this._onDidChangeFileDecorations.fire(undefined);
-    });
+    this.checkWorkspace();
+    const watcher = vscode.workspace.createFileSystemWatcher('**/*.{yml,yaml}');
+    watcher.onDidCreate(() => this.refresh());
+    watcher.onDidDelete(() => this.refresh());
+    watcher.onDidChange(() => this.refresh());
   }
 
-  public refreshScopes(): void {
+  private checkWorkspace(): void {
     const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) return;
-
-    for (const file of ['main.yml', 'main.yaml', 'testform.yml', 'testform.yaml', 'resource.yml']) {
-      const p = path.join(folders[0].uri.fsPath, file);
-      if (fs.existsSync(p)) {
-        try {
-          const content = fs.readFileSync(p, 'utf8');
-          const tcMatch = content.match(/testcase:\s*\n(?:\s+.*?\n)*?\s+match:\s*["']?([^"'\n]+)["']?/);
-          if (tcMatch) this.scopes.testcase = tcMatch[1].trim();
-
-          const trMatch = content.match(/testrun:\s*\n(?:\s+.*?\n)*?\s+match:\s*["']?([^"'\n]+)["']?/);
-          if (trMatch) this.scopes.testrun = trMatch[1].trim();
-
-          const tpMatch = content.match(/testplan:\s*\n(?:\s+.*?\n)*?\s+match:\s*["']?([^"'\n]+)["']?/);
-          if (tpMatch) this.scopes.testplan = tpMatch[1].trim();
-        } catch {}
-        break;
-      }
+    if (!folders || folders.length === 0) {
+      this.isTestformProject = false;
+      return;
     }
+
+    const root = folders[0].uri.fsPath;
+    const candidates = ['main.yml', 'main.yaml', 'testform.yml', 'testform.yaml'];
+    this.isTestformProject = candidates.some(f => fs.existsSync(path.join(root, f)));
+  }
+
+  public refresh(): void {
+    this.checkWorkspace();
+    this._onDidChangeFileDecorations.fire(undefined);
   }
 
   provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
     const fileName = path.basename(uri.fsPath).toLowerCase();
 
-    // 1. Check YAML manifests
-    if (fileName === 'main.yml' || fileName === 'main.yaml' || fileName === 'testform.yml' || fileName === 'testform.yaml') {
+    // Only inspect YAML configuration files (no intrusive decorations or colors on feature files)
+    if (!fileName.endsWith('.yml') && !fileName.endsWith('.yaml')) {
+      return undefined;
+    }
+
+    // Root manifests and auto-loaded variable value files always get TF
+    const ROOT_MANIFESTS = new Set([
+      'main.yml', 'main.yaml',
+      'testform.yml', 'testform.yaml',
+      'testform.config.yml', 'testform.config.yaml'
+    ]);
+
+    if (ROOT_MANIFESTS.has(fileName) || fileName.endsWith('.vars.yml') || fileName.endsWith('.vars.yaml')) {
       return {
         badge: 'TF',
-        tooltip: 'Testform Root Manifest',
-        color: new vscode.ThemeColor('symbolIcon.classForeground')
+        tooltip: 'Testform Manifest'
       };
     }
 
-    if (fileName === 'resource.yml' || fileName === 'resource.yaml' || fileName === 'variables.yml' || fileName.endsWith('.vars.yml')) {
-      return {
-        badge: 'TF',
-        tooltip: 'Testform Configuration Component',
-        color: new vscode.ThemeColor('symbolIcon.variableForeground')
-      };
-    }
-
-    // 2. Check dynamic scopes matched from configuration
-    if (this.matchesPattern(fileName, this.scopes.testcase)) {
-      return {
-        badge: 'TC',
-        tooltip: 'Testform Testcase Specification',
-        color: new vscode.ThemeColor('testing.iconPassed')
-      };
-    }
-
-    if (this.matchesPattern(fileName, this.scopes.testrun)) {
-      return {
-        badge: 'TR',
-        tooltip: 'Testform Testrun Suite',
-        color: new vscode.ThemeColor('testing.iconQueued')
-      };
-    }
-
-    if (this.matchesPattern(fileName, this.scopes.testplan)) {
-      return {
-        badge: 'TP',
-        tooltip: 'Testform Master Testplan',
-        color: new vscode.ThemeColor('symbolIcon.packageForeground')
-      };
+    // In a Testform workspace, treat YAML files by block structure like Terraform (not by filename)
+    if (this.isTestformProject) {
+      try {
+        const content = fs.readFileSync(uri.fsPath, 'utf8');
+        // Check if file declares any Testform top-level blocks
+        const hasTestformBlock = /^(version|provider|backend|variable|variables|locals|local|resource|scopes|data|module|modules|output|outputs|policy)\s*:/m.test(content);
+        if (hasTestformBlock) {
+          return {
+            badge: 'TF',
+            tooltip: 'Testform Configuration'
+          };
+        }
+      } catch {}
     }
 
     return undefined;
-  }
-
-  private matchesPattern(fileName: string, pattern: string): boolean {
-    if (!pattern) return false;
-    const cleanPattern = pattern.split('::')[0].trim();
-    // Convert glob like *.case.feature to regex
-    const regexStr = '^' + cleanPattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$';
-    try {
-      return new RegExp(regexStr, 'i').test(fileName);
-    } catch {
-      return false;
-    }
   }
 }
