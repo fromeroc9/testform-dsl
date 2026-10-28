@@ -12,44 +12,44 @@ interface ReportMeta {
 const CORE_REPORTS: ReportMeta[] = [
   {
     slug: 'testcase-summary',
-    label: 'Resumen de Casos de Prueba',
-    description: 'Métricas de estado, ejecución y porcentaje de éxito',
+    label: 'Test Case Summary',
+    description: 'Execution statuses, metrics, and pass rate',
     icon: 'checklist'
   },
   {
     slug: 'testrun-summary',
-    label: 'Resumen de Test Runs',
-    description: 'Resumen de ejecuciones y ciclos activos/cerrados',
+    label: 'Test Run Summary',
+    description: 'Overview of execution cycles and active runs',
     icon: 'play-circle'
   },
   {
     slug: 'testrun-detailed',
-    label: 'Detalle de Ejecución de Corridas',
-    description: 'Detalle caso por caso, prioridades y asignados',
+    label: 'Detailed Test Runs',
+    description: 'Case-by-case breakdown with priorities',
     icon: 'list-ordered'
   },
   {
     slug: 'testplan-summary',
-    label: 'Resumen de Planes de Prueba',
-    description: 'Progreso y vinculación de corridas por plan',
+    label: 'Test Plan Summary',
+    description: 'Progress and linked test runs across test plans',
     icon: 'notebook'
   },
   {
     slug: 'coverage',
-    label: 'Matriz de Cobertura',
-    description: 'Cobertura por tags, componentes y requerimientos',
+    label: 'Coverage Matrix',
+    description: 'Traceability across tags, components, and scopes',
     icon: 'pie-chart'
   },
   {
     slug: 'matrix',
-    label: 'Matriz de Trazabilidad',
-    description: 'Matriz cruzada de requerimientos y casos',
+    label: 'Traceability Matrix',
+    description: 'Cross-matrix mapping requirements to test cases',
     icon: 'table'
   },
   {
     slug: 'audit',
-    label: 'Auditoría y Calidad',
-    description: 'Cumplimiento de políticas y control de gobernanza',
+    label: 'Quality & Governance Audit',
+    description: 'Policy compliance and QA gate validation',
     icon: 'shield'
   }
 ];
@@ -64,8 +64,9 @@ export class ReportTreeItem extends vscode.TreeItem {
   ) {
     super(reportTitle, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'testformReport';
-    this.description = isCustom ? `[Custom] ${slug}` : slug;
-    this.tooltip = `${reportTitle}\n${reportDescription}\n\nComando: testform report ${slug}`;
+    // Do not show the slug like "testcase-summary" in the description
+    this.description = isCustom ? '[Custom]' : undefined;
+    this.tooltip = `${reportTitle}\n${reportDescription}\n\nCommand: testform report ${slug}`;
     this.iconPath = new vscode.ThemeIcon(iconName);
     this.command = {
       command: 'testform.report.trigger',
@@ -110,8 +111,8 @@ export class ReportsTreeProvider implements vscode.TreeDataProvider<ReportTreeIt
                 items.push(
                   new ReportTreeItem(
                     slug,
-                    `Reporte Personalizado (${slug})`,
-                    `Reporte cargado desde .testform/reports/${e.name}`,
+                    `Custom Report (${slug})`,
+                    `Loaded from .testform/reports/${e.name}`,
                     'extensions',
                     true
                   )

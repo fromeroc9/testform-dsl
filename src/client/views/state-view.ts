@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-export type StateNodeKind = 'category' | 'resource' | 'attribute' | 'output' | 'info';
+export type StateNodeKind = 'category' | 'resource' | 'cases_group' | 'executed_case' | 'attribute' | 'output' | 'info';
 
 export class StateTreeItem extends vscode.TreeItem {
   constructor(
@@ -31,6 +31,11 @@ export class StateTreeItem extends vscode.TreeItem {
           arguments: [address]
         };
       }
+    } else if (kind === 'cases_group') {
+      this.contextValue = 'testformCasesGroup';
+      this.iconPath = new vscode.ThemeIcon('checklist');
+    } else if (kind === 'executed_case') {
+      this.contextValue = 'testformExecutedCase';
     } else if (kind === 'output') {
       this.contextValue = 'testformOutput';
       this.iconPath = new vscode.ThemeIcon('symbol-variable');
@@ -88,6 +93,22 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         ]);
       }
 
+      // Build a title lookup map for testcase identities
+      // Maps e.g. "auth/login.case.feature.@tc-1" -> "Inicio de sesión exitoso con usuario estándar"
+      // and "@tc-1" -> "Inicio de sesión..."
+      const caseTitleMap = new Map<string, string>();
+      for (const r of resources) {
+        const id = (r.identity || '').replace(/\\/g, '/').toLowerCase();
+        const title = r.attributes?.title;
+        if (id && title) {
+          caseTitleMap.set(id, title);
+          const tagMatch = id.match(/@(tc|tr|tp)-[0-9]+/i);
+          if (tagMatch) {
+            caseTitleMap.set(tagMatch[0].toLowerCase(), title);
+          }
+        }
+      }
+
       const testruns: StateTreeItem[] = [];
       const testcases: StateTreeItem[] = [];
       const testplans: StateTreeItem[] = [];
@@ -104,6 +125,64 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
 
         // Build detail child attributes
         const childNodes: StateTreeItem[] = [];
+
+        // Group executed testcases into a dedicated collapsible sub-tree
+        if (attrs.testcaseStatuses && typeof attrs.testcaseStatuses === 'object') {
+          const executedCaseNodes: StateTreeItem[] = [];
+
+          for (const [tcAddr, stVal] of Object.entries(attrs.testcaseStatuses)) {
+            const shortAddr = tcAddr.replace(/\\/g, '/');
+            const normAddr = shortAddr.toLowerCase();
+            const tagMatch = shortAddr.match(/@(tc|tr|tp)-[0-9]+/i);
+            const tag = tagMatch ? tagMatch[0] : '';
+
+            // Resolve real scenario name
+            const scenarioName =
+              caseTitleMap.get(normAddr) ||
+              (tag ? caseTitleMap.get(tag.toLowerCase()) : undefined) ||
+              shortAddr;
+
+            const st = String(stVal).toLowerCase();
+            const caseItem = new StateTreeItem(
+              scenarioName,
+              vscode.TreeItemCollapsibleState.None,
+              'executed_case',
+              shortAddr,
+              tag ? `[${st.toUpperCase()}] ${tag}` : `[${st.toUpperCase()}]`
+            );
+
+            caseItem.tooltip = `Scenario: ${scenarioName}\nAddress: ${shortAddr}\nStatus: ${st}`;
+
+            if (st === 'passed') {
+              caseItem.iconPath = new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'));
+            } else if (st === 'failed') {
+              caseItem.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed'));
+            } else if (st === 'pending') {
+              caseItem.iconPath = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('testing.iconQueued'));
+            } else if (st === 'blocked') {
+              caseItem.iconPath = new vscode.ThemeIcon('stop', new vscode.ThemeColor('testing.iconErrored'));
+            } else if (st === 'skipped') {
+              caseItem.iconPath = new vscode.ThemeIcon('debug-step-over', new vscode.ThemeColor('testing.iconSkipped'));
+            } else {
+              caseItem.iconPath = new vscode.ThemeIcon('circle-outline');
+            }
+
+            executedCaseNodes.push(caseItem);
+          }
+
+          if (executedCaseNodes.length > 0) {
+            const casesGroup = new StateTreeItem(
+              `Executed Cases (${executedCaseNodes.length})`,
+              vscode.TreeItemCollapsibleState.Expanded,
+              'cases_group',
+              undefined,
+              undefined,
+              executedCaseNodes
+            );
+            childNodes.push(casesGroup);
+          }
+        }
+
         childNodes.push(new StateTreeItem(`Identity: ${identity}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
         if (remoteRef) {
           childNodes.push(new StateTreeItem(`Remote: ${remoteRef}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
@@ -113,12 +192,6 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         }
         if (r.lastApplied) {
           childNodes.push(new StateTreeItem(`Last Applied: ${r.lastApplied}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
-        }
-        if (attrs.testcaseStatuses && typeof attrs.testcaseStatuses === 'object') {
-          for (const [tcAddr, st] of Object.entries(attrs.testcaseStatuses)) {
-            const shortAddr = tcAddr.replace(/\\/g, '/');
-            childNodes.push(new StateTreeItem(`Case: ${shortAddr} → ${st}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
-          }
         }
 
         const resItem = new StateTreeItem(

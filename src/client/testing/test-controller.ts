@@ -3,9 +3,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { runTestformCommand } from '../terminal';
 
+interface ReferencedFeatureInfo {
+  featureTitle: string;
+  scenariosByTag: Map<string, string>; // e.g. "@tc-1" -> "Inicio de sesión exitoso con usuario estándar"
+  scenariosByName: Map<string, string>;
+}
+
 export class TestformTestController {
   private controller: vscode.TestController;
   private disposables: vscode.Disposable[] = [];
+  private scenarioStatusMap: Map<string, string> = new Map(); // testId -> status ("passed", "failed", etc.)
 
   constructor() {
     this.controller = vscode.tests.createTestController('testform-controller', 'Testform Test Runs');
@@ -13,7 +20,7 @@ export class TestformTestController {
 
     // Run Profile for executing tests
     this.controller.createRunProfile(
-      'Apply Testrun Target',
+      'Run Testform Suite',
       vscode.TestRunProfileKind.Run,
       (request, token) => this.runHandler(request, token),
       true
@@ -45,7 +52,7 @@ export class TestformTestController {
     const fileName = path.basename(filePath).toLowerCase();
     if (fileName.includes('.run.feature')) return true;
 
-    // Check header tags
+    // Check header tags for @testrun
     const firstLines = content.split(/\r?\n/).slice(0, 15);
     for (const line of firstLines) {
       const trimmed = line.trim();
@@ -54,6 +61,89 @@ export class TestformTestController {
       }
     }
     return false;
+  }
+
+  /**
+   * Reads a referenced feature file (e.g. auth/login.case.feature)
+   * to extract its Feature title and scenario names by tag.
+   */
+  private resolveReferencedFeature(rootPath: string, ruleText: string): ReferencedFeatureInfo | null {
+    try {
+      // Find possible candidate path
+      let candidatePath = path.resolve(rootPath, ruleText);
+      if (!fs.existsSync(candidatePath)) {
+        if (!candidatePath.endsWith('.feature')) {
+          candidatePath = `${candidatePath}.feature`;
+        }
+      }
+
+      if (!fs.existsSync(candidatePath)) {
+        // Fallback: search in workspace by basename
+        const base = path.basename(ruleText);
+        const searchBase = base.endsWith('.feature') ? base : `${base}.feature`;
+        const findInDir = (dir: string): string | null => {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const e of entries) {
+            if (e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules') {
+              const res = findInDir(path.join(dir, e.name));
+              if (res) return res;
+            } else if (e.isFile() && e.name.toLowerCase() === searchBase.toLowerCase()) {
+              return path.join(dir, e.name);
+            }
+          }
+          return null;
+        };
+        const found = findInDir(rootPath);
+        if (found) candidatePath = found;
+      }
+
+      if (!fs.existsSync(candidatePath)) return null;
+
+      const content = fs.readFileSync(candidatePath, 'utf8');
+      const lines = content.split(/\r?\n/);
+
+      let featureTitle = path.basename(candidatePath);
+      const scenariosByTag = new Map<string, string>();
+      const scenariosByName = new Map<string, string>();
+
+      let pendingTags: string[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('#')) continue;
+
+        const featMatch = line.match(/^(?:Feature|Característica):\s*(.+)$/i);
+        if (featMatch) {
+          featureTitle = featMatch[1].trim();
+          continue;
+        }
+
+        if (line.startsWith('@')) {
+          const tags = line.split(/\s+/).filter(t => t.startsWith('@'));
+          pendingTags.push(...tags);
+          continue;
+        }
+
+        const scenMatch = line.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
+        if (scenMatch) {
+          const title = scenMatch[1].trim();
+          scenariosByName.set(title.toLowerCase(), title);
+
+          for (const tag of pendingTags) {
+            if (/^@(tc|tr|tp)-[0-9]+/i.test(tag)) {
+              scenariosByTag.set(tag.toLowerCase(), title);
+            }
+          }
+          pendingTags = [];
+        } else if (line.length > 0 && !line.startsWith('@')) {
+          pendingTags = [];
+        }
+      }
+
+      return { featureTitle, scenariosByTag, scenariosByName };
+    } catch {
+      return null;
+    }
   }
 
   private async updateFileTests(uri: vscode.Uri): Promise<void> {
@@ -65,7 +155,7 @@ export class TestformTestController {
 
       const content = fs.readFileSync(uri.fsPath, 'utf8');
 
-      // Only expose test runs in the Test Explorer / Gutter Play icons
+      // Only expose test runs in the Test Explorer
       if (!this.isTestrunFile(uri.fsPath, content)) {
         this.removeFileTests(uri);
         return;
@@ -95,9 +185,9 @@ export class TestformTestController {
       );
       fileTestItem.description = relPath;
 
-      // Group scenarios under Rules if present
       let currentRuleItem: vscode.TestItem | null = null;
-      let pendingTags: string[] = [];
+      let currentRefInfo: ReferencedFeatureInfo | null = null;
+      let currentScenarioItem: vscode.TestItem | null = null;
 
       for (let i = 0; i < lines.length; i++) {
         const rawLine = lines[i];
@@ -105,44 +195,65 @@ export class TestformTestController {
 
         if (trimmed.startsWith('#')) continue;
 
-        if (trimmed.startsWith('@')) {
-          const tags = trimmed.split(/\s+/).filter(t => t.startsWith('@'));
-          pendingTags.push(...tags);
-          continue;
-        }
-
+        // 1. Rule block: Rule: auth/login.case.feature
         const ruleMatch = trimmed.match(/^(?:Rule|Regla):\s*(.+)$/i);
         if (ruleMatch) {
-          const ruleTitle = ruleMatch[1].trim();
+          const ruleText = ruleMatch[1].trim();
+          currentRefInfo = this.resolveReferencedFeature(rootPath, ruleText);
+
+          // Use the referenced feature's title as the label if resolved
+          const ruleLabel = currentRefInfo?.featureTitle || ruleText;
           const ruleId = `${uri.toString()}::rule_${i}`;
-          currentRuleItem = this.controller.createTestItem(ruleId, ruleTitle, uri);
+
+          currentRuleItem = this.controller.createTestItem(ruleId, ruleLabel, uri);
+          currentRuleItem.description = ruleText;
           currentRuleItem.range = new vscode.Range(new vscode.Position(i, 0), new vscode.Position(i, rawLine.length));
+
           fileTestItem.children.add(currentRuleItem);
-          pendingTags = [];
+          currentScenarioItem = null;
           continue;
         }
 
+        // 2. Scenario block: Scenario: login.case.feature.@tc-1
         const scenarioMatch = trimmed.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
         if (scenarioMatch) {
-          const title = scenarioMatch[1].trim();
-          const identityTag = pendingTags.find(t => /^@(tr|tc|tp)-/i.test(t));
-          const id = identityTag ? `${uri.toString()}::${identityTag}` : `${uri.toString()}::line_${i}`;
+          const rawScenarioText = scenarioMatch[1].trim();
 
-          const scenarioItem = this.controller.createTestItem(id, title, uri);
-          scenarioItem.range = new vscode.Range(new vscode.Position(i, 0), new vscode.Position(i, rawLine.length));
+          // Check if it references a testcase tag like @tc-1 or an address
+          const tagMatch = rawScenarioText.match(/@(tc|tr|tp)-[0-9]+/i);
+          const tag = tagMatch ? tagMatch[0].toLowerCase() : undefined;
 
-          if (identityTag) {
-            scenarioItem.description = identityTag;
+          // Lookup linked scenario name from referenced feature
+          let linkedTitle: string | undefined;
+          if (tag && currentRefInfo) {
+            linkedTitle = currentRefInfo.scenariosByTag.get(tag);
           }
+
+          const displayTitle = linkedTitle || rawScenarioText;
+          const id = `${uri.toString()}::scenario_${i}`;
+
+          currentScenarioItem = this.controller.createTestItem(id, displayTitle, uri);
+          currentScenarioItem.range = new vscode.Range(new vscode.Position(i, 0), new vscode.Position(i, rawLine.length));
+          currentScenarioItem.description = tag ? tag.toUpperCase() : undefined;
 
           if (currentRuleItem) {
-            currentRuleItem.children.add(scenarioItem);
+            currentRuleItem.children.add(currentScenarioItem);
           } else {
-            fileTestItem.children.add(scenarioItem);
+            fileTestItem.children.add(currentScenarioItem);
           }
-          pendingTags = [];
-        } else if (trimmed.length > 0 && !trimmed.startsWith('@')) {
-          pendingTags = [];
+          continue;
+        }
+
+        // 3. Status mark step: * mark status = passed | failed | pending | skipped | blocked
+        const statusMatch = trimmed.match(/^\*\s+mark\s+status\s*=\s*([a-zA-Z]+)/i);
+        if (statusMatch && currentScenarioItem) {
+          const status = statusMatch[1].toLowerCase();
+          this.scenarioStatusMap.set(currentScenarioItem.id, status);
+
+          const existingTag = currentScenarioItem.description?.split(' ')[0] || '';
+          currentScenarioItem.description = existingTag
+            ? `${existingTag} [${status.toUpperCase()}]`
+            : `[${status.toUpperCase()}]`;
         }
       }
 
@@ -172,36 +283,47 @@ export class TestformTestController {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
 
+    // Collect all root feature items
+    const executedFiles = new Set<string>();
+
     for (const item of queue) {
       if (token.isCancellationRequested) {
         run.skipped(item);
         continue;
       }
 
-      run.started(item);
-
       const uri = item.uri;
-      if (!uri) {
-        run.skipped(item);
-        continue;
-      }
+      if (!uri) continue;
 
-      const relPath = rootPath ? path.relative(rootPath, uri.fsPath).replace(/\\/g, '/') : path.basename(uri.fsPath);
+      const fileKey = uri.toString();
+      if (!executedFiles.has(fileKey)) {
+        executedFiles.add(fileKey);
+        const relPath = rootPath ? path.relative(rootPath, uri.fsPath).replace(/\\/g, '/') : path.basename(uri.fsPath);
 
-      // Single scenario: target is address (e.g. suites/smoke.run.feature.@tr-1)
-      const targetTag = item.description && item.description.startsWith('@') ? item.description : undefined;
-
-      if (targetTag) {
-        const address = `${relPath}.${targetTag}`;
-        run.appendOutput(`Executing Testform target: ${address}\r\n`);
-        runTestformCommand(`apply --auto-approve --target="${address}"`);
-        run.passed(item);
-      } else {
-        // Entire testrun feature
         run.appendOutput(`Executing Testform suite: ${relPath}\r\n`);
+        // Always run at Feature level directly
         runTestformCommand(`apply --auto-approve --target="${relPath}"`);
-        run.passed(item);
       }
+
+      // Propagate mark status to scenario items
+      const reportScenarioStatus = (node: vscode.TestItem) => {
+        const status = this.scenarioStatusMap.get(node.id);
+        run.started(node);
+
+        if (status === 'passed') {
+          run.passed(node);
+        } else if (status === 'failed') {
+          run.failed(node, new vscode.TestMessage('Status in ledger: failed'));
+        } else if (status === 'skipped' || status === 'blocked') {
+          run.skipped(node);
+        } else {
+          run.enqueued(node);
+        }
+
+        node.children.forEach(c => reportScenarioStatus(c));
+      };
+
+      reportScenarioStatus(item);
     }
 
     run.end();

@@ -230,17 +230,17 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('testform.report', async () => {
       const reportTypes = [
-        { label: 'Resumen de Casos de Prueba', description: 'testcase-summary' },
-        { label: 'Resumen de Test Runs', description: 'testrun-summary' },
-        { label: 'Detalle de Ejecución de Corridas', description: 'testrun-detailed' },
-        { label: 'Resumen de Planes de Prueba', description: 'testplan-summary' },
-        { label: 'Matriz de Cobertura', description: 'coverage' },
-        { label: 'Matriz de Trazabilidad', description: 'matrix' },
-        { label: 'Auditoría y Calidad', description: 'audit' }
+        { label: 'Test Case Summary', description: 'testcase-summary' },
+        { label: 'Test Run Summary', description: 'testrun-summary' },
+        { label: 'Detailed Test Runs', description: 'testrun-detailed' },
+        { label: 'Test Plan Summary', description: 'testplan-summary' },
+        { label: 'Coverage Matrix', description: 'coverage' },
+        { label: 'Traceability Matrix', description: 'matrix' },
+        { label: 'Quality & Governance Audit', description: 'audit' }
       ];
 
       const selected = await vscode.window.showQuickPick(reportTypes, {
-        placeHolder: 'Selecciona el tipo de informe a generar'
+        placeHolder: 'Select report type to generate'
       });
 
       if (selected) {
