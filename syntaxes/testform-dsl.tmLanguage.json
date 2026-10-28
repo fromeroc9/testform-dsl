@@ -1,9 +1,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "Testform DSL Injection",
-  "scopeName": "testform.dsl.injection",
-  "injectionSelector": "L:text.gherkin.feature, L:source.feature, L:source.gherkin",
+  "name": "Testform Gherkin & DSL",
+  "scopeName": "source.feature",
   "patterns": [
+    {
+      "name": "comment.line.number-sign.gherkin",
+      "match": "#.*$"
+    },
     {
       "include": "#expressions"
     },
@@ -11,24 +14,34 @@
       "include": "#outline-params"
     },
     {
-      "include": "#tags-special"
-    },
-    {
       "include": "#dsl-status"
     },
     {
       "include": "#dsl-field"
+    },
+    {
+      "include": "#tags-special"
+    },
+    {
+      "include": "#tags"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#steps"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#tables"
+    },
+    {
+      "include": "#docstrings"
     }
   ],
   "repository": {
-    "outline-params": {
-      "patterns": [
-        {
-          "name": "variable.parameter.outline.gherkin",
-          "match": "<[a-zA-Z0-9_.-]+>"
-        }
-      ]
-    },
     "expressions": {
       "patterns": [
         {
@@ -84,6 +97,14 @@
         }
       ]
     },
+    "outline-params": {
+      "patterns": [
+        {
+          "name": "variable.parameter.outline.gherkin",
+          "match": "<[a-zA-Z0-9_.-]+>"
+        }
+      ]
+    },
     "tags-special": {
       "patterns": [
         {
@@ -101,6 +122,14 @@
         {
           "name": "entity.name.tag.flag.testform",
           "match": "@(smoke|regression|critical|slow|flaky|e2e|auth|ui|api|security|performance|retry|timeout)\\b"
+        }
+      ]
+    },
+    "tags": {
+      "patterns": [
+        {
+          "name": "entity.name.tag.gherkin",
+          "match": "@[a-zA-Z0-9_-]+"
         }
       ]
     },
@@ -131,7 +160,74 @@
           }
         }
       ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.feature.gherkin",
+          "match": "^\\s*(Feature|Característica|Funcionalidad|Rule|Regla|Background|Antecedentes|Contexto|Scenario Outline|Esquema del escenario|Scenario|Escenario|Caso|Examples?|Ejemplos?)\\s*:"
+        }
+      ]
+    },
+    "steps": {
+      "patterns": [
+        {
+          "name": "keyword.control.step.gherkin",
+          "match": "^\\s*(Given|Dado|When|Cuando|Then|Entonces|And|Y|e|But|Pero|\\*)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.gherkin",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "include": "#expressions"
+            },
+            {
+              "include": "#outline-params"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.gherkin",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "include": "#expressions"
+            },
+            {
+              "include": "#outline-params"
+            }
+          ]
+        }
+      ]
+    },
+    "tables": {
+      "patterns": [
+        {
+          "name": "keyword.operator.table.gherkin",
+          "match": "\\|"
+        }
+      ]
+    },
+    "docstrings": {
+      "patterns": [
+        {
+          "name": "string.quoted.triple.gherkin",
+          "begin": "^\\s*(\"\"\"|```)",
+          "end": "^\\s*(\"\"\"|```)",
+          "patterns": [
+            {
+              "include": "#expressions"
+            }
+          ]
+        }
+      ]
     }
   }
 }
-

@@ -22,7 +22,7 @@
     ["'", "'"]
   ],
   "indentationRules": {
-    "increaseIndentPattern": "^\\s*(Feature|Rule|Background|Scenario|Scenario Outline|Examples?)\\s*:.*$",
-    "decreaseIndentPattern": "^\\s*(Feature|Rule|Background|Scenario|Scenario Outline|Examples?)\\s*:.*$"
+    "increaseIndentPattern": "^\\s*(Feature|Característica|Funcionalidad|Rule|Regla|Background|Antecedentes|Contexto|Scenario|Escenario|Scenario Outline|Esquema del escenario|Examples?|Ejemplos?)\\s*:.*$",
+    "decreaseIndentPattern": "^\\s*(Feature|Característica|Funcionalidad|Rule|Regla|Background|Antecedentes|Contexto|Scenario|Escenario|Scenario Outline|Esquema del escenario|Examples?|Ejemplos?)\\s*:.*$"
   }
 }

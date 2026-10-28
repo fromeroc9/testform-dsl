@@ -49,6 +49,12 @@
     "languages": [
       {
         "id": "gherkin",
+        "aliases": [
+          "Gherkin",
+          "Cucumber",
+          "feature",
+          "Cucumber Gherkin"
+        ],
         "extensions": [
           ".case.feature",
           ".run.feature",
@@ -64,13 +70,9 @@
     ],
     "grammars": [
       {
-        "scopeName": "testform.dsl.injection",
-        "path": "./syntaxes/testform-dsl.tmLanguage.json",
-        "injectTo": [
-          "text.gherkin.feature",
-          "source.feature",
-          "source.gherkin"
-        ]
+        "language": "gherkin",
+        "scopeName": "source.feature",
+        "path": "./syntaxes/testform-dsl.tmLanguage.json"
       }
     ],
     "snippets": [

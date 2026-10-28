@@ -49,8 +49,7 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
     if (fileName.endsWith('.vars.yml') || fileName.endsWith('.vars.yaml')) {
       return {
         badge: 'TF',
-        tooltip: 'Testform Variables Value File',
-        color: new vscode.ThemeColor('charts.blue')
+        tooltip: 'Testform Variables Value File'
       };
     }
 
@@ -58,8 +57,7 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
     if (fileName === 'main.yml' || fileName === 'main.yaml' || fileName === 'testform.yml' || fileName === 'testform.yaml') {
       return {
         badge: 'TF',
-        tooltip: 'Testform Root Manifest',
-        color: new vscode.ThemeColor('charts.blue')
+        tooltip: 'Testform Root Manifest'
       };
     }
 
@@ -72,8 +70,7 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
           this.knownTestformFiles.add(path.basename(uri.fsPath));
           return {
             badge: 'TF',
-            tooltip: 'Testform Configuration Block (Resource/Module)',
-            color: new vscode.ThemeColor('charts.blue')
+            tooltip: 'Testform Configuration Block (Resource/Module)'
           };
         }
       } catch {}
