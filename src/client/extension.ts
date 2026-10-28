@@ -254,25 +254,64 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('Testform state refreshed.');
     }),
     vscode.commands.registerCommand('testform.state.showResource', (item?: any) => {
-      const address = typeof item === 'string' ? item : (item?.address || item?.label);
+      const address = typeof item === 'string'
+        ? item
+        : (item?.address || (typeof item?.label === 'string' ? item.label : item?.label?.label));
       if (address) {
         runTestformCommand(`state show "${address}"`);
       }
     }),
-    vscode.commands.registerCommand('testform.state.inspectResource', async (address: string, rawResource?: any) => {
-      if (!rawResource) {
-        runTestformCommand(`state show "${address}"`);
+    vscode.commands.registerCommand('testform.state.inspectResource', async (itemOrAddress: any, rawResource?: any) => {
+      let address: string | undefined;
+      let resource = rawResource;
+
+      if (itemOrAddress && typeof itemOrAddress === 'object') {
+        const item = itemOrAddress as any;
+        address = item.address || (typeof item.label === 'string' ? item.label : item.label?.label);
+        resource = item.rawResource || rawResource;
+      } else if (typeof itemOrAddress === 'string') {
+        address = itemOrAddress;
+      }
+
+      // If rawResource is not directly attached to tree item, lookup in testform.state
+      if (!resource && address) {
+        try {
+          const workspaceFolders = vscode.workspace.workspaceFolders;
+          if (workspaceFolders && workspaceFolders.length > 0) {
+            const stateFile = path.join(workspaceFolders[0].uri.fsPath, 'testform.state');
+            if (fs.existsSync(stateFile)) {
+              const stateData = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+              const normAddr = address.replace(/\\/g, '/').toLowerCase();
+              const found = stateData.resources?.find((r: any) => {
+                const rIdent = (r.identity || '').replace(/\\/g, '/').toLowerCase();
+                return rIdent === normAddr || rIdent.endsWith(normAddr) || normAddr.endsWith(rIdent);
+              });
+              if (found) {
+                resource = found;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (resource) {
+        const content = JSON.stringify(resource, null, 2);
+        const doc = await vscode.workspace.openTextDocument({
+          content,
+          language: 'json'
+        });
+        await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: true });
         return;
       }
-      const content = JSON.stringify(rawResource, null, 2);
-      const doc = await vscode.workspace.openTextDocument({
-        content,
-        language: 'json'
-      });
-      await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: true });
+
+      if (address) {
+        runTestformCommand(`state show "${address}"`);
+      }
     }),
     vscode.commands.registerCommand('testform.state.taint', async (item?: any) => {
-      const address = typeof item === 'string' ? item : (item?.address || item?.label);
+      const address = typeof item === 'string'
+        ? item
+        : (item?.address || (typeof item?.label === 'string' ? item.label : item?.label?.label));
       if (!address) {
         vscode.window.showErrorMessage('No resource selected to taint.');
         return;
@@ -282,7 +321,9 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage(`Resource '${address}' marked as tainted.`);
     }),
     vscode.commands.registerCommand('testform.state.untaint', async (item?: any) => {
-      const address = typeof item === 'string' ? item : (item?.address || item?.label);
+      const address = typeof item === 'string'
+        ? item
+        : (item?.address || (typeof item?.label === 'string' ? item.label : item?.label?.label));
       if (!address) {
         vscode.window.showErrorMessage('No resource selected to untaint.');
         return;
@@ -292,7 +333,9 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage(`Taint mark removed from '${address}'.`);
     }),
     vscode.commands.registerCommand('testform.state.rm', async (item?: any) => {
-      const address = typeof item === 'string' ? item : (item?.address || item?.label);
+      const address = typeof item === 'string'
+        ? item
+        : (item?.address || (typeof item?.label === 'string' ? item.label : item?.label?.label));
       if (!address) {
         vscode.window.showErrorMessage('No resource selected to remove from state.');
         return;

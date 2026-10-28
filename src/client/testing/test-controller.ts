@@ -386,6 +386,77 @@ export class TestformTestController implements vscode.Disposable {
     }
   }
 
+  private async updateScenarioMarkInDocument(
+    documentUri: vscode.Uri,
+    scenarioLine: number,
+    newStatus: string
+  ): Promise<boolean> {
+    try {
+      const doc = await vscode.workspace.openTextDocument(documentUri);
+      const edit = new vscode.WorkspaceEdit();
+
+      let foundMarkLine = -1;
+      const lineCount = doc.lineCount;
+
+      for (let i = scenarioLine + 1; i < lineCount; i++) {
+        const text = doc.lineAt(i).text;
+        const trimmed = text.trim();
+        if (/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario|Rule|Regla):/i.test(trimmed)) {
+          break;
+        }
+        if (/^\*\s*mark\s+status\s*=/i.test(trimmed)) {
+          foundMarkLine = i;
+          break;
+        }
+      }
+
+      if (foundMarkLine !== -1) {
+        const existingLine = doc.lineAt(foundMarkLine);
+        const indent = existingLine.text.match(/^\s*/)?.[0] || '      ';
+        edit.replace(documentUri, existingLine.range, `${indent}* mark status = ${newStatus}`);
+      } else {
+        const scenLine = doc.lineAt(scenarioLine);
+        const indent = (scenLine.text.match(/^\s*/)?.[0] || '    ') + '  ';
+        edit.insert(documentUri, new vscode.Position(scenarioLine + 1, 0), `${indent}* mark status = ${newStatus}\n`);
+      }
+
+      const success = await vscode.workspace.applyEdit(edit);
+      if (success) {
+        await doc.save();
+      }
+      return success;
+    } catch {
+      return false;
+    }
+  }
+
+  private async updateAllScenarioMarksInDocument(
+    documentUri: vscode.Uri,
+    newStatus: string
+  ): Promise<boolean> {
+    try {
+      const doc = await vscode.workspace.openTextDocument(documentUri);
+      const edit = new vscode.WorkspaceEdit();
+
+      for (let i = 0; i < doc.lineCount; i++) {
+        const text = doc.lineAt(i).text;
+        const trimmed = text.trim();
+        if (/^\*\s*mark\s+status\s*=/i.test(trimmed)) {
+          const indent = text.match(/^\s*/)?.[0] || '      ';
+          edit.replace(documentUri, doc.lineAt(i).range, `${indent}* mark status = ${newStatus}`);
+        }
+      }
+
+      const success = await vscode.workspace.applyEdit(edit);
+      if (success) {
+        await doc.save();
+      }
+      return success;
+    } catch {
+      return false;
+    }
+  }
+
   private async runHandler(
     request: vscode.TestRunRequest,
     token: vscode.CancellationToken
@@ -415,24 +486,81 @@ export class TestformTestController implements vscode.Disposable {
       await this.updateFileTests(uri);
 
       const isScenario = item.id.includes('::scenario_');
-      const isFeature = !item.id.includes('::');
 
       if (isScenario) {
-        // Individual Scenario execution
+        // Individual Scenario execution: prompt with form to choose status
         const targetAddress = this.scenarioAddressMap.get(item.id) || item.label;
-        run.appendOutput(`[Testform] Running scenario target: ${targetAddress}\r\n`);
-        run.started(item);
+        const scenLine = item.range ? item.range.start.line : 0;
 
-        // Execute apply targeted specifically to this scenario
+        interface StatusOption extends vscode.QuickPickItem {
+          status: string;
+        }
+
+        const statusOptions: StatusOption[] = [
+          {
+            label: '$(pass-filled) passed',
+            description: 'PASSED',
+            detail: 'El escenario se ejecutó con éxito y todas las aserciones pasaron.',
+            status: 'passed'
+          },
+          {
+            label: '$(error) failed',
+            description: 'FAILED',
+            detail: 'Fallo de aserción o defecto detectado en la prueba.',
+            status: 'failed'
+          },
+          {
+            label: '$(stop) blocked',
+            description: 'BLOCKED',
+            detail: 'Ejecución bloqueada por un fallo en una dependencia previa.',
+            status: 'blocked'
+          },
+          {
+            label: '$(debug-step-over) skipped',
+            description: 'SKIPPED',
+            detail: 'Ejecución omitida deliberadamente.',
+            status: 'skipped'
+          },
+          {
+            label: '$(history) pending',
+            description: 'PENDING',
+            detail: 'Escenario pendiente de ejecución o en desarrollo.',
+            status: 'pending'
+          }
+        ];
+
+        const selected = await vscode.window.showQuickPick(statusOptions, {
+          placeHolder: `Selecciona el resultado de ejecución para: ${item.label}`,
+          title: `Testform: Registrar Estado del Escenario`
+        });
+
+        if (!selected) {
+          run.skipped(item);
+          continue;
+        }
+
+        const chosenStatus = selected.status;
+
+        // 1. Update the feature file with the chosen status
+        await this.updateScenarioMarkInDocument(uri, scenLine, chosenStatus);
+
+        // 2. Dispatch testform apply for this scenario target
+        run.appendOutput(`[Testform] Running scenario target: ${targetAddress} (status: ${chosenStatus})\r\n`);
+        run.started(item);
         runTestformCommand(`apply --auto-approve --target="${targetAddress}"`);
 
-        // Re-read status immediately
-        const status = this.scenarioStatusMap.get(item.id) || 'passed';
-        if (status === 'passed') {
+        // 3. Immediately reflect in memory and UI
+        this.scenarioStatusMap.set(item.id, chosenStatus);
+        const tagPrefix = item.description?.split(' ')[0] || '';
+        item.description = tagPrefix
+          ? `${tagPrefix} [${chosenStatus.toUpperCase()}]`
+          : `[${chosenStatus.toUpperCase()}]`;
+
+        if (chosenStatus === 'passed') {
           run.passed(item);
-        } else if (status === 'failed') {
-          run.failed(item, new vscode.TestMessage(`Scenario failed according to Testform mark status.`));
-        } else if (status === 'skipped' || status === 'blocked') {
+        } else if (chosenStatus === 'failed') {
+          run.failed(item, new vscode.TestMessage(`Escenario marcado como fallido (failed) por el usuario.`));
+        } else if (chosenStatus === 'skipped' || chosenStatus === 'blocked') {
           run.skipped(item);
         } else {
           run.enqueued(item);
@@ -440,13 +568,48 @@ export class TestformTestController implements vscode.Disposable {
       } else {
         // Feature / Full Testrun execution
         const relPath = rootPath ? path.relative(rootPath, uri.fsPath).replace(/\\/g, '/') : path.basename(uri.fsPath);
+
+        const featureOptions: vscode.QuickPickItem[] = [
+          {
+            label: '$(play) Ejecutar apply con estados actuales',
+            description: 'testform apply --auto-approve',
+            detail: 'Reconcilia el ledger respetando los estados (* mark status) ya definidos en el archivo.'
+          },
+          {
+            label: '$(pass-filled) Marcar todos como PASSED y aplicar',
+            description: 'mark all passed',
+            detail: 'Establece todos los escenarios de esta suite como passed y ejecuta apply.'
+          },
+          {
+            label: '$(history) Resetear todos a PENDING y aplicar',
+            description: 'mark all pending',
+            detail: 'Reinicia todos los escenarios a pending y ejecuta apply.'
+          }
+        ];
+
+        const featChoice = await vscode.window.showQuickPick(featureOptions, {
+          placeHolder: `Selecciona la acción para la suite: ${item.label}`,
+          title: `Testform Suite: ${item.label}`
+        });
+
+        if (!featChoice) {
+          run.skipped(item);
+          continue;
+        }
+
+        if (featChoice.description === 'mark all passed') {
+          await this.updateAllScenarioMarksInDocument(uri, 'passed');
+        } else if (featChoice.description === 'mark all pending') {
+          await this.updateAllScenarioMarksInDocument(uri, 'pending');
+        }
+
         run.appendOutput(`[Testform] Running testrun suite: ${relPath}\r\n`);
         run.started(item);
 
-        // Execute apply on the whole suite
         runTestformCommand(`apply --auto-approve --target="${relPath}"`);
 
-        // Propagate status to all scenarios
+        await this.updateFileTests(uri);
+
         let hasFailures = false;
         const reportChildren = (parent: vscode.TestItem) => {
           parent.children.forEach(child => {
@@ -457,7 +620,7 @@ export class TestformTestController implements vscode.Disposable {
                 run.passed(child);
               } else if (status === 'failed') {
                 hasFailures = true;
-                run.failed(child, new vscode.TestMessage('Testcase failed in Testform run ledger.'));
+                run.failed(child, new vscode.TestMessage('Testcase fallido en el ledger de Testform.'));
               } else if (status === 'skipped' || status === 'blocked') {
                 run.skipped(child);
               } else {
@@ -472,7 +635,7 @@ export class TestformTestController implements vscode.Disposable {
         reportChildren(item);
 
         if (hasFailures) {
-          run.failed(item, new vscode.TestMessage('One or more scenarios in the testrun failed.'));
+          run.failed(item, new vscode.TestMessage('Uno o más escenarios en la suite fallaron.'));
         } else {
           run.passed(item);
         }

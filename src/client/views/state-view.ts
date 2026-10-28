@@ -30,7 +30,7 @@ export class StateTreeItem extends vscode.TreeItem {
         this.command = {
           command: 'testform.state.inspectResource',
           title: 'Inspect Resource in Editor',
-          arguments: [address, rawResource]
+          arguments: [this]
         };
       }
     } else if (kind === 'cases_group') {
@@ -38,6 +38,13 @@ export class StateTreeItem extends vscode.TreeItem {
       this.iconPath = new vscode.ThemeIcon('checklist');
     } else if (kind === 'executed_case') {
       this.contextValue = 'testformExecutedCase';
+      if (address) {
+        this.command = {
+          command: 'testform.state.inspectResource',
+          title: 'Inspect Resource in Editor',
+          arguments: [this]
+        };
+      }
     } else if (kind === 'output') {
       this.contextValue = 'testformOutput';
       this.iconPath = new vscode.ThemeIcon('symbol-variable');
