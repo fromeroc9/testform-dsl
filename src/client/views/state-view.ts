@@ -11,7 +11,9 @@ export class StateTreeItem extends vscode.TreeItem {
     public readonly kind: StateNodeKind,
     public readonly address?: string,
     public readonly details?: string,
-    public readonly childrenNodes?: StateTreeItem[]
+    public readonly childrenNodes?: StateTreeItem[],
+    public readonly rawResource?: any,
+    public readonly isTainted: boolean = false
   ) {
     super(label, collapsibleState);
 
@@ -22,13 +24,13 @@ export class StateTreeItem extends vscode.TreeItem {
     if (kind === 'category') {
       this.contextValue = 'testformCategory';
     } else if (kind === 'resource') {
-      this.contextValue = 'testformResource';
+      this.contextValue = isTainted ? 'testformResourceTainted' : 'testformResource';
       this.tooltip = `Address: ${address}\n${details || ''}`;
       if (address) {
         this.command = {
-          command: 'testform.state.showResource',
-          title: 'Show Resource in CLI',
-          arguments: [address]
+          command: 'testform.state.inspectResource',
+          title: 'Inspect Resource in Editor',
+          arguments: [address, rawResource]
         };
       }
     } else if (kind === 'cases_group') {
@@ -200,7 +202,9 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           'resource',
           identity,
           remoteRef ? `${identity} (${remoteRef})` : identity,
-          childNodes
+          childNodes,
+          r,
+          isTainted
         );
 
         if (isTainted) {

@@ -289,7 +289,7 @@
       },
       {
         "command": "testform.modules.update",
-        "title": "Testform: Update Modules (init -upgrade)",
+        "title": "Testform: Update Modules (init)",
         "category": "Testform",
         "icon": "$(cloud-download)"
       },
@@ -297,6 +297,42 @@
         "command": "testform.format",
         "title": "Testform: Format Document",
         "category": "Testform"
+      },
+      {
+        "command": "testform.state.inspectResource",
+        "title": "Inspect Resource (JSON)",
+        "category": "Testform",
+        "icon": "$(json)"
+      },
+      {
+        "command": "testform.state.taint",
+        "title": "Taint Resource",
+        "category": "Testform",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "testform.state.untaint",
+        "title": "Untaint Resource",
+        "category": "Testform",
+        "icon": "$(check)"
+      },
+      {
+        "command": "testform.state.rm",
+        "title": "Remove Resource from State",
+        "category": "Testform",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "testform.state.forceUnlock",
+        "title": "Testform: Force Unlock State",
+        "category": "Testform",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "testform.workspace.select",
+        "title": "Testform: Select Workspace",
+        "category": "Testform",
+        "icon": "$(layers)"
       }
     ],
     "menus": {
@@ -304,7 +340,12 @@
         {
           "command": "testform.state.refresh",
           "when": "view == testform.views.state",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "testform.state.forceUnlock",
+          "when": "view == testform.views.state",
+          "group": "navigation@2"
         },
         {
           "command": "testform.report",
@@ -317,6 +358,33 @@
           "group": "navigation"
         }
       ],
+      "view/item/context": [
+        {
+          "command": "testform.state.inspectResource",
+          "when": "view == testform.views.state && (viewItem == testformResource || viewItem == testformResourceTainted)",
+          "group": "inline"
+        },
+        {
+          "command": "testform.state.taint",
+          "when": "view == testform.views.state && viewItem == testformResource",
+          "group": "testformState@1"
+        },
+        {
+          "command": "testform.state.untaint",
+          "when": "view == testform.views.state && viewItem == testformResourceTainted",
+          "group": "testformState@1"
+        },
+        {
+          "command": "testform.state.showResource",
+          "when": "view == testform.views.state && (viewItem == testformResource || viewItem == testformResourceTainted)",
+          "group": "testformState@2"
+        },
+        {
+          "command": "testform.state.rm",
+          "when": "view == testform.views.state && (viewItem == testformResource || viewItem == testformResourceTainted)",
+          "group": "testformState@3"
+        }
+      ],
       "editor/context": [
         {
           "command": "testform.plan",
@@ -327,6 +395,16 @@
           "command": "testform.apply",
           "when": "resourceExtname == .feature",
           "group": "testform@2"
+        },
+        {
+          "command": "testform.diff",
+          "when": "resourceExtname == .feature",
+          "group": "testform@3"
+        },
+        {
+          "command": "testform.validate",
+          "when": "resourceExtname == .feature",
+          "group": "testform@4"
         }
       ]
     },

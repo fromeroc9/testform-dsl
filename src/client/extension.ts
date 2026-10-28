@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import {
   LanguageClient,
@@ -12,6 +13,7 @@ import { ModulesTreeProvider } from './views/modules-view';
 import { ReportsTreeProvider } from './views/reports-view';
 import { TestformTestController } from './testing/test-controller';
 import { TestformFileDecorationProvider } from './views/decorations';
+import { TestformWorkspaceManager } from './workspace-manager';
 
 let client: LanguageClient;
 
@@ -95,12 +97,17 @@ export function activate(context: vscode.ExtensionContext) {
   const reportsProvider = new ReportsTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.reports', reportsProvider);
 
-  // 4. Test Controller & File Decorations
+  // 4. Test Controller & File Decorations & Workspace Manager
   const testController = new TestformTestController();
   context.subscriptions.push(testController);
 
   const decorationProvider = new TestformFileDecorationProvider();
   context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorationProvider));
+
+  const workspaceManager = new TestformWorkspaceManager((_ws) => {
+    stateProvider.refresh();
+  });
+  context.subscriptions.push(workspaceManager);
 
   // 5. Register Commands
   context.subscriptions.push(
@@ -129,10 +136,22 @@ export function activate(context: vscode.ExtensionContext) {
           cmd: 'testform.apply'
         },
         {
-          label: '$(diff) Diff',
+          label: '$(diff) Diff / Test Drift',
           description: 'testform diff',
           detail: 'Compara y detecta diferencias (drift) entre los archivos feature en disco y el estado registrado.',
           cmd: 'testform.diff'
+        },
+        {
+          label: '$(layers) Workspaces',
+          description: 'testform workspace',
+          detail: 'Alternar entre ambientes y workspaces aislados (default, staging, prod).',
+          cmd: 'testform.workspace.select'
+        },
+        {
+          label: '$(unlock) Force Unlock',
+          description: 'testform force-unlock',
+          detail: 'Libera un bloqueo atascado en el archivo de estado de Testform.',
+          cmd: 'testform.state.forceUnlock'
         },
         {
           label: '$(eye) Show',
@@ -143,7 +162,7 @@ export function activate(context: vscode.ExtensionContext) {
         {
           label: '$(file-text) Report',
           description: 'testform report',
-          detail: 'Genera reportes interactivos de calidad (Markdown, Word .docx, Excel .xlsx, HTML, etc.).',
+          detail: 'Genera reportes interactivos de calidad (Markdown, Word .docx, Excel .xlsx, etc.).',
           cmd: 'testform.report'
         },
         {
@@ -177,8 +196,17 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('testform.init', () => {
       runTestformCommand('init');
     }),
-    vscode.commands.registerCommand('testform.validate', () => {
-      runTestformCommand('validate');
+    vscode.commands.registerCommand('testform.validate', (uri?: vscode.Uri) => {
+      const activeEditor = vscode.window.activeTextEditor;
+      const targetUri = uri || activeEditor?.document.uri;
+      if (targetUri && targetUri.fsPath.endsWith('.feature')) {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri);
+        const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
+        const relPath = rootPath ? path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/') : path.basename(targetUri.fsPath);
+        runTestformCommand(`validate "${relPath}"`);
+      } else {
+        runTestformCommand('validate');
+      }
     }),
     vscode.commands.registerCommand('testform.plan', () => {
       runTestformCommand('plan');
@@ -186,8 +214,17 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('testform.apply', () => {
       runTestformCommand('apply');
     }),
-    vscode.commands.registerCommand('testform.diff', () => {
-      runTestformCommand('diff');
+    vscode.commands.registerCommand('testform.diff', (uri?: vscode.Uri) => {
+      const activeEditor = vscode.window.activeTextEditor;
+      const targetUri = uri || activeEditor?.document.uri;
+      if (targetUri && targetUri.fsPath.endsWith('.feature')) {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri);
+        const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
+        const relPath = rootPath ? path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/') : path.basename(targetUri.fsPath);
+        runTestformCommand(`diff --target="${relPath}"`);
+      } else {
+        runTestformCommand('diff');
+      }
     }),
     vscode.commands.registerCommand('testform.show', () => {
       runTestformCommand('show');
@@ -202,8 +239,94 @@ export function activate(context: vscode.ExtensionContext) {
       stateProvider.refresh();
       vscode.window.showInformationMessage('Testform state refreshed.');
     }),
-    vscode.commands.registerCommand('testform.state.showResource', (address: string) => {
-      runTestformCommand(`state show ${address}`);
+    vscode.commands.registerCommand('testform.state.showResource', (item?: any) => {
+      const address = typeof item === 'string' ? item : (item?.address || item?.label);
+      if (address) {
+        runTestformCommand(`state show "${address}"`);
+      }
+    }),
+    vscode.commands.registerCommand('testform.state.inspectResource', async (address: string, rawResource?: any) => {
+      if (!rawResource) {
+        runTestformCommand(`state show "${address}"`);
+        return;
+      }
+      const content = JSON.stringify(rawResource, null, 2);
+      const doc = await vscode.workspace.openTextDocument({
+        content,
+        language: 'json'
+      });
+      await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: true });
+    }),
+    vscode.commands.registerCommand('testform.state.taint', async (item?: any) => {
+      const address = typeof item === 'string' ? item : (item?.address || item?.label);
+      if (!address) {
+        vscode.window.showErrorMessage('No resource selected to taint.');
+        return;
+      }
+      runTestformCommand(`taint "${address}"`);
+      setTimeout(() => stateProvider.refresh(), 1000);
+      vscode.window.showInformationMessage(`Resource '${address}' marked as tainted.`);
+    }),
+    vscode.commands.registerCommand('testform.state.untaint', async (item?: any) => {
+      const address = typeof item === 'string' ? item : (item?.address || item?.label);
+      if (!address) {
+        vscode.window.showErrorMessage('No resource selected to untaint.');
+        return;
+      }
+      runTestformCommand(`untaint "${address}"`);
+      setTimeout(() => stateProvider.refresh(), 1000);
+      vscode.window.showInformationMessage(`Taint mark removed from '${address}'.`);
+    }),
+    vscode.commands.registerCommand('testform.state.rm', async (item?: any) => {
+      const address = typeof item === 'string' ? item : (item?.address || item?.label);
+      if (!address) {
+        vscode.window.showErrorMessage('No resource selected to remove from state.');
+        return;
+      }
+      const confirm = await vscode.window.showWarningMessage(
+        `Are you sure you want to remove '${address}' from the state ledger? (This will NOT delete the feature file)`,
+        { modal: true },
+        'Remove from State'
+      );
+      if (confirm === 'Remove from State') {
+        runTestformCommand(`state rm "${address}"`);
+        setTimeout(() => stateProvider.refresh(), 1000);
+      }
+    }),
+    vscode.commands.registerCommand('testform.state.forceUnlock', async () => {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      let defaultLockId = '';
+      if (workspaceFolder) {
+        const lockFiles = [
+          path.join(workspaceFolder.uri.fsPath, '.testform', 'testform.state.lock'),
+          path.join(workspaceFolder.uri.fsPath, 'testform.state.lock'),
+          path.join(workspaceFolder.uri.fsPath, '.testform', 'lock.json')
+        ];
+        for (const lf of lockFiles) {
+          if (fs.existsSync(lf)) {
+            try {
+              const content = fs.readFileSync(lf, 'utf8');
+              const parsed = JSON.parse(content);
+              defaultLockId = parsed.ID || parsed.lockId || parsed.id || '';
+              if (defaultLockId) break;
+            } catch {}
+          }
+        }
+      }
+
+      const lockId = await vscode.window.showInputBox({
+        prompt: 'Enter the lock ID to force release',
+        value: defaultLockId,
+        placeHolder: 'e.g. 550e8400-e29b-41d4-a716-446655440000'
+      });
+
+      if (lockId) {
+        runTestformCommand(`force-unlock ${lockId} -force`);
+        setTimeout(() => stateProvider.refresh(), 1000);
+      }
+    }),
+    vscode.commands.registerCommand('testform.workspace.select', async () => {
+      await workspaceManager.selectWorkspacePrompt();
     }),
     vscode.commands.registerCommand('testform.modules.update', () => {
       runTestformCommand('init');
