@@ -8,7 +8,7 @@
   "author": "Flavio Romero <flavio.arc9@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fromeroc9/testform-vscode.git"
+    "url": "https://github.com/fromeroc9/testform-extension.git"
   },
   "icon": "assets/logo.png",
   "engines": {
@@ -39,10 +39,7 @@
     "workspaceContains:**/testform.yaml",
     "workspaceContains:**/*.case.feature",
     "workspaceContains:**/*.run.feature",
-    "workspaceContains:**/*.plan.feature",
-    "onView:testform.views.state",
-    "onView:testform.views.modules",
-    "onView:testform.views.reports"
+    "workspaceContains:**/*.plan.feature"
   ],
   "contributes": {
     "languages": [
