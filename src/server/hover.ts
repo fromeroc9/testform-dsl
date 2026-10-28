@@ -59,6 +59,7 @@ export function provideHover(
         const info = scanner.config.locals.get(localName);
 
         if (info) {
+          const fileName = info.sourceFile.split(/[/\\]/).pop();
           return {
             contents: {
               kind: MarkupKind.Markdown,
@@ -66,8 +67,15 @@ export function provideHover(
                 `### Testform Local: \`${localName}\``,
                 `**Expression:** \`${info.expression}\``,
                 `---`,
-                `*Defined in:* \`${info.sourceFile}\``
+                `*Autoloaded from:* \`${fileName}\` (${info.sourceFile})`
               ].join('\n\n')
+            }
+          };
+        } else {
+          return {
+            contents: {
+              kind: MarkupKind.Markdown,
+              value: `⚠️ **Undefined Local:** \`${localName}\`\n\nThis local value is referenced but not declared in any \`main.yml\`, \`locals.yml\` or domain configuration.`
             }
           };
         }

@@ -1,42 +1,40 @@
 {
-  "Testform Manifest (main.yml)": {
-    "prefix": "tf-main",
+  "Testform Root Manifest Template": {
+    "prefix": "testform-init-manifest",
     "body": [
-      "testform:",
-      "  required_version: \">= 1.0.0\"",
-      "  backend:",
-      "    local:",
-      "      path: \"testform.state\"",
-      "",
-      "provider:",
-      "  local: {}",
+      "version: \"1.0\"",
+      "provider: local",
+      "backend: local",
       "",
       "variable:",
       "  ${1:app_url}:",
       "    type: string",
-      "    default: \"${2:https://example.com}\"",
+      "    description: \"${2:Base application URL}\"",
+      "    default: \"${3:https://example.com}\"",
       "",
-      "locals:",
-      "  ${3:base_url}: \"\\${var.${1:app_url}}\"",
+      "local:",
+      "  ${4:base_url}: \"\\${var.${1:app_url}}\"",
       "",
       "resource:",
       "  testcase:",
       "    match: \"*.case.feature\"",
+      "    scaffold:",
+      "      directory: \"testcase\"",
+      "      filename: \"{slug}.case.feature\"",
+      "    fields: {}",
       "  testrun:",
       "    match: \"*.run.feature\"",
+      "    scaffold:",
+      "      directory: \"testrun\"",
+      "      filename: \"{slug}.run.feature\"",
+      "    fields: {}",
       "  testplan:",
-      "    match: \"*.plan.feature\""
+      "    match: \"*.plan.feature\"",
+      "    scaffold:",
+      "      directory: \"testplan\"",
+      "      filename: \"{slug}.plan.feature\"",
+      "    fields: {}"
     ],
-    "description": "Scaffold a complete Testform root main.yml manifest"
-  },
-  "Testform Variable Block": {
-    "prefix": "tf-var-block",
-    "body": [
-      "${1:var_name}:",
-      "  type: ${2|string,number,boolean,list,map|}",
-      "  description: \"${3:Description}\"",
-      "  default: \"${4:value}\""
-    ],
-    "description": "Insert a Testform variable declaration block"
+    "description": "Scaffold a complete Testform root main.yml manifest (v1.1.0-beta.2 format)"
   }
 }

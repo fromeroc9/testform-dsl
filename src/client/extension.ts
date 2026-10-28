@@ -11,6 +11,7 @@ import { StateTreeProvider } from './views/state-view';
 import { ModulesTreeProvider } from './views/modules-view';
 import { ReportsTreeProvider } from './views/reports-view';
 import { TestformTestController } from './testing/test-controller';
+import { TestformFileDecorationProvider } from './views/decorations';
 
 let client: LanguageClient;
 
@@ -56,7 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = '$(beaker) Testform';
   statusBarItem.tooltip = 'Testform Test-as-Code Engine';
-  statusBarItem.command = 'testform.plan';
+  statusBarItem.command = 'testform.menu';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
@@ -68,8 +69,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (isTestform) {
       statusBarItem.text = '$(beaker) Testform: Ready';
-      statusBarItem.tooltip = 'Testform Project Detected (Click to run Plan)';
-      statusBarItem.command = 'testform.plan';
+      statusBarItem.tooltip = 'Testform Project Active (Click to open Control Center)';
+      statusBarItem.command = 'testform.menu';
     } else {
       statusBarItem.text = '$(beaker) Testform';
       statusBarItem.tooltip = 'Testform: No main.yml found. Click to Initialize (testform init)';
@@ -94,12 +95,36 @@ export function activate(context: vscode.ExtensionContext) {
   const reportsProvider = new ReportsTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.reports', reportsProvider);
 
-  // 4. Test Controller
+  // 4. Test Controller & File Decorations
   const testController = new TestformTestController();
   context.subscriptions.push(testController);
 
+  const decorationProvider = new TestformFileDecorationProvider();
+  context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorationProvider));
+
   // 5. Register Commands
   context.subscriptions.push(
+    vscode.commands.registerCommand('testform.menu', async () => {
+      const options = [
+        { label: '$(check) Validate Configuration', description: 'Validate syntax, scopes, and variables (testform validate)', cmd: 'testform.validate' },
+        { label: '$(git-compare) Speculative Plan', description: 'Preview execution diff without changes (testform plan)', cmd: 'testform.plan' },
+        { label: '$(play) Apply Changes', description: 'Reconcile tests and sync state ledger (testform apply)', cmd: 'testform.apply' },
+        { label: '$(diff) Show State Drift', description: 'Inspect differences against state ledger (testform diff)', cmd: 'testform.diff' },
+        { label: '$(eye) Inspect State / Plan', description: 'Inspect resources in state ledger (testform show)', cmd: 'testform.show' },
+        { label: '$(file-text) Generate Report', description: 'Interactive QA report export (Markdown, Word, Excel...)', cmd: 'testform.report' },
+        { label: '$(list-tree) Show Providers Tree', description: 'Display providers hierarchy and requirements', cmd: 'testform.providers' },
+        { label: '$(package) List Modules', description: 'Inspect declared Testform modules', cmd: 'testform.modules.list' },
+        { label: '$(refresh) Refresh State Explorer', description: 'Reload testform.state in the sidebar', cmd: 'testform.state.refresh' }
+      ];
+
+      const selected = await vscode.window.showQuickPick(options, {
+        placeHolder: 'Testform Control Center - Select an action'
+      });
+
+      if (selected) {
+        vscode.commands.executeCommand(selected.cmd);
+      }
+    }),
     vscode.commands.registerCommand('testform.init', () => {
       runTestformCommand('init');
     }),

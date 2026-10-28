@@ -202,6 +202,12 @@
     },
     "commands": [
       {
+        "command": "testform.menu",
+        "title": "Testform: Open Control Center Menu",
+        "category": "Testform",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "testform.init",
         "title": "Testform: Initialize Workspace (init)",
         "category": "Testform",
