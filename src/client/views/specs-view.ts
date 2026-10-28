@@ -345,3 +345,4 @@ export class SpecsTreeProvider implements vscode.TreeDataProvider<SpecTreeItem>,
     return categories;
   }
 }
+

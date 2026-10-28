@@ -227,7 +227,7 @@ export function activate(context: vscode.ExtensionContext) {
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri);
         const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
         const relPath = rootPath ? path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/') : path.basename(targetUri.fsPath);
-        runTestformCommand(`diff --target="${relPath}"`);
+        runTestformCommand(`diff -target="${relPath}"`);
       } else {
         runTestformCommand('diff');
       }
@@ -396,9 +396,9 @@ export function activate(context: vscode.ExtensionContext) {
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri);
         const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
         const relPath = rootPath ? path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/') : path.basename(targetUri.fsPath);
-        runTestformCommand(`apply --auto-approve --target="${relPath}"`);
+        runTestformCommand(`apply -auto-approve -target="${relPath}"`);
       } else {
-        runTestformCommand('apply --auto-approve');
+        runTestformCommand('apply -auto-approve');
       }
     }),
     vscode.commands.registerCommand('testform.planCurrent', (uri?: vscode.Uri) => {
@@ -408,14 +408,14 @@ export function activate(context: vscode.ExtensionContext) {
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri);
         const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
         const relPath = rootPath ? path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/') : path.basename(targetUri.fsPath);
-        runTestformCommand(`plan --target="${relPath}"`);
+        runTestformCommand(`plan -target="${relPath}"`);
       } else {
         runTestformCommand('plan');
       }
     }),
     vscode.commands.registerCommand('testform.applyTarget', (target: string) => {
       if (target) {
-        runTestformCommand(`apply --auto-approve --target="${target}"`);
+        runTestformCommand(`apply -auto-approve -target="${target}"`);
       }
     }),
     vscode.commands.registerCommand('testform.format', () => {

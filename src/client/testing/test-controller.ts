@@ -542,7 +542,7 @@ export class TestformTestController implements vscode.Disposable {
         // 2. Dispatch testform apply for this scenario target
         run.appendOutput(`[Testform] Running scenario target: ${targetAddress} (status: ${chosenStatus})\r\n`);
         run.started(item);
-        runTestformCommand(`apply --auto-approve --target="${targetAddress}"`);
+        runTestformCommand(`apply -auto-approve -target="${targetAddress}"`);
 
         // 3. Immediately reflect in memory and UI
         this.scenarioStatusMap.set(item.id, chosenStatus);
@@ -598,7 +598,7 @@ export class TestformTestController implements vscode.Disposable {
         run.appendOutput(`[Testform] Running testrun suite: ${relPath}\r\n`);
         run.started(item);
 
-        runTestformCommand(`apply --auto-approve --target="${relPath}"`);
+        runTestformCommand(`apply -auto-approve -target="${relPath}"`);
 
         await this.updateFileTests(uri);
 
