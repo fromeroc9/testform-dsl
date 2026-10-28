@@ -13,6 +13,7 @@ import { StateTreeProvider } from './views/state-view';
 import { ModulesTreeProvider } from './views/modules-view';
 import { ReportsTreeProvider } from './views/reports-view';
 import { TestformTestController } from './testing/test-controller';
+import { TestformFileDecorationProvider } from './views/decorations';
 import { TestformWorkspaceManager } from './workspace-manager';
 
 let client: LanguageClient;
@@ -101,9 +102,12 @@ export function activate(context: vscode.ExtensionContext) {
   const reportsProvider = new ReportsTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.reports', reportsProvider);
 
-  // 4. Test Controller & Workspace Manager
+  // 4. Test Controller & File Decorations & Workspace Manager
   const testController = new TestformTestController();
   context.subscriptions.push(testController);
+
+  const decorationProvider = new TestformFileDecorationProvider();
+  context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorationProvider));
 
   const workspaceManager = new TestformWorkspaceManager((_ws) => {
     stateProvider.refresh();
