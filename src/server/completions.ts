@@ -9,17 +9,36 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
 
 const BUILTIN_FUNCTIONS = [
-  { name: 'lower', desc: 'Converts a string to lowercase' },
-  { name: 'upper', desc: 'Converts a string to uppercase' },
-  { name: 'trim', desc: 'Removes leading and trailing whitespace' },
-  { name: 'replace', desc: 'Replaces substrings within a string' },
-  { name: 'split', desc: 'Splits a string into a list' },
-  { name: 'join', desc: 'Joins a list into a string' },
-  { name: 'length', desc: 'Determines the length of a string or list' },
-  { name: 'coalesce', desc: 'Returns the first non-null argument' },
-  { name: 'default', desc: 'Returns a fallback value if expression is empty' },
-  { name: 'jsonencode', desc: 'Encodes a value to JSON string' },
-  { name: 'jsondecode', desc: 'Decodes a JSON string to object' }
+  // Strings
+  { name: 'lower', desc: 'Converts a given string to lowercase.', snippet: 'lower(${1:string})' },
+  { name: 'upper', desc: 'Converts a given string to uppercase.', snippet: 'upper(${1:string})' },
+  { name: 'trim', desc: 'Removes leading and trailing whitespace from a string.', snippet: 'trim(${1:string})' },
+  { name: 'trimprefix', desc: 'Removes the specified prefix from a string if present.', snippet: 'trimprefix(${1:string}, ${2:prefix})' },
+  { name: 'trimsuffix', desc: 'Removes the specified suffix from a string if present.', snippet: 'trimsuffix(${1:string}, ${2:suffix})' },
+  { name: 'startswith', desc: 'Determines if a string starts with the given prefix.', snippet: 'startswith(${1:string}, ${2:prefix})' },
+  { name: 'endswith', desc: 'Determines if a string ends with the given suffix.', snippet: 'endswith(${1:string}, ${2:suffix})' },
+  { name: 'replace', desc: 'Searches a string for substrings and replaces them.', snippet: 'replace(${1:string}, ${2:search}, ${3:replace})' },
+  { name: 'split', desc: 'Produces a list by dividing a string at all occurrences of a separator.', snippet: 'split(${1:separator}, ${2:string})' },
+  { name: 'join', desc: 'Concatenates list elements with a specified delimiter.', snippet: 'join(${1:delimiter}, ${2:list})' },
+  { name: 'format', desc: 'Produces a formatted string using sprintf-like syntax.', snippet: 'format("${1:%s}", ${2:arg})' },
+  { name: 'substr', desc: 'Extracts a substring from a string given offset and length.', snippet: 'substr(${1:string}, ${2:offset}, ${3:length})' },
+
+  // Collections & Logic
+  { name: 'contains', desc: 'Determines whether a list contains a given value or key.', snippet: 'contains(${1:list}, ${2:value})' },
+  { name: 'coalesce', desc: 'Returns the first non-empty value from the given arguments.', snippet: 'coalesce(${1:val1}, ${2:val2})' },
+  { name: 'lookup', desc: 'Retrieves a single element from a map with an optional fallback.', snippet: 'lookup(${1:map}, ${2:key}, ${3:default})' },
+  { name: 'length', desc: 'Determines the length of a string, list, or map.', snippet: 'length(${1:collection})' },
+  { name: 'element', desc: 'Retrieves a single element from a list by index.', snippet: 'element(${1:list}, ${2:index})' },
+  { name: 'slice', desc: 'Extracts a sublist from a list given start and end index.', snippet: 'slice(${1:list}, ${2:start}, ${3:end})' },
+  { name: 'merge', desc: 'Combines multiple maps into a single map.', snippet: 'merge(${1:map1}, ${2:map2})' },
+
+  // System & Encoding
+  { name: 'env', desc: 'Reads the value of an environment variable.', snippet: 'env("${1:VAR_NAME}")' },
+  { name: 'uuid', desc: 'Generates a random UUID (version 4).', snippet: 'uuid()' },
+  { name: 'timestamp', desc: 'Returns current UTC execution date and time formatted in RFC 3339.', snippet: 'timestamp()' },
+  { name: 'jsonencode', desc: 'Encodes a value to its valid JSON string representation.', snippet: 'jsonencode(${1:value})' },
+  { name: 'jsondecode', desc: 'Parses a valid JSON string into an object or list.', snippet: 'jsondecode(${1:json_string})' },
+  { name: 'file', desc: 'Reads the contents of a local file as a string.', snippet: 'file("${1:path/to/file}")' }
 ];
 
 export function provideCompletions(
@@ -121,7 +140,7 @@ export function provideCompletions(
         detail: `Testform Function: ${fn.name}()`,
         documentation: fn.desc,
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: `${fn.name}(\${1:arg})`
+        insertText: fn.snippet
       });
     }
 
@@ -146,32 +165,20 @@ export function provideCompletions(
       {
         label: 'testcase',
         kind: CompletionItemKind.Keyword,
-        detail: 'Scope: Testcase feature (@testcase)',
+        detail: 'Resource: Testcase feature (@testcase)',
         insertText: 'testcase'
       },
       {
         label: 'testrun',
         kind: CompletionItemKind.Keyword,
-        detail: 'Scope: Execution run feature (@testrun)',
+        detail: 'Resource: Execution run feature (@testrun)',
         insertText: 'testrun'
       },
       {
         label: 'testplan',
         kind: CompletionItemKind.Keyword,
-        detail: 'Scope: Master quality gate plan (@testplan)',
+        detail: 'Resource: Master quality gate plan (@testplan)',
         insertText: 'testplan'
-      },
-      {
-        label: 'smoke',
-        kind: CompletionItemKind.Property,
-        detail: 'Category Tag: Smoke suite',
-        insertText: 'smoke'
-      },
-      {
-        label: 'regression',
-        kind: CompletionItemKind.Property,
-        detail: 'Category Tag: Regression suite',
-        insertText: 'regression'
       },
       {
         label: 'depends_on',

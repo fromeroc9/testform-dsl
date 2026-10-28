@@ -28,8 +28,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
-      { scheme: 'file', language: 'gherkin' },
-      { scheme: 'file', language: 'testform-gherkin' }
+      { scheme: 'file', language: 'testform-yaml' },
+      { scheme: 'file', language: 'yaml' },
+      { scheme: 'file', language: 'testform-gherkin' },
+      { scheme: 'file', language: 'gherkin' }
     ],
     synchronize: {
       fileEvents: [
@@ -50,13 +52,37 @@ export function activate(context: vscode.ExtensionContext) {
 
   client.start();
 
-  // 2. Status Bar Item
+  // 2. Status Bar Item & Project Detection
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = '$(beaker) Testform';
   statusBarItem.tooltip = 'Testform Test-as-Code Engine';
   statusBarItem.command = 'testform.plan';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
+
+  const updateProjectDetection = async () => {
+    const files = await vscode.workspace.findFiles('{main.yml,main.yaml,testform.yml,testform.yaml,**/main.yml,**/testform.yml}', '**/node_modules/**', 1);
+    const isTestform = files.length > 0;
+    vscode.commands.executeCommand('setContext', 'testform:isTestformProject', isTestform);
+    vscode.commands.executeCommand('setContext', 'testform.isTestformWorkspace', isTestform);
+
+    if (isTestform) {
+      statusBarItem.text = '$(beaker) Testform: Ready';
+      statusBarItem.tooltip = 'Testform Project Detected (Click to run Plan)';
+      statusBarItem.command = 'testform.plan';
+    } else {
+      statusBarItem.text = '$(beaker) Testform';
+      statusBarItem.tooltip = 'Testform: No main.yml found. Click to Initialize (testform init)';
+      statusBarItem.command = 'testform.init';
+    }
+  };
+
+  updateProjectDetection();
+
+  const manifestWatcher = vscode.workspace.createFileSystemWatcher('{**/main.yml,**/main.yaml,**/testform.yml,**/testform.yaml}');
+  manifestWatcher.onDidCreate(() => updateProjectDetection());
+  manifestWatcher.onDidDelete(() => updateProjectDetection());
+  context.subscriptions.push(manifestWatcher);
 
   // 3. Tree Views
   const stateProvider = new StateTreeProvider();
@@ -88,6 +114,15 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('testform.diff', () => {
       runTestformCommand('diff');
+    }),
+    vscode.commands.registerCommand('testform.show', () => {
+      runTestformCommand('show');
+    }),
+    vscode.commands.registerCommand('testform.providers', () => {
+      runTestformCommand('providers');
+    }),
+    vscode.commands.registerCommand('testform.modules.list', () => {
+      runTestformCommand('modules');
     }),
     vscode.commands.registerCommand('testform.state.refresh', () => {
       stateProvider.refresh();

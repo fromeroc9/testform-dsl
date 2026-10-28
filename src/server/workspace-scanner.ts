@@ -35,6 +35,9 @@ export class WorkspaceScanner {
     // 2. Standard Level 1: variables.yml / vars.yml & locals.yml
     this.scanStandardConfigs();
 
+    // 2.1 Auto-load resource.yml / resource.yaml
+    this.scanResourceConfigs();
+
     // 3. Domain Level 2: Project YAMLs
     this.scanDomainConfigs();
 
@@ -57,10 +60,11 @@ export class WorkspaceScanner {
             this.parseVariableBlock(parsed.variable || parsed.variables || parsed.vars, fullPath, content);
             this.parseLocalsBlock(parsed.local || parsed.locals, fullPath, content);
             this.parseDataBlock(parsed.data, fullPath, content);
-            if (parsed.scopes && typeof parsed.scopes === 'object') {
-              if (parsed.scopes.testcase?.match) this.config.scopes.testcase = parsed.scopes.testcase.match;
-              if (parsed.scopes.testrun?.match) this.config.scopes.testrun = parsed.scopes.testrun.match;
-              if (parsed.scopes.testplan?.match) this.config.scopes.testplan = parsed.scopes.testplan.match;
+            const resBlock = parsed.resource || parsed.scopes;
+            if (resBlock && typeof resBlock === 'object') {
+              if (resBlock.testcase?.match) this.config.scopes.testcase = resBlock.testcase.match;
+              if (resBlock.testrun?.match) this.config.scopes.testrun = resBlock.testrun.match;
+              if (resBlock.testplan?.match) this.config.scopes.testplan = resBlock.testplan.match;
             }
           }
         } catch {
@@ -115,12 +119,32 @@ export class WorkspaceScanner {
     }
   }
 
+  private scanResourceConfigs(): void {
+    for (const name of ['resource.yml', 'resource.yaml']) {
+      const fullPath = path.join(this.workspaceRoot, name);
+      if (fs.existsSync(fullPath)) {
+        try {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const parsed = YAML.parse(content);
+          const resBlock = parsed.resource || parsed;
+          if (resBlock && typeof resBlock === 'object') {
+            if (resBlock.testcase?.match) this.config.scopes.testcase = resBlock.testcase.match;
+            if (resBlock.testrun?.match) this.config.scopes.testrun = resBlock.testrun.match;
+            if (resBlock.testplan?.match) this.config.scopes.testplan = resBlock.testplan.match;
+          }
+        } catch {}
+        break;
+      }
+    }
+  }
+
   private scanDomainConfigs(): void {
     const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', '.terraform', 'dist', 'coverage', '.system_generated']);
     const RESERVED_ROOT_FILES = new Set([
       'main.yml', 'main.yaml', 'testform.yml', 'testform.yaml',
       'variables.yml', 'variables.yaml', 'vars.yml', 'vars.yaml',
       'locals.yml', 'locals.yaml', 'local.yml', 'local.yaml',
+      'resource.yml', 'resource.yaml',
       'data.yml', 'data.yaml', 'outputs.yml', 'outputs.yaml'
     ]);
 
@@ -283,17 +307,67 @@ export class WorkspaceScanner {
 
   private parseDataBlock(block: any, sourceFile: string, content: string): void {
     if (!block || typeof block !== 'object') return;
-    for (const [type, instances] of Object.entries(block)) {
-      if (instances && typeof instances === 'object') {
-        for (const [name] of Object.entries(instances)) {
-          const line = this.findKeyLineInYaml(content, name);
-          this.config.dataSources.set(`${type}.${name}`, {
-            type,
-            name,
+    const KNOWN_SCOPES = new Set(['testcase', 'testrun', 'testplan', 'local_file', 'http']);
+
+    for (const [key, val] of Object.entries(block)) {
+      if (val === undefined || val === null) continue;
+      const line = this.findKeyLineInYaml(content, key);
+
+      // 1. Grouped by scope/type (e.g. http: { api: "https://..." } or local_file: { users: "..." })
+      if (KNOWN_SCOPES.has(key) && typeof val === 'object' && !Array.isArray(val)) {
+        for (const [subKey, subVal] of Object.entries(val)) {
+          const subLine = this.findKeyLineInYaml(content, subKey);
+          const dataInfo: DataInfo = {
+            type: key,
+            name: subKey,
             sourceFile,
-            line
-          });
+            line: subLine || line
+          };
+          this.config.dataSources.set(`${key}.${subKey}`, dataInfo);
+          this.config.dataSources.set(subKey, dataInfo);
         }
+        continue;
+      }
+
+      // 2. Compact single-line string at root: e.g. users: "fixtures/users.json", api: "https://..."
+      if (typeof val === 'string') {
+        const lower = val.toLowerCase().trim();
+        let detectedType = 'data';
+        if (lower.startsWith('http://') || lower.startsWith('https://')) {
+          detectedType = 'http';
+        } else if (lower.endsWith('.json') || lower.endsWith('.yaml') || lower.endsWith('.yml') || lower.endsWith('.csv')) {
+          detectedType = 'local_file';
+        } else if (lower.includes('.feature') || lower.startsWith('@')) {
+          detectedType = 'testcase';
+        }
+
+        const dataInfo: DataInfo = {
+          type: detectedType,
+          name: key,
+          sourceFile,
+          line
+        };
+        this.config.dataSources.set(key, dataInfo);
+        this.config.dataSources.set(`${detectedType}.${key}`, dataInfo);
+        continue;
+      }
+
+      // 3. Object instance at root: e.g. my_api: { url: "https://...", method: "POST" }
+      if (typeof val === 'object') {
+        const v = val as any;
+        let detectedType = 'data';
+        if (v.url) detectedType = 'http';
+        else if (v.file) detectedType = 'local_file';
+        else if (v.address) detectedType = 'testcase';
+
+        const dataInfo: DataInfo = {
+          type: detectedType,
+          name: key,
+          sourceFile,
+          line
+        };
+        this.config.dataSources.set(key, dataInfo);
+        this.config.dataSources.set(`${detectedType}.${key}`, dataInfo);
       }
     }
   }

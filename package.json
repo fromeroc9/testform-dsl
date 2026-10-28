@@ -45,20 +45,64 @@
   "contributes": {
     "languages": [
       {
+        "id": "testform-yaml",
+        "aliases": [
+          "Testform",
+          "Testform Configuration",
+          "testform"
+        ],
+        "filenames": [
+          "main.yml",
+          "main.yaml",
+          "testform.yml",
+          "testform.yaml"
+        ],
+        "filenamePatterns": [
+          "**/main.yml",
+          "**/main.yaml",
+          "**/testform.yml",
+          "**/testform.yaml"
+        ],
+        "configuration": "./yaml-language-configuration.json",
+        "icon": {
+          "light": "./assets/icon.svg",
+          "dark": "./assets/icon.svg"
+        }
+      },
+      {
         "id": "testform-gherkin",
         "aliases": [
           "Testform Gherkin",
-          "testform"
+          "testform",
+          "Cucumber Gherkin",
+          "Gherkin"
         ],
         "extensions": [
           ".case.feature",
           ".run.feature",
-          ".plan.feature"
+          ".plan.feature",
+          ".feature"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./assets/cucumber.svg",
+          "dark": "./assets/cucumber.svg"
+        }
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "testform-icons",
+        "label": "Testform Icons",
+        "path": "./icons/icon-theme.json"
       }
     ],
     "grammars": [
+      {
+        "language": "testform-yaml",
+        "scopeName": "source.testform.yaml",
+        "path": "./syntaxes/testform-yaml.tmLanguage.json"
+      },
       {
         "language": "testform-gherkin",
         "scopeName": "source.feature.testform",
@@ -83,8 +127,27 @@
         "path": "./snippets/gherkin.json"
       },
       {
+        "language": "testform-yaml",
+        "path": "./snippets/yaml.json"
+      },
+      {
         "language": "yaml",
         "path": "./snippets/yaml.json"
+      }
+    ],
+    "yamlValidation": [
+      {
+        "fileMatch": [
+          "main.yml",
+          "main.yaml",
+          "testform.yml",
+          "testform.yaml",
+          "**/main.yml",
+          "**/main.yaml",
+          "**/testform.yml",
+          "**/testform.yaml"
+        ],
+        "url": "./schemas/testform.schema.json"
       }
     ],
     "jsonValidation": [
@@ -167,6 +230,24 @@
         "title": "Testform: Show State Drift (diff)",
         "category": "Testform",
         "icon": "$(diff)"
+      },
+      {
+        "command": "testform.show",
+        "title": "Testform: Inspect State or Plan (show)",
+        "category": "Testform",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "testform.providers",
+        "title": "Testform: Show Providers Tree (providers)",
+        "category": "Testform",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "testform.modules.list",
+        "title": "Testform: List Declared Modules (modules)",
+        "category": "Testform",
+        "icon": "$(package)"
       },
       {
         "command": "testform.report",

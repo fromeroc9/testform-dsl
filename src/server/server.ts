@@ -17,6 +17,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { fileURLToPath } from 'url';
 import { WorkspaceScanner } from './workspace-scanner';
 import { provideCompletions } from './completions';
+import { provideYamlCompletions } from './yaml-completions';
 import { provideHover } from './hover';
 import { provideDefinition } from './definition';
 import { validateTextDocument } from './diagnostics';
@@ -63,7 +64,7 @@ connection.onInitialize((params: InitializeParams) => {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       completionProvider: {
         resolveProvider: false,
-        triggerCharacters: ['.', '{', '@', '=', '$']
+        triggerCharacters: ['.', '{', '@', '=', '$', ':', ' ']
       },
       hoverProvider: true,
       definitionProvider: true,
@@ -108,8 +109,13 @@ documents.onDidChangeContent(change => {
 
 function validateDoc(document: TextDocument): void {
   if (!workspaceScanner) return;
-  const diagnostics = validateTextDocument(document, workspaceScanner);
-  connection.sendDiagnostics({ uri: document.uri, diagnostics });
+  const uri = document.uri.toLowerCase();
+  if (uri.endsWith('.feature')) {
+    const diagnostics = validateTextDocument(document, workspaceScanner);
+    connection.sendDiagnostics({ uri: document.uri, diagnostics });
+  } else {
+    connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
+  }
 }
 
 // Completions
@@ -117,6 +123,12 @@ connection.onCompletion(
   (textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
     const document = documents.get(textDocumentPosition.textDocument.uri);
     if (!document || !workspaceScanner) return [];
+
+    const uri = document.uri.toLowerCase();
+    if (uri.endsWith('.yml') || uri.endsWith('.yaml')) {
+      return provideYamlCompletions(document, textDocumentPosition.position, workspaceScanner);
+    }
+
     return provideCompletions(document, textDocumentPosition.position, workspaceScanner);
   }
 );

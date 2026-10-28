@@ -1,0 +1,41 @@
+{
+  "iconDefinitions": {
+    "_testform": {
+      "iconPath": "../assets/icon.svg"
+    },
+    "_cucumber": {
+      "iconPath": "../assets/cucumber.svg"
+    }
+  },
+  "file": "_testform",
+  "fileExtensions": {
+    "feature": "_cucumber",
+    "case.feature": "_cucumber",
+    "run.feature": "_cucumber",
+    "plan.feature": "_cucumber"
+  },
+  "fileNames": {
+    "main.yml": "_testform",
+    "main.yaml": "_testform",
+    "testform.yml": "_testform",
+    "testform.yaml": "_testform",
+    "variables.yml": "_testform",
+    "variables.yaml": "_testform",
+    "vars.yml": "_testform",
+    "vars.yaml": "_testform",
+    "locals.yml": "_testform",
+    "locals.yaml": "_testform",
+    "resource.yml": "_testform",
+    "resource.yaml": "_testform",
+    "data.yml": "_testform",
+    "data.yaml": "_testform",
+    "outputs.yml": "_testform",
+    "outputs.yaml": "_testform"
+  },
+  "languageIds": {
+    "testform-yaml": "_testform",
+    "testform-gherkin": "_cucumber",
+    "gherkin": "_cucumber"
+  }
+}
+

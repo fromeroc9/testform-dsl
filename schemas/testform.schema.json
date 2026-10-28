@@ -1,9 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Testform Configuration Manifest",
-  "description": "Configuration schema for Testform declarative Test-as-Code root manifests (main.yml, testform.yml)",
+  "description": "Configuration schema for Testform declarative Test-as-Code manifests (main.yml, main.yaml, testform.yml, testform.yaml)",
   "type": "object",
   "properties": {
+    "version": {
+      "type": "string",
+      "description": "Manifest schema version (e.g. \"1.0\")",
+      "default": "1.0"
+    },
     "testform": {
       "type": "object",
       "description": "Testform core engine configuration",
@@ -13,17 +18,76 @@
           "description": "Version constraint string (e.g. >= 1.0.0)"
         },
         "backend": {
+          "description": "Backend state storage configuration (string or object)",
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": ["local", "s3", "gcs", "azurerm", "http", "github", "oci", "rest", "custom"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "local": {
+                  "type": "object",
+                  "properties": {
+                    "path": { "type": "string", "default": "testform.state" }
+                  }
+                },
+                "s3": {
+                  "type": "object",
+                  "properties": {
+                    "bucket": { "type": "string" },
+                    "key": { "type": "string" },
+                    "region": { "type": "string" },
+                    "dynamodb_table": { "type": "string" }
+                  },
+                  "required": ["bucket", "key"]
+                },
+                "gcs": {
+                  "type": "object",
+                  "properties": {
+                    "bucket": { "type": "string" },
+                    "prefix": { "type": "string" }
+                  },
+                  "required": ["bucket"]
+                },
+                "azurerm": {
+                  "type": "object",
+                  "properties": {
+                    "storage_account_name": { "type": "string" },
+                    "container_name": { "type": "string" },
+                    "key": { "type": "string" }
+                  },
+                  "required": ["storage_account_name", "container_name", "key"]
+                },
+                "http": {
+                  "type": "object",
+                  "properties": {
+                    "address": { "type": "string" }
+                  },
+                  "required": ["address"]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "backend": {
+      "description": "Backend state storage configuration. Can be a string identifier ('local') or configuration object.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["local", "s3", "gcs", "azurerm", "http", "github", "oci", "rest", "custom"],
+          "default": "local"
+        },
+        {
           "type": "object",
-          "description": "State storage backend configuration",
           "properties": {
             "local": {
               "type": "object",
               "properties": {
-                "path": {
-                  "type": "string",
-                  "default": "testform.state",
-                  "description": "Relative path to local state ledger file"
-                }
+                "path": { "type": "string", "default": "testform.state" }
               }
             },
             "s3": {
@@ -62,98 +126,224 @@
             }
           }
         }
-      }
+      ]
     },
     "provider": {
-      "type": "object",
-      "description": "Configured execution or sync providers",
-      "properties": {
-        "local": {
-          "type": "object",
-          "description": "Local offline provider"
+      "description": "Configured execution or sync provider. Can be a string identifier ('local', 'github', 'gitlab', 'custom') or configuration object.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["local", "github", "gitlab", "custom"],
+          "default": "local"
         },
-        "github": {
+        {
           "type": "object",
-          "description": "GitHub Projects & Issues provider",
           "properties": {
-            "owner": { "type": "string" },
-            "repo": { "type": "string" },
-            "project_number": { "type": "integer" }
+            "local": {
+              "type": "object",
+              "description": "Local offline execution provider"
+            },
+            "github": {
+              "type": "object",
+              "description": "GitHub Projects & Issues provider",
+              "properties": {
+                "owner": { "type": "string", "description": "GitHub repository owner or organization" },
+                "repo": { "type": "string", "description": "GitHub repository name" },
+                "repository": { "type": "string", "description": "Alias for repository name" },
+                "project_number": { "type": "integer", "description": "GitHub Projects V2 board number" },
+                "project_id": { "type": "string", "description": "GitHub Projects V2 node ID" },
+                "token_env": { "type": "string", "default": "GITHUB_TOKEN" }
+              }
+            },
+            "gitlab": {
+              "type": "object",
+              "description": "GitLab Issues provider",
+              "properties": {
+                "project_id": { "type": "string" },
+                "base_url": { "type": "string" }
+              }
+            },
+            "custom": {
+              "type": "object",
+              "description": "User-defined custom provider",
+              "properties": {
+                "source": { "type": "string", "description": "Relative file path (./providers/jira.ts) or npm package" }
+              },
+              "required": ["source"],
+              "additionalProperties": true
+            }
           }
-        },
-        "gitlab": {
-          "type": "object",
-          "description": "GitLab Issues provider"
         }
-      }
+      ]
     },
     "variable": {
       "type": "object",
       "description": "Input variable declarations",
       "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["string", "number", "boolean", "list", "map"]
-          },
-          "description": { "type": "string" },
-          "default": {},
-          "enum": {
-            "type": "array"
-          },
-          "validation": {
+        "oneOf": [
+          {
             "type": "object",
             "properties": {
-              "condition": { "type": "string" },
-              "error_message": { "type": "string" }
-            },
-            "required": ["condition", "error_message"]
-          }
-        }
+              "type": {
+                "type": "string",
+                "enum": ["string", "number", "boolean", "list", "map"],
+                "default": "string"
+              },
+              "description": { "type": "string" },
+              "default": {},
+              "enum": { "type": "array" },
+              "validation": {
+                "type": "object",
+                "properties": {
+                  "condition": { "type": "string" },
+                  "error_message": { "type": "string" }
+                },
+                "required": ["condition", "error_message"]
+              }
+            }
+          },
+          { "type": "string" },
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "array" }
+        ]
       }
     },
+    "variables": { "$ref": "#/properties/variable" },
+    "vars": { "$ref": "#/properties/variable" },
     "local": {
       "type": "object",
       "description": "Local computed values evaluated within expressions",
-      "additionalProperties": {}
+      "additionalProperties": true
     },
-    "locals": {
+    "locals": { "$ref": "#/properties/local" },
+    "resource": {
       "type": "object",
-      "description": "Local computed values evaluated within expressions",
-      "additionalProperties": {}
-    },
-    "scopes": {
-      "type": "object",
-      "description": "Scope matching patterns for feature file classification",
+      "description": "Resource scope mapping, scaffolding patterns, and custom fields",
       "properties": {
         "testcase": {
           "type": "object",
           "properties": {
-            "match": { "type": "string", "default": "*.case.feature" }
+            "match": { "type": "string", "default": "*.case.feature" },
+            "scaffold": {
+              "type": "object",
+              "properties": {
+                "directory": { "type": "string" },
+                "filename": { "type": "string" }
+              }
+            },
+            "fields": { "type": "array" }
           }
         },
         "testrun": {
           "type": "object",
           "properties": {
-            "match": { "type": "string", "default": "*.run.feature" }
+            "match": { "type": "string", "default": "*.run.feature" },
+            "scaffold": {
+              "type": "object",
+              "properties": {
+                "directory": { "type": "string" },
+                "filename": { "type": "string" }
+              }
+            },
+            "fields": { "type": "array" }
           }
         },
         "testplan": {
           "type": "object",
           "properties": {
-            "match": { "type": "string", "default": "*.plan.feature" }
+            "match": { "type": "string", "default": "*.plan.feature" },
+            "scaffold": {
+              "type": "object",
+              "properties": {
+                "directory": { "type": "string" },
+                "filename": { "type": "string" }
+              }
+            },
+            "fields": { "type": "array" }
+          }
+        },
+        "global": {
+          "type": "object",
+          "properties": {
+            "fields": { "type": "array" }
           }
         }
       }
     },
+    "scopes": { "$ref": "#/properties/resource" },
     "data": {
       "type": "object",
-      "description": "Data source declarations"
+      "description": "Data sources declarations (fixtures or state resource aliases)",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Path to JSON or YAML fixture file (e.g. fixtures/users.json)"
+          },
+          "address": {
+            "type": "string",
+            "description": "Address of an existing state resource (e.g. auth/login.case.feature.@tc-1)"
+          },
+          "repository": { "type": "string" },
+          "filter": { "type": "object" }
+        }
+      }
     },
     "modules": {
       "type": "object",
-      "description": "Reusable testform modules"
+      "description": "Reusable Testform feature modules",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Path to feature file or directory (e.g. auth/login.case.feature)"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "Optional scenario identity tag or title filter (e.g. @tc-1)"
+          },
+          "vars": {
+            "type": "object",
+            "description": "Input parameters passed into the module"
+          },
+          "outputs": {
+            "type": "object",
+            "description": "Exported outputs from the module",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "value": { "type": "string", "description": "Expression or value (e.g. ${testcase.auth/login.case.feature.@tc-1.title})" },
+                "description": { "type": "string" }
+              },
+              "required": ["value"]
+            }
+          }
+        },
+        "required": ["source"]
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "description": "Root outputs accessible via 'testform output'",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "description": "Value or expression to output (e.g. ${var.env}, ${module.auth_module.login_title})",
+            "type": ["string", "number", "boolean", "array", "object"]
+          },
+          "description": { "type": "string" },
+          "sensitive": { "type": "boolean", "default": false }
+        },
+        "required": ["value"]
+      }
+    },
+    "policy": {
+      "type": "object",
+      "description": "Governance and quality gate policy rules"
     }
   }
 }
