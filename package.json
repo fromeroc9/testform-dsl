@@ -48,38 +48,7 @@
   "contributes": {
     "languages": [
       {
-        "id": "testform-yaml",
-        "aliases": [
-          "Testform",
-          "Testform Configuration",
-          "testform"
-        ],
-        "filenames": [
-          "main.yml",
-          "main.yaml",
-          "testform.yml",
-          "testform.yaml"
-        ],
-        "filenamePatterns": [
-          "**/main.yml",
-          "**/main.yaml",
-          "**/testform.yml",
-          "**/testform.yaml"
-        ],
-        "configuration": "./yaml-language-configuration.json",
-        "icon": {
-          "light": "./assets/icon.svg",
-          "dark": "./assets/icon.svg"
-        }
-      },
-      {
-        "id": "testform-gherkin",
-        "aliases": [
-          "Testform Gherkin",
-          "testform",
-          "Cucumber Gherkin",
-          "Gherkin"
-        ],
+        "id": "gherkin",
         "extensions": [
           ".case.feature",
           ".run.feature",
@@ -95,31 +64,22 @@
     ],
     "grammars": [
       {
-        "language": "testform-yaml",
-        "scopeName": "source.testform.yaml",
-        "path": "./syntaxes/testform-yaml.tmLanguage.json"
-      },
-      {
-        "language": "testform-gherkin",
-        "scopeName": "source.feature.testform",
-        "path": "./syntaxes/testform-gherkin.tmLanguage.json"
-      },
-      {
-        "scopeName": "testform.injection",
-        "path": "./syntaxes/testform-injection.tmLanguage.json",
+        "scopeName": "testform.dsl.injection",
+        "path": "./syntaxes/testform-dsl.tmLanguage.json",
         "injectTo": [
           "text.gherkin.feature",
-          "source.feature"
+          "source.feature",
+          "source.gherkin"
         ]
       }
     ],
     "snippets": [
       {
-        "language": "testform-gherkin",
+        "language": "gherkin",
         "path": "./snippets/gherkin.json"
       },
       {
-        "language": "testform-yaml",
+        "language": "yaml",
         "path": "./snippets/yaml.json"
       }
     ],

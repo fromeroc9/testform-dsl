@@ -32,9 +32,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
-      { scheme: 'file', language: 'testform-yaml' },
       { scheme: 'file', language: 'yaml' },
-      { scheme: 'file', language: 'testform-gherkin' },
+      { scheme: 'file', language: 'gherkin' },
       { scheme: 'file', pattern: '**/*.feature' }
     ],
     synchronize: {
@@ -457,25 +456,6 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
   );
-
-  // 6. Content-based Testform YAML language auto-detection
-  const detectTestformYaml = (doc: vscode.TextDocument) => {
-    if (doc.languageId === 'testform-yaml') return;
-    const lower = doc.fileName.toLowerCase();
-    if (!lower.endsWith('.yml') && !lower.endsWith('.yaml')) return;
-    if (lower.endsWith('.vars.yml') || lower.endsWith('.vars.yaml')) return;
-
-    try {
-      const text = doc.getText();
-      const hasTestformBlock = /^\s*(version|provider|backend|variable|locals|resource|data|module|output|policy)\s*:/m.test(text);
-      if (hasTestformBlock) {
-        vscode.languages.setTextDocumentLanguage(doc, 'testform-yaml');
-      }
-    } catch {}
-  };
-
-  vscode.workspace.textDocuments.forEach(detectTestformYaml);
-  context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(detectTestformYaml));
 }
 
 export function deactivate(): Thenable<void> | undefined {
