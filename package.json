@@ -40,7 +40,6 @@
     "workspaceContains:**/*.case.feature",
     "workspaceContains:**/*.run.feature",
     "workspaceContains:**/*.plan.feature",
-    "onView:testform.views.specs",
     "onView:testform.views.state",
     "onView:testform.views.modules",
     "onView:testform.views.reports"
@@ -163,11 +162,6 @@
     "views": {
       "testform-sidebar": [
         {
-          "id": "testform.views.specs",
-          "name": "Test Cases, Runs & Plans",
-          "icon": "$(list-tree)"
-        },
-        {
           "id": "testform.views.state",
           "name": "State Explorer",
           "icon": "$(database)"
@@ -275,10 +269,10 @@
         "icon": "$(terminal)"
       },
       {
-        "command": "testform.specs.refresh",
-        "title": "Testform: Refresh Test Specs",
+        "command": "testform.specs.openHub",
+        "title": "Testform: Open Test Cases, Runs & Plans Hub",
         "category": "Testform",
-        "icon": "$(refresh)"
+        "icon": "$(layout-sidebar-right-off)"
       },
       {
         "command": "testform.state.taint",
@@ -332,9 +326,9 @@
     "menus": {
       "view/title": [
         {
-          "command": "testform.specs.refresh",
-          "when": "view == testform.views.specs",
-          "group": "navigation@1"
+          "command": "testform.specs.openHub",
+          "when": "view == testform.views.state || view == testform.views.modules || view == testform.views.reports",
+          "group": "navigation@0"
         },
         {
           "command": "testform.state.refresh",
