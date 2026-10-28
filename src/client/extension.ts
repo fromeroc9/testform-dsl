@@ -14,7 +14,6 @@ import { ReportsTreeProvider } from './views/reports-view';
 import { TestformTestController } from './testing/test-controller';
 import { TestformFileDecorationProvider } from './views/decorations';
 import { TestformWorkspaceManager } from './workspace-manager';
-import { FeatureCodeLensProvider } from './testing/feature-codelens';
 
 let client: LanguageClient;
 
@@ -99,21 +98,9 @@ export function activate(context: vscode.ExtensionContext) {
   const reportsProvider = new ReportsTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.reports', reportsProvider);
 
-  // 4. Test Controller & File Decorations & Workspace Manager & CodeLens
+  // 4. Test Controller & File Decorations & Workspace Manager
   const testController = new TestformTestController();
   context.subscriptions.push(testController);
-
-  const codeLensProvider = new FeatureCodeLensProvider();
-  context.subscriptions.push(
-    vscode.languages.registerCodeLensProvider(
-      { language: 'testform-gherkin' },
-      codeLensProvider
-    ),
-    vscode.languages.registerCodeLensProvider(
-      { pattern: '**/*.feature' },
-      codeLensProvider
-    )
-  );
 
   const decorationProvider = new TestformFileDecorationProvider();
   context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorationProvider));
