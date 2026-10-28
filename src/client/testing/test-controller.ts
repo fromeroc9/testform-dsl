@@ -3,19 +3,27 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { runTestformCommand } from '../terminal';
 
+interface ReferencedScenario {
+  id: string;
+  title: string;
+  tag?: string;
+  status?: string;
+}
+
 interface ReferencedFeatureInfo {
   featureTitle: string;
+  scope: 'testcase' | 'testrun' | 'testplan';
   scenariosByTag: Map<string, string>; // e.g. "@tc-1" -> "Inicio de sesión exitoso con usuario estándar"
-  scenariosByName: Map<string, string>;
+  scenarios: ReferencedScenario[];
 }
 
 export class TestformTestController {
   private controller: vscode.TestController;
   private disposables: vscode.Disposable[] = [];
-  private scenarioStatusMap: Map<string, string> = new Map(); // testId -> status ("passed", "failed", etc.)
+  private scenarioStatusMap: Map<string, string> = new Map();
 
   constructor() {
-    this.controller = vscode.tests.createTestController('testform-controller', 'Testform Test Runs');
+    this.controller = vscode.tests.createTestController('testform-controller', 'Testform Suites');
     this.disposables.push(this.controller);
 
     // Run Profile for executing tests
@@ -48,28 +56,30 @@ export class TestformTestController {
     }
   }
 
-  private isTestrunFile(filePath: string, content: string): boolean {
+  private isExecutableSuiteFile(filePath: string, content: string): 'testrun' | 'testplan' | null {
     const fileName = path.basename(filePath).toLowerCase();
-    if (fileName.includes('.run.feature')) return true;
+    if (fileName.includes('.run.feature')) return 'testrun';
+    if (fileName.includes('.plan.feature')) return 'testplan';
 
-    // Check header tags for @testrun
+    // Check header tags
     const firstLines = content.split(/\r?\n/).slice(0, 15);
     for (const line of firstLines) {
       const trimmed = line.trim();
-      if (trimmed.startsWith('@') && trimmed.includes('@testrun')) {
-        return true;
+      if (trimmed.startsWith('@')) {
+        if (trimmed.includes('@testrun')) return 'testrun';
+        if (trimmed.includes('@testplan')) return 'testplan';
       }
     }
-    return false;
+    return null;
   }
 
   /**
-   * Reads a referenced feature file (e.g. auth/login.case.feature)
-   * to extract its Feature title and scenario names by tag.
+   * Resolves a referenced feature file:
+   * - In a testrun: Rule points to a testcase (*.case.feature)
+   * - In a testplan: Rule points to a testrun (*.run.feature)
    */
   private resolveReferencedFeature(rootPath: string, ruleText: string): ReferencedFeatureInfo | null {
     try {
-      // Find possible candidate path
       let candidatePath = path.resolve(rootPath, ruleText);
       if (!fs.existsSync(candidatePath)) {
         if (!candidatePath.endsWith('.feature')) {
@@ -78,7 +88,6 @@ export class TestformTestController {
       }
 
       if (!fs.existsSync(candidatePath)) {
-        // Fallback: search in workspace by basename
         const base = path.basename(ruleText);
         const searchBase = base.endsWith('.feature') ? base : `${base}.feature`;
         const findInDir = (dir: string): string | null => {
@@ -102,11 +111,17 @@ export class TestformTestController {
       const content = fs.readFileSync(candidatePath, 'utf8');
       const lines = content.split(/\r?\n/);
 
+      const lowerName = path.basename(candidatePath).toLowerCase();
+      let scope: 'testcase' | 'testrun' | 'testplan' = 'testcase';
+      if (lowerName.includes('.run.')) scope = 'testrun';
+      else if (lowerName.includes('.plan.')) scope = 'testplan';
+
       let featureTitle = path.basename(candidatePath);
       const scenariosByTag = new Map<string, string>();
-      const scenariosByName = new Map<string, string>();
+      const scenarios: ReferencedScenario[] = [];
 
       let pendingTags: string[] = [];
+      let currentScen: ReferencedScenario | null = null;
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -127,20 +142,29 @@ export class TestformTestController {
         const scenMatch = line.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
         if (scenMatch) {
           const title = scenMatch[1].trim();
-          scenariosByName.set(title.toLowerCase(), title);
-
-          for (const tag of pendingTags) {
-            if (/^@(tc|tr|tp)-[0-9]+/i.test(tag)) {
-              scenariosByTag.set(tag.toLowerCase(), title);
-            }
+          const identityTag = pendingTags.find(t => /^@(tc|tr|tp)-[0-9]+/i.test(t));
+          if (identityTag) {
+            scenariosByTag.set(identityTag.toLowerCase(), title);
           }
+
+          currentScen = {
+            id: identityTag || `line_${i}`,
+            title,
+            tag: identityTag
+          };
+          scenarios.push(currentScen);
           pendingTags = [];
-        } else if (line.length > 0 && !line.startsWith('@')) {
-          pendingTags = [];
+          continue;
+        }
+
+        // Status mark if present in referenced testrun
+        const statusMatch = line.match(/^\*\s+mark\s+status\s*=\s*([a-zA-Z]+)/i);
+        if (statusMatch && currentScen) {
+          currentScen.status = statusMatch[1].toLowerCase();
         }
       }
 
-      return { featureTitle, scenariosByTag, scenariosByName };
+      return { featureTitle, scope, scenariosByTag, scenarios };
     } catch {
       return null;
     }
@@ -155,8 +179,9 @@ export class TestformTestController {
 
       const content = fs.readFileSync(uri.fsPath, 'utf8');
 
-      // Only expose test runs in the Test Explorer
-      if (!this.isTestrunFile(uri.fsPath, content)) {
+      // Only expose test runs and test plans in the Test Explorer (testcases are not suites)
+      const suiteKind = this.isExecutableSuiteFile(uri.fsPath, content);
+      if (!suiteKind) {
         this.removeFileTests(uri);
         return;
       }
@@ -168,12 +193,14 @@ export class TestformTestController {
 
       const lines = content.split(/\r?\n/);
 
-      // Extract Feature title
+      // Extract Feature title and its line index
       let featureTitle = fileName;
+      let featureLineIndex = 0;
       for (let i = 0; i < lines.length; i++) {
         const featMatch = lines[i].match(/^(?:Feature|Característica):\s*(.+)$/i);
         if (featMatch) {
           featureTitle = featMatch[1].trim();
+          featureLineIndex = i;
           break;
         }
       }
@@ -185,6 +212,13 @@ export class TestformTestController {
       );
       fileTestItem.description = relPath;
 
+      // CRITICAL FIX: Only set range on the Feature line so that the gutter play icon
+      // appears EXCLUSIVELY on "Feature:" (Play All Test) and NOT on each Rule or Scenario!
+      fileTestItem.range = new vscode.Range(
+        new vscode.Position(featureLineIndex, 0),
+        new vscode.Position(featureLineIndex, lines[featureLineIndex].length)
+      );
+
       let currentRuleItem: vscode.TestItem | null = null;
       let currentRefInfo: ReferencedFeatureInfo | null = null;
       let currentScenarioItem: vscode.TestItem | null = null;
@@ -195,35 +229,45 @@ export class TestformTestController {
 
         if (trimmed.startsWith('#')) continue;
 
-        // 1. Rule block: Rule: auth/login.case.feature
+        // 1. Rule block: Rule: auth/login.case.feature or Rule: suites/smoke.run.feature
         const ruleMatch = trimmed.match(/^(?:Rule|Regla):\s*(.+)$/i);
         if (ruleMatch) {
           const ruleText = ruleMatch[1].trim();
           currentRefInfo = this.resolveReferencedFeature(rootPath, ruleText);
 
-          // Use the referenced feature's title as the label if resolved
+          // Use the referenced feature's title as the label
           const ruleLabel = currentRefInfo?.featureTitle || ruleText;
           const ruleId = `${uri.toString()}::rule_${i}`;
 
           currentRuleItem = this.controller.createTestItem(ruleId, ruleLabel, uri);
           currentRuleItem.description = ruleText;
-          currentRuleItem.range = new vscode.Range(new vscode.Position(i, 0), new vscode.Position(i, rawLine.length));
+          // NO range set on Rule item: avoids gutter play icon on Rule
 
           fileTestItem.children.add(currentRuleItem);
           currentScenarioItem = null;
+
+          // If inside a testplan and the referenced file is a testrun with scenarios, add them as children
+          if (suiteKind === 'testplan' && currentRefInfo && currentRefInfo.scenarios.length > 0) {
+            for (const s of currentRefInfo.scenarios) {
+              const childId = `${ruleId}::${s.id}`;
+              const scenNode = this.controller.createTestItem(childId, s.title, uri);
+              scenNode.description = s.status ? `${s.tag || ''} [${s.status.toUpperCase()}]` : s.tag;
+              // NO range set: avoids gutter play icon
+              currentRuleItem.children.add(scenNode);
+            }
+          }
           continue;
         }
 
-        // 2. Scenario block: Scenario: login.case.feature.@tc-1
+        // 2. Scenario block in testrun: Scenario: login.case.feature.@tc-1
         const scenarioMatch = trimmed.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
         if (scenarioMatch) {
           const rawScenarioText = scenarioMatch[1].trim();
 
-          // Check if it references a testcase tag like @tc-1 or an address
           const tagMatch = rawScenarioText.match(/@(tc|tr|tp)-[0-9]+/i);
           const tag = tagMatch ? tagMatch[0].toLowerCase() : undefined;
 
-          // Lookup linked scenario name from referenced feature
+          // Resolve real linked scenario name from referenced feature
           let linkedTitle: string | undefined;
           if (tag && currentRefInfo) {
             linkedTitle = currentRefInfo.scenariosByTag.get(tag);
@@ -233,7 +277,7 @@ export class TestformTestController {
           const id = `${uri.toString()}::scenario_${i}`;
 
           currentScenarioItem = this.controller.createTestItem(id, displayTitle, uri);
-          currentScenarioItem.range = new vscode.Range(new vscode.Position(i, 0), new vscode.Position(i, rawLine.length));
+          // NO range set on Scenario item: avoids gutter play icon on Scenario
           currentScenarioItem.description = tag ? tag.toUpperCase() : undefined;
 
           if (currentRuleItem) {
@@ -283,7 +327,6 @@ export class TestformTestController {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
 
-    // Collect all root feature items
     const executedFiles = new Set<string>();
 
     for (const item of queue) {
@@ -301,7 +344,7 @@ export class TestformTestController {
         const relPath = rootPath ? path.relative(rootPath, uri.fsPath).replace(/\\/g, '/') : path.basename(uri.fsPath);
 
         run.appendOutput(`Executing Testform suite: ${relPath}\r\n`);
-        // Always run at Feature level directly
+        // Always execute at the Feature level
         runTestformCommand(`apply --auto-approve --target="${relPath}"`);
       }
 

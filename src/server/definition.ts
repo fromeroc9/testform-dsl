@@ -117,8 +117,22 @@ export function provideDefinition(
     }
   }
 
-  // 3. Line context: Scenario address in Testrun (e.g. Scenario: login.case.feature.@tc-1 or Rule: auth/login.case.feature)
-  const addrMatch = lineText.match(/([a-zA-Z0-9_./-]+\.case\.feature(?:\.@tc-[0-9]+)?)/i);
+  // 3. Line context: Rule file reference (e.g. Rule: auth/login.case.feature or Rule: suites/smoke.run.feature)
+  const ruleMatch = lineText.match(/^(?:\s*Rule|\s*Regla):\s*([a-zA-Z0-9_./-]+\.(?:case|run|plan)\.feature)/i);
+  if (ruleMatch) {
+    const rawPath = ruleMatch[1].trim();
+    const feat = scanner.featureFiles.get(rawPath) ||
+      [...scanner.featureFiles.values()].find(f => f.relPath.endsWith(rawPath) || f.fullPath.endsWith(rawPath));
+    if (feat) {
+      return Location.create(pathToFileURL(feat.fullPath).href, {
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 100 }
+      });
+    }
+  }
+
+  // 3.1 Line context: Scenario address in Testrun (e.g. Scenario: login.case.feature.@tc-1)
+  const addrMatch = lineText.match(/([a-zA-Z0-9_./-]+\.(?:case|run|plan)\.feature(?:\.@(?:tc|tr|tp)-[0-9]+)?)/i);
   if (addrMatch) {
     const rawAddr = addrMatch[1];
     const targetScenario = scanner.config.scenarioAddresses.get(rawAddr);
@@ -127,6 +141,15 @@ export function provideDefinition(
       return Location.create(uri, {
         start: { line: targetScenario.line, character: 0 },
         end: { line: targetScenario.line, character: 100 }
+      });
+    }
+    // If it's a file without scenario, jump to start of file
+    const feat = scanner.featureFiles.get(rawAddr) ||
+      [...scanner.featureFiles.values()].find(f => f.relPath.endsWith(rawAddr) || f.fullPath.endsWith(rawAddr));
+    if (feat) {
+      return Location.create(pathToFileURL(feat.fullPath).href, {
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 100 }
       });
     }
   }

@@ -10,6 +10,12 @@ export class WorkspaceScanner {
   public declaredModules: Map<string, { source: string; outputs: string[] }> = new Map();
   public customReports: string[] = [];
   public customPolicies: string[] = [];
+  public featureFiles: Map<string, {
+    relPath: string;
+    fullPath: string;
+    scope: 'testcase' | 'testrun' | 'testplan';
+    title: string;
+  }> = new Map();
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
@@ -38,6 +44,7 @@ export class WorkspaceScanner {
     this.config.duplicateScenarioTags.clear();
     this.config.maxIdentityIds = { tc: 0, tr: 0, tp: 0 };
     this.declaredModules.clear();
+    this.featureFiles.clear();
 
     // 1. Root main.yml / testform.yml (Base Level 0)
     const baseFile = this.scanBaseConfig();
@@ -219,13 +226,26 @@ export class WorkspaceScanner {
               const content = fs.readFileSync(fullPath, 'utf8');
               const lines = content.split(/\r?\n/);
 
-              // Detect root scope tag if present
-              for (let i = 0; i < Math.min(lines.length, 10); i++) {
+              // Detect root scope tag and Feature title
+              let featureTitle = path.basename(fullPath);
+              for (let i = 0; i < Math.min(lines.length, 20); i++) {
                 const line = lines[i].trim();
                 if (line.includes('@testrun')) fileScope = 'testrun';
                 else if (line.includes('@testplan')) fileScope = 'testplan';
                 else if (line.includes('@testcase')) fileScope = 'testcase';
+
+                const featMatch = line.match(/^(?:Feature|Característica):\s*(.+)$/i);
+                if (featMatch) {
+                  featureTitle = featMatch[1].trim();
+                }
               }
+
+              this.featureFiles.set(relPath, {
+                relPath,
+                fullPath,
+                scope: fileScope,
+                title: featureTitle
+              });
 
               for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();

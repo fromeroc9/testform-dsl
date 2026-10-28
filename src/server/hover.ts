@@ -286,5 +286,28 @@ export function provideHover(
     };
   }
 
+  // 6. Match Rule path hover: Rule: auth/login.case.feature or Rule: suites/smoke.run.feature
+  const ruleMatch = lineText.match(/^(?:\s*Rule|\s*Regla):\s*([a-zA-Z0-9_./-]+\.(?:case|run|plan)\.feature)/i);
+  if (ruleMatch) {
+    const rawPath = ruleMatch[1].trim();
+    const feat = scanner.featureFiles.get(rawPath) ||
+      [...scanner.featureFiles.values()].find(f => f.relPath.endsWith(rawPath) || f.fullPath.endsWith(rawPath));
+    if (feat) {
+      const scopeLabel = feat.scope === 'testrun' ? 'Test Run Suite' : (feat.scope === 'testplan' ? 'Test Plan' : 'Test Case Feature');
+      return {
+        contents: {
+          kind: MarkupKind.Markdown,
+          value: [
+            `### 🎯 ${scopeLabel}: \`${feat.title}\``,
+            `**Scope:** \`${feat.scope}\``,
+            `**Target Path:** \`${feat.relPath}\``,
+            `---`,
+            `*Presiona \`F12\` o \`Ctrl+Click\` para navegar a este archivo.*`
+          ].join('\n\n')
+        }
+      };
+    }
+  }
+
   return null;
 }

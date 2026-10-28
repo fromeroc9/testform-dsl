@@ -181,6 +181,90 @@ export function provideCompletions(
     return items;
   }
 
+  // 4.5 Rule path completion in testrun and testplan
+  const ruleMatch = lineText.match(/^\s*(?:Rule|Regla):\s*([a-zA-Z0-9_./-]*)$/i);
+  if (ruleMatch) {
+    const docText = document.getText();
+    const uri = document.uri.toLowerCase();
+    const isTestplan = uri.endsWith('.plan.feature') || /@testplan\b/i.test(docText);
+    const isTestrun = uri.endsWith('.run.feature') || /@testrun\b/i.test(docText);
+
+    if (isTestplan) {
+      // In a testplan, Rule: must suggest testrun suite files (*.run.feature)
+      for (const [relPath, feat] of scanner.featureFiles.entries()) {
+        if (feat.scope === 'testrun') {
+          items.push({
+            label: relPath,
+            kind: CompletionItemKind.File,
+            detail: `Test Run: ${feat.title}`,
+            documentation: {
+              kind: MarkupKind.Markdown,
+              value: `### 🚀 Test Run Target\n\n**Title:** ${feat.title}\n\n**Path:** \`${relPath}\``
+            },
+            insertText: relPath
+          });
+        }
+      }
+      return items;
+    } else if (isTestrun) {
+      // In a testrun, Rule: must suggest testcase feature files (*.case.feature)
+      for (const [relPath, feat] of scanner.featureFiles.entries()) {
+        if (feat.scope === 'testcase') {
+          items.push({
+            label: relPath,
+            kind: CompletionItemKind.File,
+            detail: `Feature: ${feat.title}`,
+            documentation: {
+              kind: MarkupKind.Markdown,
+              value: `### 🧪 Test Case Feature Target\n\n**Title:** ${feat.title}\n\n**Path:** \`${relPath}\``
+            },
+            insertText: relPath
+          });
+        }
+      }
+      return items;
+    }
+  }
+
+  // 4.6 Scenario address completion inside a testrun Rule
+  const scenarioKeywordMatch = lineText.match(/^\s*(?:Scenario|Escenario):\s*([a-zA-Z0-9_./-]*)$/i);
+  if (scenarioKeywordMatch) {
+    const docText = document.getText();
+    const uri = document.uri.toLowerCase();
+    const isTestrun = uri.endsWith('.run.feature') || /@testrun\b/i.test(docText);
+
+    if (isTestrun) {
+      const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
+      let enclosingRulePath = '';
+      for (let i = linesBefore.length - 1; i >= 0; i--) {
+        const m = linesBefore[i].trim().match(/^(?:Rule|Regla):\s*(.+)$/i);
+        if (m) {
+          enclosingRulePath = m[1].trim();
+          break;
+        }
+      }
+
+      if (enclosingRulePath) {
+        const normRule = enclosingRulePath.toLowerCase();
+        for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+          if (info.sourceFile.toLowerCase().endsWith(normRule) || addr.toLowerCase().startsWith(normRule)) {
+            items.push({
+              label: addr,
+              kind: CompletionItemKind.Reference,
+              detail: info.title,
+              documentation: {
+                kind: MarkupKind.Markdown,
+                value: `### Linked Test Case\n\n**Title:** ${info.title}\n\n**Tag:** \`${info.tag}\`\n\n*Address:* \`${addr}\``
+              },
+              insertText: addr
+            });
+          }
+        }
+        if (items.length > 0) return items;
+      }
+    }
+  }
+
   // 5. DSL Mark Status Step completion
   if (/^\s*\*\s*(m|ma|mar|mark)?\s*$/i.test(lineText)) {
     items.push({
