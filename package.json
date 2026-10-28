@@ -33,7 +33,6 @@
   ],
   "main": "./dist/client.js",
   "activationEvents": [
-    "onLanguage:gherkin",
     "workspaceContains:**/main.yml",
     "workspaceContains:**/main.yaml",
     "workspaceContains:**/testform.yml",
@@ -120,10 +119,6 @@
     "snippets": [
       {
         "language": "testform-gherkin",
-        "path": "./snippets/gherkin.json"
-      },
-      {
-        "language": "gherkin",
         "path": "./snippets/gherkin.json"
       },
       {

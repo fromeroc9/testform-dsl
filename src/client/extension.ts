@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
       { scheme: 'file', language: 'testform-yaml' },
       { scheme: 'file', language: 'yaml' },
       { scheme: 'file', language: 'testform-gherkin' },
-      { scheme: 'file', language: 'gherkin' }
+      { scheme: 'file', pattern: '**/*.feature' }
     ],
     synchronize: {
       fileEvents: [

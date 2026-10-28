@@ -19,8 +19,7 @@
   },
   "languageIds": {
     "testform-yaml": "_testform",
-    "testform-gherkin": "_cucumber",
-    "gherkin": "_cucumber"
+    "testform-gherkin": "_cucumber"
   }
 }
 
