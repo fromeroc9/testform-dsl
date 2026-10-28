@@ -54,15 +54,20 @@ export function formatGherkin(content: string): string {
       continue;
     }
 
-    // Determine indentation based on keyword
-    if (trimmed.startsWith('Feature:')) {
+    // Determine indentation based on keyword (English and Spanish)
+    if (trimmed.startsWith('Feature:') || trimmed.startsWith('Característica:')) {
       expectedIndent = 0;
     } else if (
       trimmed.startsWith('Rule:') ||
+      trimmed.startsWith('Regla:') ||
       trimmed.startsWith('Background:') ||
+      trimmed.startsWith('Antecedentes:') ||
       trimmed.startsWith('Scenario:') ||
+      trimmed.startsWith('Escenario:') ||
       trimmed.startsWith('Scenario Outline:') ||
-      trimmed.startsWith('Example:')
+      trimmed.startsWith('Esquema del escenario:') ||
+      trimmed.startsWith('Example:') ||
+      trimmed.startsWith('Ejemplo:')
     ) {
       expectedIndent = 2;
       if (output.length > 0 && output[output.length - 1] !== '' && !output[output.length - 1].trim().startsWith('@')) {
@@ -70,14 +75,19 @@ export function formatGherkin(content: string): string {
       }
     } else if (
       trimmed.startsWith('Given ') ||
+      trimmed.startsWith('Dado ') ||
       trimmed.startsWith('When ') ||
+      trimmed.startsWith('Cuando ') ||
       trimmed.startsWith('Then ') ||
+      trimmed.startsWith('Entonces ') ||
       trimmed.startsWith('And ') ||
+      trimmed.startsWith('Y ') ||
       trimmed.startsWith('But ') ||
+      trimmed.startsWith('Pero ') ||
       trimmed.startsWith('* ')
     ) {
       expectedIndent = 4;
-    } else if (trimmed.startsWith('Examples:')) {
+    } else if (trimmed.startsWith('Examples:') || trimmed.startsWith('Ejemplos:')) {
       expectedIndent = 4;
       if (output.length > 0 && output[output.length - 1] !== '') {
         output.push('');
@@ -89,15 +99,19 @@ export function formatGherkin(content: string): string {
       for (let j = i + 1; j < lines.length; j++) {
         const nextTrimmed = lines[j].trim();
         if (nextTrimmed === '' || nextTrimmed.startsWith('@')) continue;
-        if (nextTrimmed.startsWith('Feature:')) nextIndent = 0;
+        if (nextTrimmed.startsWith('Feature:') || nextTrimmed.startsWith('Característica:')) nextIndent = 0;
         else if (
           nextTrimmed.startsWith('Rule:') ||
+          nextTrimmed.startsWith('Regla:') ||
           nextTrimmed.startsWith('Background:') ||
+          nextTrimmed.startsWith('Antecedentes:') ||
           nextTrimmed.startsWith('Scenario:') ||
-          nextTrimmed.startsWith('Scenario Outline:')
+          nextTrimmed.startsWith('Escenario:') ||
+          nextTrimmed.startsWith('Scenario Outline:') ||
+          nextTrimmed.startsWith('Esquema del escenario:')
         )
           nextIndent = 2;
-        else if (nextTrimmed.startsWith('Examples:')) nextIndent = 4;
+        else if (nextTrimmed.startsWith('Examples:') || nextTrimmed.startsWith('Ejemplos:')) nextIndent = 4;
         break;
       }
       expectedIndent = nextIndent;

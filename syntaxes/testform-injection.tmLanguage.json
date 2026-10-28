@@ -35,12 +35,20 @@
                   "match": "\\bdata\\.[a-zA-Z0-9_]+(\\.[a-zA-Z0-9_]+)*"
                 },
                 {
+                  "name": "variable.other.testform.module",
+                  "match": "\\bmodule\\.[a-zA-Z0-9_]+(\\.[a-zA-Z0-9_]+)*"
+                },
+                {
+                  "name": "variable.other.testform.state",
+                  "match": "\\b(testcase|testrun|testplan)\\.[a-zA-Z0-9_./@-]+"
+                },
+                {
                   "name": "variable.other.testform.env",
                   "match": "\\benv\\.[a-zA-Z0-9_]+"
                 },
                 {
                   "name": "support.function.testform",
-                  "match": "\\b(lower|upper|trim|replace|split|join|length|coalesce|default|jsonencode|jsondecode|abs|min|max)\\b"
+                  "match": "\\b(lower|upper|trim|trimprefix|trimsuffix|startswith|endswith|replace|split|join|format|substr|contains|coalesce|lookup|length|element|slice|merge|env|uuid|timestamp|jsonencode|jsondecode|file|abs|min|max|floor|ceil)\\b"
                 },
                 {
                   "name": "string.quoted.double.testform",
@@ -73,13 +81,17 @@
         {
           "name": "entity.name.tag.directive.testform",
           "match": "@(module|depends_on|target)\\b"
+        },
+        {
+          "name": "entity.name.tag.flag.testform",
+          "match": "@(smoke|regression|critical|slow|flaky|e2e|auth|ui|api|security|performance|retry|timeout)\\b"
         }
       ]
     },
     "dsl-status": {
       "patterns": [
         {
-          "match": "(^\\s*(?:\\*\\s*)?mark\\s+status\\s*=\\s*)(passed|failed|skipped|blocked|unexecuted)\\b",
+          "match": "(^\\s*(?:\\*\\s*)?mark\\s+status\\s*=\\s*)(passed|failed|skipped|blocked|pending|unexecuted)\\b",
           "captures": {
             "1": { "name": "keyword.other.testform.mark" },
             "2": { "name": "constant.language.status.testform" }

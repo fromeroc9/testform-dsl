@@ -104,6 +104,34 @@ export function provideCompletions(
     return items;
   }
 
+  // 3.1 Module completion: ${module.
+  if (/\$\{module\.[a-zA-Z0-9_.]*$/.test(lineText)) {
+    for (const [modName, modInfo] of scanner.declaredModules.entries()) {
+      if (modInfo.outputs.length > 0) {
+        for (const outName of modInfo.outputs) {
+          items.push({
+            label: `${modName}.${outName}`,
+            kind: CompletionItemKind.Property,
+            detail: `Module Output: ${modName}.${outName}`,
+            documentation: {
+              kind: MarkupKind.Markdown,
+              value: `**Module Output:** \`${modName}.${outName}\`\n\n*Source:* \`${modInfo.source}\``
+            },
+            insertText: `${modName}.${outName}`
+          });
+        }
+      } else {
+        items.push({
+          label: modName,
+          kind: CompletionItemKind.Module,
+          detail: `Module: ${modName} (${modInfo.source})`,
+          insertText: modName
+        });
+      }
+    }
+    return items;
+  }
+
   // 4. Expression prefix: ${
   if (/\$\{[a-zA-Z0-9_]*$/.test(lineText)) {
     items.push(
@@ -124,6 +152,12 @@ export function provideCompletions(
         kind: CompletionItemKind.Module,
         detail: 'Reference an external data source',
         insertText: 'data.'
+      },
+      {
+        label: 'module.',
+        kind: CompletionItemKind.Module,
+        detail: 'Reference a module output',
+        insertText: 'module.'
       },
       {
         label: 'env.',
@@ -149,7 +183,7 @@ export function provideCompletions(
 
   // 5. DSL Mark Status: mark status =
   if (/mark\s+status\s*=\s*[a-zA-Z]*$/i.test(lineText)) {
-    const statuses = ['passed', 'failed', 'skipped', 'blocked', 'unexecuted'];
+    const statuses = ['passed', 'failed', 'pending', 'skipped', 'blocked', 'unexecuted'];
     return statuses.map(s => ({
       label: s,
       kind: CompletionItemKind.EnumMember,
@@ -158,7 +192,55 @@ export function provideCompletions(
     }));
   }
 
-  // 6. Tags completion: @
+  // 6. Depends on addresses completion inside @depends_on("...")
+  if (/@depends_on\([^)]*["'][^"']*$/.test(lineText)) {
+    for (const [address, info] of scanner.config.scenarioAddresses.entries()) {
+      // Suggest full relative address
+      if (address.includes('/')) {
+        items.push({
+          label: address,
+          kind: CompletionItemKind.Reference,
+          detail: `${info.tag}: ${info.title}`,
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: `### Dependency Target\n\n**Tag:** \`${info.tag}\`\n\n**Title:** ${info.title}\n\n*File:* \`${info.sourceFile}\``
+          },
+          insertText: address
+        });
+      }
+    }
+    return items;
+  }
+
+  // 7. Identity Tag next-ID completion (@tc-, @tr-, @tp-)
+  const tcPrefixMatch = lineText.match(/@(tc|tr|tp)-([0-9]*)$/i);
+  if (tcPrefixMatch) {
+    const prefix = tcPrefixMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp';
+    const nextId = scanner.config.maxIdentityIds[prefix] + 1;
+    const nextTag = `${prefix}-${nextId}`;
+
+    items.push({
+      label: nextTag,
+      kind: CompletionItemKind.Value,
+      detail: `Siguiente ID secuencial sugerido (@${nextTag})`,
+      insertText: nextTag
+    });
+
+    // Also list existing scenario tags
+    for (const [tag, info] of scanner.config.scenarios.entries()) {
+      if (tag.toLowerCase().startsWith(`@${prefix}-`)) {
+        items.push({
+          label: tag.replace(/^@/, ''),
+          kind: CompletionItemKind.Reference,
+          detail: info.title,
+          insertText: tag.replace(/^@/, '')
+        });
+      }
+    }
+    return items;
+  }
+
+  // 8. General Tags completion: @
   if (/@([a-zA-Z0-9_-]*)$/.test(lineText)) {
     // Scopes
     items.push(
@@ -183,9 +265,57 @@ export function provideCompletions(
       {
         label: 'depends_on',
         kind: CompletionItemKind.Snippet,
-        detail: 'Dependency constraint: @depends_on(target="@tc-1")',
+        detail: 'Dependency constraint: @depends_on("path/to.case.feature.@tc-1")',
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'depends_on(target="${1:@tc-1}")'
+        insertText: 'depends_on("${1:target}")'
+      },
+      {
+        label: 'smoke',
+        kind: CompletionItemKind.Constant,
+        detail: 'Flag: Smoke test suite (@smoke)',
+        insertText: 'smoke'
+      },
+      {
+        label: 'regression',
+        kind: CompletionItemKind.Constant,
+        detail: 'Flag: Regression test suite (@regression)',
+        insertText: 'regression'
+      },
+      {
+        label: 'critical',
+        kind: CompletionItemKind.Constant,
+        detail: 'Flag: Critical path test (@critical)',
+        insertText: 'critical'
+      },
+      {
+        label: 'flaky',
+        kind: CompletionItemKind.Constant,
+        detail: 'Flag: Known flaky test (@flaky)',
+        insertText: 'flaky'
+      },
+      {
+        label: 'retry',
+        kind: CompletionItemKind.Snippet,
+        detail: 'Directive: Retry count on failure (@retry(3))',
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: 'retry(${1:3})'
+      },
+      {
+        label: 'timeout',
+        kind: CompletionItemKind.Snippet,
+        detail: 'Directive: Timeout threshold (@timeout("30s"))',
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: 'timeout("${1:30s}")'
+      }
+    );
+
+    // Suggest next available TC/TR/TP IDs
+    items.push(
+      {
+        label: `tc-${scanner.config.maxIdentityIds.tc + 1}`,
+        kind: CompletionItemKind.Value,
+        detail: `Siguiente TestCase ID (@tc-${scanner.config.maxIdentityIds.tc + 1})`,
+        insertText: `tc-${scanner.config.maxIdentityIds.tc + 1}`
       }
     );
 

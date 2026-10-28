@@ -19,23 +19,85 @@ export function validateTextDocument(
       const startPos = textDocument.positionAt(match.index);
       const endPos = textDocument.positionAt(match.index + match[0].length);
 
-      const range: Range = {
-        start: startPos,
-        end: endPos
-      };
-
       diagnostics.push({
         severity: DiagnosticSeverity.Warning,
-        range,
-        message: `Undeclared variable 'var.${varName}'. Declare it in main.yml, variables.yml, or a domain YAML manifest.`,
+        range: { start: startPos, end: endPos },
+        message: `Variable no declarada: 'var.${varName}'. Declárala en variable.yml o un manifiesto YAML del workspace.`,
         source: 'Testform'
       });
     }
   }
 
-  // 2. Validate scope tags vs filename convention
+  // 2. Check for undeclared locals in ${local.name}
+  const localRegex = /\$\{local\.([a-zA-Z0-9_]+)\}/g;
+  while ((match = localRegex.exec(text)) !== null) {
+    const localName = match[1];
+    if (!scanner.config.locals.has(localName)) {
+      const startPos = textDocument.positionAt(match.index);
+      const endPos = textDocument.positionAt(match.index + match[0].length);
+
+      diagnostics.push({
+        severity: DiagnosticSeverity.Warning,
+        range: { start: startPos, end: endPos },
+        message: `Local no definido: 'local.${localName}'. Defínelo en un bloque 'locals:' en el workspace.`,
+        source: 'Testform'
+      });
+    }
+  }
+
+  // 3. Check for broken @depends_on("...")
+  const dependsOnRegex = /@depends_on\s*\(\s*([^)]+)\s*\)/g;
+  while ((match = dependsOnRegex.exec(text)) !== null) {
+    const argsContent = match[1];
+    const matchOffset = match.index;
+    const targetMatches = [...argsContent.matchAll(/["']([^"']+)["']/g)];
+
+    for (const tm of targetMatches) {
+      const targetAddress = tm[1];
+      const targetExists = scanner.config.scenarioAddresses.has(targetAddress) || scanner.config.scenarios.has(targetAddress);
+
+      if (!targetExists) {
+        const startOffset = matchOffset + (tm.index || 0);
+        const endOffset = startOffset + tm[0].length;
+
+        diagnostics.push({
+          severity: DiagnosticSeverity.Warning,
+          range: {
+            start: textDocument.positionAt(startOffset),
+            end: textDocument.positionAt(endOffset)
+          },
+          message: `Referencia de dependencia no encontrada: '${targetAddress}' no existe en el workspace.`,
+          source: 'Testform'
+        });
+      }
+    }
+  }
+
+  // 4. Check for duplicate identity tags in workspace
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const idMatch = line.match(/@(tc|tr|tp)-([0-9]+)/i);
+    if (idMatch) {
+      const tag = idMatch[0].toLowerCase();
+      const duplicates = scanner.config.duplicateScenarioTags.get(tag);
+      if (duplicates && duplicates.length > 1) {
+        const tagCol = line.indexOf(idMatch[0]);
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range: {
+            start: { line: i, character: tagCol },
+            end: { line: i, character: tagCol + idMatch[0].length }
+          },
+          message: `ID de escenario duplicado: '${idMatch[0]}' está definido en múltiples archivos (${duplicates.join(', ')}).`,
+          source: 'Testform'
+        });
+      }
+    }
+  }
+
+  // 5. Validate scope tags vs filename convention
   const uri = textDocument.uri.toLowerCase();
-  const lines = text.split('\n');
 
   if (uri.endsWith('.case.feature')) {
     if (!text.includes('@testcase')) {

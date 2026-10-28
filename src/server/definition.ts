@@ -51,10 +51,10 @@ export function provideDefinition(
         }
       }
 
-      // Check data.<type>.<name>
-      const dataMatch = exprContent.match(/\bdata\.([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\b/);
+      // Check data.<name> or data.<type>.<name>
+      const dataMatch = exprContent.match(/\bdata\.([a-zA-Z0-9_.]+)\b/);
       if (dataMatch) {
-        const dataKey = `${dataMatch[1]}.${dataMatch[2]}`;
+        const dataKey = dataMatch[1];
         const info = scanner.config.dataSources.get(dataKey);
         if (info && info.sourceFile) {
           const uri = pathToFileURL(info.sourceFile).href;
@@ -65,6 +65,67 @@ export function provideDefinition(
           return Location.create(uri, range);
         }
       }
+
+      // Check module.<name>
+      const modMatch = exprContent.match(/\bmodule\.([a-zA-Z0-9_]+)\b/);
+      if (modMatch) {
+        const modName = modMatch[1];
+        const modInfo = scanner.declaredModules.get(modName);
+        if (modInfo && modInfo.source) {
+          const modUri = pathToFileURL(modInfo.source).href;
+          return Location.create(modUri, { start: { line: 0, character: 0 }, end: { line: 0, character: 100 } });
+        }
+      }
+    }
+  }
+
+  // 2. Line context: Go to definition on @depends_on("...")
+  const lineText = document.getText({
+    start: { line: position.line, character: 0 },
+    end: { line: position.line + 1, character: 0 }
+  });
+
+  const dependsOnMatch = lineText.match(/@depends_on\s*\(\s*([^)]+)\s*\)/);
+  if (dependsOnMatch) {
+    const targetMatches = [...dependsOnMatch[1].matchAll(/["']([^"']+)["']/g)];
+    for (const tm of targetMatches) {
+      const address = tm[1];
+      const targetScenario = scanner.config.scenarioAddresses.get(address) || scanner.config.scenarios.get(address);
+      if (targetScenario) {
+        const uri = pathToFileURL(targetScenario.sourceFile).href;
+        return Location.create(uri, {
+          start: { line: targetScenario.line, character: 0 },
+          end: { line: targetScenario.line, character: 100 }
+        });
+      }
+    }
+  }
+
+  // 3. Line context: Scenario address in Testrun (e.g. Scenario: login.case.feature.@tc-1 or Rule: auth/login.case.feature)
+  const addrMatch = lineText.match(/([a-zA-Z0-9_./-]+\.case\.feature(?:\.@tc-[0-9]+)?)/i);
+  if (addrMatch) {
+    const rawAddr = addrMatch[1];
+    const targetScenario = scanner.config.scenarioAddresses.get(rawAddr);
+    if (targetScenario) {
+      const uri = pathToFileURL(targetScenario.sourceFile).href;
+      return Location.create(uri, {
+        start: { line: targetScenario.line, character: 0 },
+        end: { line: targetScenario.line, character: 100 }
+      });
+    }
+  }
+
+  // 4. Line context: @tc-X reference in step or tag
+  const tcTagMatch = lineText.match(/@(tc|tr|tp)-([0-9]+)/i);
+  if (tcTagMatch) {
+    const tag = `@${tcTagMatch[1].toLowerCase()}-${tcTagMatch[2]}`;
+    const scenario = scanner.config.scenarios.get(tag);
+    if (scenario) {
+      const uri = pathToFileURL(scenario.sourceFile).href;
+      return Location.create(uri, {
+        start: { line: scenario.line, character: 0 },
+        end: { line: scenario.line, character: 100 }
+      });
     }
   }
 

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as YAML from 'yaml';
-import { VariableInfo, LocalInfo, DataInfo, TestformWorkspaceConfig } from '../shared/types';
+import { VariableInfo, LocalInfo, DataInfo, ScenarioIdentityInfo, TestformWorkspaceConfig } from '../shared/types';
 
 export class WorkspaceScanner {
   private workspaceRoot: string;
@@ -17,6 +17,10 @@ export class WorkspaceScanner {
       variables: new Map(),
       locals: new Map(),
       dataSources: new Map(),
+      scenarios: new Map(),
+      scenarioAddresses: new Map(),
+      duplicateScenarioTags: new Map(),
+      maxIdentityIds: { tc: 0, tr: 0, tp: 0 },
       scopes: {
         testcase: '*.case.feature',
         testrun: '*.run.feature',
@@ -29,6 +33,10 @@ export class WorkspaceScanner {
     this.config.variables.clear();
     this.config.locals.clear();
     this.config.dataSources.clear();
+    this.config.scenarios.clear();
+    this.config.scenarioAddresses.clear();
+    this.config.duplicateScenarioTags.clear();
+    this.config.maxIdentityIds = { tc: 0, tr: 0, tp: 0 };
     this.declaredModules.clear();
 
     // 1. Root main.yml / testform.yml (Base Level 0)
@@ -40,7 +48,10 @@ export class WorkspaceScanner {
     // 3. Level 3: Auto-loaded *.vars.yml / *.vars.yaml files (sorted alphabetically)
     this.scanAutoVarFiles();
 
-    // 4. Scan .testform directory (modules, reports, policies)
+    // 4. Scan .feature files for Scenarios, IDs and Addresses
+    this.scanFeatureFiles();
+
+    // 5. Scan .testform directory (modules, reports, policies)
     this.scanDotTestform();
   }
 
@@ -182,6 +193,104 @@ export class WorkspaceScanner {
         } catch {}
       }
     } catch {}
+  }
+
+  private scanFeatureFiles(): void {
+    const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', '.terraform', 'dist', 'coverage', '.system_generated']);
+
+    const walk = (currentDir: string) => {
+      try {
+        const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            if (!IGNORED_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
+              walk(path.join(currentDir, entry.name));
+            }
+          } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.feature')) {
+            const fullPath = path.join(currentDir, entry.name);
+            const relPath = path.relative(this.workspaceRoot, fullPath).replace(/\\/g, '/');
+            const lowerRel = relPath.toLowerCase();
+
+            let fileScope: 'testcase' | 'testrun' | 'testplan' = 'testcase';
+            if (lowerRel.endsWith('.run.feature')) fileScope = 'testrun';
+            else if (lowerRel.endsWith('.plan.feature')) fileScope = 'testplan';
+
+            try {
+              const content = fs.readFileSync(fullPath, 'utf8');
+              const lines = content.split(/\r?\n/);
+
+              // Detect root scope tag if present
+              for (let i = 0; i < Math.min(lines.length, 10); i++) {
+                const line = lines[i].trim();
+                if (line.includes('@testrun')) fileScope = 'testrun';
+                else if (line.includes('@testplan')) fileScope = 'testplan';
+                else if (line.includes('@testcase')) fileScope = 'testcase';
+              }
+
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                // Match identity tags: @tc-1, @tr-1, @tp-1
+                const idMatch = line.match(/@(tc|tr|tp)-([0-9]+)/i);
+                if (idMatch) {
+                  const prefix = idMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp';
+                  const idNumber = parseInt(idMatch[2], 10);
+                  const tag = `@${prefix}-${idNumber}`;
+
+                  // Update max ID tracker
+                  if (idNumber > this.config.maxIdentityIds[prefix]) {
+                    this.config.maxIdentityIds[prefix] = idNumber;
+                  }
+
+                  // Find title on this line or next non-empty lines
+                  let title = tag;
+                  let targetLine = i;
+                  for (let j = i; j < Math.min(lines.length, i + 5); j++) {
+                    const candidate = lines[j].trim();
+                    const titleMatch = candidate.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario|Rule|Regla)\s*:\s*(.*)$/i);
+                    if (titleMatch) {
+                      title = titleMatch[1].trim() || candidate;
+                      targetLine = j;
+                      break;
+                    }
+                  }
+
+                  const info: ScenarioIdentityInfo = {
+                    tag,
+                    idNumber,
+                    scope: prefix === 'tc' ? 'testcase' : (prefix === 'tr' ? 'testrun' : 'testplan'),
+                    title,
+                    address: `${relPath}.${tag}`,
+                    sourceFile: fullPath,
+                    line: targetLine
+                  };
+
+                  // Check duplicates across different files
+                  const existing = this.config.scenarios.get(tag);
+                  if (existing && path.resolve(existing.sourceFile) !== path.resolve(fullPath)) {
+                    const list = this.config.duplicateScenarioTags.get(tag) || [
+                      `${path.basename(existing.sourceFile)}:${existing.line + 1}`
+                    ];
+                    list.push(`${path.basename(fullPath)}:${targetLine + 1}`);
+                    this.config.duplicateScenarioTags.set(tag, list);
+                  } else {
+                    this.config.scenarios.set(tag, info);
+                  }
+
+                  // Address mapping (full relative: auth/login.case.feature.@tc-1)
+                  this.config.scenarioAddresses.set(info.address, info);
+
+                  // Shorthand address mapping (filename only: login.case.feature.@tc-1)
+                  const fileNameOnly = path.basename(fullPath);
+                  this.config.scenarioAddresses.set(`${fileNameOnly}.${tag}`, info);
+                }
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+    };
+
+    walk(this.workspaceRoot);
   }
 
   private scanDotTestform(): void {
