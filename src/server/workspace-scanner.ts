@@ -10,6 +10,13 @@ export class WorkspaceScanner {
   public declaredModules: Map<string, { source: string; outputs: string[] }> = new Map();
   public customReports: string[] = [];
   public customPolicies: string[] = [];
+  public customFields: Map<string, {
+    name: string;
+    source?: string;
+    required?: boolean;
+    default?: any;
+    enum?: string[];
+  }> = new Map();
   public featureFiles: Map<string, {
     relPath: string;
     fullPath: string;
@@ -45,6 +52,7 @@ export class WorkspaceScanner {
     this.config.maxIdentityIds = { tc: 0, tr: 0, tp: 0 };
     this.declaredModules.clear();
     this.featureFiles.clear();
+    this.customFields.clear();
 
     // 1. Root main.yml / testform.yml (Base Level 0)
     const baseFile = this.scanBaseConfig();
@@ -80,6 +88,30 @@ export class WorkspaceScanner {
               if (resBlock.testcase?.match) this.config.scopes.testcase = resBlock.testcase.match;
               if (resBlock.testrun?.match) this.config.scopes.testrun = resBlock.testrun.match;
               if (resBlock.testplan?.match) this.config.scopes.testplan = resBlock.testplan.match;
+
+              const extractFields = (fObj: any) => {
+                if (!fObj) return;
+                if (Array.isArray(fObj)) {
+                  for (const f of fObj) {
+                    if (typeof f === 'string') this.customFields.set(f.toLowerCase(), { name: f });
+                    else if (f && typeof f === 'object' && f.name) this.customFields.set(f.name.toLowerCase(), f);
+                  }
+                } else if (typeof fObj === 'object') {
+                  for (const [k, v] of Object.entries(fObj)) {
+                    if (typeof v === 'object' && v !== null) {
+                      this.customFields.set(k.toLowerCase(), { name: k, ...(v as any) });
+                    } else {
+                      this.customFields.set(k.toLowerCase(), { name: k });
+                    }
+                  }
+                }
+              };
+
+              extractFields(resBlock.fields);
+              extractFields(resBlock.global?.fields);
+              extractFields(resBlock.testcase?.fields);
+              extractFields(resBlock.testrun?.fields);
+              extractFields(resBlock.testplan?.fields);
             }
           }
         } catch {

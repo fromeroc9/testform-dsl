@@ -287,6 +287,83 @@ export function provideCompletions(
     }));
   }
 
+  // 5.1 DSL Field Step completion: * field <name> = <value>
+  if (/^\s*(?:\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)?\s*(f|fi|fie|fiel|field)\s*$/i.test(lineText)) {
+    items.push({
+      label: 'field <name> = ...',
+      kind: CompletionItemKind.Snippet,
+      detail: 'Testform DSL: Asignar metadato personalizado de campo',
+      insertTextFormat: InsertTextFormat.Snippet,
+      insertText: 'field ${1:priority} = ${2:High}'
+    });
+    return items;
+  }
+
+  // 5.2 Suggest field names after "field "
+  const fieldNameMatch = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]*)$/i);
+  if (fieldNameMatch) {
+    const knownFields = [
+      { name: 'priority', desc: 'Prioridad del escenario (High, Medium, Low, Critical)' },
+      { name: 'severity', desc: 'Severidad del defecto o riesgo (Blocker, Critical, Major, Minor)' },
+      { name: 'component', desc: 'Módulo o componente del sistema probado' },
+      { name: 'assignee', desc: 'Responsable o tester asignado' },
+      { name: 'labels', desc: 'Etiquetas adicionales de clasificación' }
+    ];
+
+    for (const f of knownFields) {
+      items.push({
+        label: f.name,
+        kind: CompletionItemKind.Property,
+        detail: f.desc,
+        insertText: `${f.name} = `
+      });
+    }
+
+    for (const [name, info] of scanner.customFields.entries()) {
+      if (!knownFields.some(k => k.name.toLowerCase() === name.toLowerCase())) {
+        items.push({
+          label: name,
+          kind: CompletionItemKind.Property,
+          detail: `Custom field: ${name} (${info.source || 'step'})`,
+          insertText: `${name} = `
+        });
+      }
+    }
+    return items;
+  }
+
+  // 5.3 Suggest values after "field <name> = "
+  const fieldValueMatch = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*([a-zA-Z0-9_.-]*)$/i);
+  if (fieldValueMatch) {
+    const fieldName = fieldValueMatch[1].toLowerCase();
+    if (fieldName === 'priority') {
+      return ['Critical', 'High', 'Medium', 'Low'].map(v => ({
+        label: v,
+        kind: CompletionItemKind.Value,
+        detail: `Priority: ${v}`,
+        insertText: v
+      }));
+    }
+    if (fieldName === 'severity') {
+      return ['Blocker', 'Critical', 'Major', 'Minor', 'Trivial'].map(v => ({
+        label: v,
+        kind: CompletionItemKind.Value,
+        detail: `Severity: ${v}`,
+        insertText: v
+      }));
+    }
+
+    const custom = scanner.customFields.get(fieldName);
+    if (custom && custom.enum && custom.enum.length > 0) {
+      return custom.enum.map(e => ({
+        label: e,
+        kind: CompletionItemKind.Value,
+        detail: `Allowed Value: ${e}`,
+        insertText: e
+      }));
+    }
+  }
+
   // 6. Scenario Outline Table Parameters Completion: <param
   const outlineParamMatch = lineText.match(/<([a-zA-Z0-9_.-]*)$/);
   if (outlineParamMatch) {

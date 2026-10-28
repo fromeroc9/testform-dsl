@@ -14,6 +14,7 @@ import { ReportsTreeProvider } from './views/reports-view';
 import { TestformTestController } from './testing/test-controller';
 import { TestformFileDecorationProvider } from './views/decorations';
 import { TestformWorkspaceManager } from './workspace-manager';
+import { FeatureCodeLensProvider } from './testing/feature-codelens';
 
 let client: LanguageClient;
 
@@ -93,13 +94,26 @@ export function activate(context: vscode.ExtensionContext) {
 
   const modulesProvider = new ModulesTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.modules', modulesProvider);
+  context.subscriptions.push(modulesProvider);
 
   const reportsProvider = new ReportsTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.reports', reportsProvider);
 
-  // 4. Test Controller & File Decorations & Workspace Manager
+  // 4. Test Controller & File Decorations & Workspace Manager & CodeLens
   const testController = new TestformTestController();
   context.subscriptions.push(testController);
+
+  const codeLensProvider = new FeatureCodeLensProvider();
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider(
+      { language: 'testform-gherkin' },
+      codeLensProvider
+    ),
+    vscode.languages.registerCodeLensProvider(
+      { pattern: '**/*.feature' },
+      codeLensProvider
+    )
+  );
 
   const decorationProvider = new TestformFileDecorationProvider();
   context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorationProvider));
@@ -331,6 +345,39 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('testform.modules.update', () => {
       runTestformCommand('init');
       modulesProvider.refresh();
+    }),
+    vscode.commands.registerCommand('testform.modules.refresh', () => {
+      modulesProvider.refresh();
+      vscode.window.showInformationMessage('Modules & .testform view refreshed.');
+    }),
+    vscode.commands.registerCommand('testform.applyCurrent', (uri?: vscode.Uri) => {
+      const activeEditor = vscode.window.activeTextEditor;
+      const targetUri = uri || activeEditor?.document.uri;
+      if (targetUri && targetUri.fsPath.endsWith('.feature')) {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri);
+        const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
+        const relPath = rootPath ? path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/') : path.basename(targetUri.fsPath);
+        runTestformCommand(`apply --auto-approve --target="${relPath}"`);
+      } else {
+        runTestformCommand('apply --auto-approve');
+      }
+    }),
+    vscode.commands.registerCommand('testform.planCurrent', (uri?: vscode.Uri) => {
+      const activeEditor = vscode.window.activeTextEditor;
+      const targetUri = uri || activeEditor?.document.uri;
+      if (targetUri && targetUri.fsPath.endsWith('.feature')) {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri);
+        const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
+        const relPath = rootPath ? path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/') : path.basename(targetUri.fsPath);
+        runTestformCommand(`plan --target="${relPath}"`);
+      } else {
+        runTestformCommand('plan');
+      }
+    }),
+    vscode.commands.registerCommand('testform.applyTarget', (target: string) => {
+      if (target) {
+        runTestformCommand(`apply --auto-approve --target="${target}"`);
+      }
     }),
     vscode.commands.registerCommand('testform.format', () => {
       vscode.commands.executeCommand('editor.action.formatDocument');

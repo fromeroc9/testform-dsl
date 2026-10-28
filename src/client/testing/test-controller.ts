@@ -8,6 +8,8 @@ interface ReferencedScenario {
   title: string;
   tag?: string;
   status?: string;
+  lineIndex?: number;
+  targetAddress?: string;
 }
 
 interface ReferencedFeatureInfo {
@@ -17,13 +19,15 @@ interface ReferencedFeatureInfo {
   scenarios: ReferencedScenario[];
 }
 
-export class TestformTestController {
+export class TestformTestController implements vscode.Disposable {
   private controller: vscode.TestController;
   private disposables: vscode.Disposable[] = [];
   private scenarioStatusMap: Map<string, string> = new Map();
+  private scenarioAddressMap: Map<string, string> = new Map();
+  private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
-    this.controller = vscode.tests.createTestController('testform-controller', 'Testform Suites');
+    this.controller = vscode.tests.createTestController('testform-controller', 'Testform Test Runs');
     this.disposables.push(this.controller);
 
     // Run Profile for executing tests
@@ -38,45 +42,72 @@ export class TestformTestController {
     this.discoverWorkspaceTests();
 
     // Watch feature files
-    const watcher = vscode.workspace.createFileSystemWatcher('**/*.feature');
-    watcher.onDidCreate(uri => this.updateFileTests(uri));
-    watcher.onDidChange(uri => this.updateFileTests(uri));
-    watcher.onDidDelete(uri => this.removeFileTests(uri));
-    this.disposables.push(watcher);
+    const featureWatcher = vscode.workspace.createFileSystemWatcher('**/*.feature');
+    featureWatcher.onDidCreate(uri => this.updateFileTests(uri));
+    featureWatcher.onDidChange(uri => this.updateFileTests(uri));
+    featureWatcher.onDidDelete(uri => this.removeFileTests(uri));
+    this.disposables.push(featureWatcher);
+
+    // Watch state file for live updates from apply
+    const stateWatcher = vscode.workspace.createFileSystemWatcher('{testform.state,**/*.state}');
+    stateWatcher.onDidCreate(() => this.syncAllWithState());
+    stateWatcher.onDidChange(() => this.syncAllWithState());
+    this.disposables.push(stateWatcher);
+
+    // Live update when document is edited in editor (without waiting for disk save)
+    this.disposables.push(
+      vscode.workspace.onDidChangeTextDocument(e => {
+        const docUri = e.document.uri;
+        if (docUri.fsPath.endsWith('.run.feature') || docUri.fsPath.endsWith('.feature')) {
+          const key = docUri.toString();
+          const existing = this.debounceTimers.get(key);
+          if (existing) clearTimeout(existing);
+
+          const timer = setTimeout(() => {
+            this.debounceTimers.delete(key);
+            this.updateFileTests(docUri);
+          }, 250);
+          this.debounceTimers.set(key, timer);
+        }
+      })
+    );
   }
 
   public dispose(): void {
     this.disposables.forEach(d => d.dispose());
+    this.debounceTimers.forEach(t => clearTimeout(t));
+    this.debounceTimers.clear();
   }
 
   private async discoverWorkspaceTests(): Promise<void> {
-    const files = await vscode.workspace.findFiles('**/*.feature', '**/node_modules/**');
+    const files = await vscode.workspace.findFiles('**/*.run.feature', '**/node_modules/**');
     for (const uri of files) {
       await this.updateFileTests(uri);
     }
   }
 
-  private isExecutableSuiteFile(filePath: string, content: string): 'testrun' | 'testplan' | null {
+  /**
+   * Only expose test runs in the Test Explorer sidebar.
+   * Testcases and testplans are executed via CodeLens / Play buttons.
+   */
+  private isExecutableSuiteFile(filePath: string, content: string): boolean {
     const fileName = path.basename(filePath).toLowerCase();
-    if (fileName.includes('.run.feature')) return 'testrun';
-    if (fileName.includes('.plan.feature')) return 'testplan';
+    if (fileName.includes('.run.feature')) return true;
 
     // Check header tags
     const firstLines = content.split(/\r?\n/).slice(0, 15);
     for (const line of firstLines) {
       const trimmed = line.trim();
-      if (trimmed.startsWith('@')) {
-        if (trimmed.includes('@testrun')) return 'testrun';
-        if (trimmed.includes('@testplan')) return 'testplan';
+      if (trimmed.startsWith('@') && trimmed.includes('@testrun')) {
+        return true;
       }
     }
-    return null;
+    return false;
   }
 
   /**
    * Resolves a referenced feature file:
-   * - In a testrun: Rule points to a testcase (*.case.feature)
-   * - In a testplan: Rule points to a testrun (*.run.feature)
+   * In a testrun: Rule points to a testcase (*.case.feature)
    */
   private resolveReferencedFeature(rootPath: string, ruleText: string): ReferencedFeatureInfo | null {
     try {
@@ -150,14 +181,14 @@ export class TestformTestController {
           currentScen = {
             id: identityTag || `line_${i}`,
             title,
-            tag: identityTag
+            tag: identityTag,
+            lineIndex: i
           };
           scenarios.push(currentScen);
           pendingTags = [];
           continue;
         }
 
-        // Status mark if present in referenced testrun
         const statusMatch = line.match(/^\*\s+mark\s+status\s*=\s*([a-zA-Z]+)/i);
         if (statusMatch && currentScen) {
           currentScen.status = statusMatch[1].toLowerCase();
@@ -170,18 +201,31 @@ export class TestformTestController {
     }
   }
 
+  private getDocumentText(uri: vscode.Uri): string | null {
+    const openDoc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString());
+    if (openDoc) {
+      return openDoc.getText();
+    }
+    if (fs.existsSync(uri.fsPath)) {
+      try {
+        return fs.readFileSync(uri.fsPath, 'utf8');
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
   private async updateFileTests(uri: vscode.Uri): Promise<void> {
     try {
-      if (!fs.existsSync(uri.fsPath)) {
+      const content = this.getDocumentText(uri);
+      if (content === null) {
         this.removeFileTests(uri);
         return;
       }
 
-      const content = fs.readFileSync(uri.fsPath, 'utf8');
-
-      // Only expose test runs and test plans in the Test Explorer (testcases are not suites)
-      const suiteKind = this.isExecutableSuiteFile(uri.fsPath, content);
-      if (!suiteKind) {
+      // ONLY testrun files are displayed in the Test Explorer
+      if (!this.isExecutableSuiteFile(uri.fsPath, content)) {
         this.removeFileTests(uri);
         return;
       }
@@ -205,23 +249,30 @@ export class TestformTestController {
         }
       }
 
-      const fileTestItem = this.controller.createTestItem(
-        uri.toString(),
-        featureTitle,
-        uri
-      );
+      let fileTestItem = this.controller.items.get(uri.toString());
+      if (!fileTestItem) {
+        fileTestItem = this.controller.createTestItem(
+          uri.toString(),
+          featureTitle,
+          uri
+        );
+        this.controller.items.add(fileTestItem);
+      } else {
+        fileTestItem.label = featureTitle;
+      }
       fileTestItem.description = relPath;
 
-      // CRITICAL FIX: Only set range on the Feature line so that the gutter play icon
-      // appears EXCLUSIVELY on "Feature:" (Play All Test) and NOT on each Rule or Scenario!
+      // Gutter play icon on "Feature:" (Play entire testrun)
       fileTestItem.range = new vscode.Range(
         new vscode.Position(featureLineIndex, 0),
         new vscode.Position(featureLineIndex, lines[featureLineIndex].length)
       );
 
       let currentRuleItem: vscode.TestItem | null = null;
+      let currentRuleText = '';
       let currentRefInfo: ReferencedFeatureInfo | null = null;
       let currentScenarioItem: vscode.TestItem | null = null;
+      let currentScenarioTarget = '';
 
       for (let i = 0; i < lines.length; i++) {
         const rawLine = lines[i];
@@ -229,33 +280,28 @@ export class TestformTestController {
 
         if (trimmed.startsWith('#')) continue;
 
-        // 1. Rule block: Rule: auth/login.case.feature or Rule: suites/smoke.run.feature
+        // 1. Rule block: Rule: auth/login.case.feature
         const ruleMatch = trimmed.match(/^(?:Rule|Regla):\s*(.+)$/i);
         if (ruleMatch) {
-          const ruleText = ruleMatch[1].trim();
-          currentRefInfo = this.resolveReferencedFeature(rootPath, ruleText);
+          currentRuleText = ruleMatch[1].trim();
+          currentRefInfo = this.resolveReferencedFeature(rootPath, currentRuleText);
 
-          // Use the referenced feature's title as the label
-          const ruleLabel = currentRefInfo?.featureTitle || ruleText;
+          const ruleLabel = currentRefInfo?.featureTitle || currentRuleText;
           const ruleId = `${uri.toString()}::rule_${i}`;
 
-          currentRuleItem = this.controller.createTestItem(ruleId, ruleLabel, uri);
-          currentRuleItem.description = ruleText;
-          // NO range set on Rule item: avoids gutter play icon on Rule
-
-          fileTestItem.children.add(currentRuleItem);
-          currentScenarioItem = null;
-
-          // If inside a testplan and the referenced file is a testrun with scenarios, add them as children
-          if (suiteKind === 'testplan' && currentRefInfo && currentRefInfo.scenarios.length > 0) {
-            for (const s of currentRefInfo.scenarios) {
-              const childId = `${ruleId}::${s.id}`;
-              const scenNode = this.controller.createTestItem(childId, s.title, uri);
-              scenNode.description = s.status ? `${s.tag || ''} [${s.status.toUpperCase()}]` : s.tag;
-              // NO range set: avoids gutter play icon
-              currentRuleItem.children.add(scenNode);
-            }
+          let ruleNode = fileTestItem.children.get(ruleId);
+          if (!ruleNode) {
+            ruleNode = this.controller.createTestItem(ruleId, ruleLabel, uri);
+            fileTestItem.children.add(ruleNode);
+          } else {
+            ruleNode.label = ruleLabel;
           }
+          ruleNode.description = currentRuleText;
+          // No range set on Rule item to keep play buttons focused on Feature & Scenarios
+          ruleNode.range = undefined;
+
+          currentRuleItem = ruleNode;
+          currentScenarioItem = null;
           continue;
         }
 
@@ -263,28 +309,51 @@ export class TestformTestController {
         const scenarioMatch = trimmed.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
         if (scenarioMatch) {
           const rawScenarioText = scenarioMatch[1].trim();
-
           const tagMatch = rawScenarioText.match(/@(tc|tr|tp)-[0-9]+/i);
           const tag = tagMatch ? tagMatch[0].toLowerCase() : undefined;
 
-          // Resolve real linked scenario name from referenced feature
-          let linkedTitle: string | undefined;
-          if (tag && currentRefInfo) {
-            linkedTitle = currentRefInfo.scenariosByTag.get(tag);
-          }
-
-          const displayTitle = linkedTitle || rawScenarioText;
-          const id = `${uri.toString()}::scenario_${i}`;
-
-          currentScenarioItem = this.controller.createTestItem(id, displayTitle, uri);
-          // NO range set on Scenario item: avoids gutter play icon on Scenario
-          currentScenarioItem.description = tag ? tag.toUpperCase() : undefined;
-
-          if (currentRuleItem) {
-            currentRuleItem.children.add(currentScenarioItem);
+          // Determine target address for execution
+          if (rawScenarioText.includes('/') || rawScenarioText.includes('.feature')) {
+            currentScenarioTarget = rawScenarioText;
+          } else if (currentRuleText && tag) {
+            currentScenarioTarget = `${currentRuleText}.${tag}`;
+          } else if (tag) {
+            currentScenarioTarget = tag;
           } else {
-            fileTestItem.children.add(currentScenarioItem);
+            currentScenarioTarget = rawScenarioText;
           }
+
+          // Resolve display title from referenced feature
+          let displayTitle = rawScenarioText;
+          if (tag && currentRefInfo) {
+            const resolved = currentRefInfo.scenariosByTag.get(tag);
+            if (resolved) {
+              displayTitle = resolved;
+            }
+          }
+
+          const scenId = `${uri.toString()}::scenario_${i}`;
+          let scenNode: vscode.TestItem;
+
+          const parent = currentRuleItem || fileTestItem;
+          const existing = parent.children.get(scenId);
+          if (existing) {
+            scenNode = existing;
+            scenNode.label = displayTitle;
+          } else {
+            scenNode = this.controller.createTestItem(scenId, displayTitle, uri);
+            parent.children.add(scenNode);
+          }
+
+          // Gutter play icon on each Scenario!
+          scenNode.range = new vscode.Range(
+            new vscode.Position(i, 0),
+            new vscode.Position(i, rawLine.length)
+          );
+
+          scenNode.description = tag ? tag.toUpperCase() : undefined;
+          this.scenarioAddressMap.set(scenId, currentScenarioTarget);
+          currentScenarioItem = scenNode;
           continue;
         }
 
@@ -294,14 +363,12 @@ export class TestformTestController {
           const status = statusMatch[1].toLowerCase();
           this.scenarioStatusMap.set(currentScenarioItem.id, status);
 
-          const existingTag = currentScenarioItem.description?.split(' ')[0] || '';
-          currentScenarioItem.description = existingTag
-            ? `${existingTag} [${status.toUpperCase()}]`
+          const tagPrefix = currentScenarioItem.description?.split(' ')[0] || '';
+          currentScenarioItem.description = tagPrefix
+            ? `${tagPrefix} [${status.toUpperCase()}]`
             : `[${status.toUpperCase()}]`;
         }
       }
-
-      this.controller.items.add(fileTestItem);
     } catch {
       // ignore read errors
     }
@@ -309,6 +376,14 @@ export class TestformTestController {
 
   private removeFileTests(uri: vscode.Uri): void {
     this.controller.items.delete(uri.toString());
+  }
+
+  private syncAllWithState(): void {
+    for (const [, item] of this.controller.items) {
+      if (item.uri) {
+        this.updateFileTests(item.uri);
+      }
+    }
   }
 
   private async runHandler(
@@ -327,8 +402,6 @@ export class TestformTestController {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
 
-    const executedFiles = new Set<string>();
-
     for (const item of queue) {
       if (token.isCancellationRequested) {
         run.skipped(item);
@@ -338,35 +411,72 @@ export class TestformTestController {
       const uri = item.uri;
       if (!uri) continue;
 
-      const fileKey = uri.toString();
-      if (!executedFiles.has(fileKey)) {
-        executedFiles.add(fileKey);
-        const relPath = rootPath ? path.relative(rootPath, uri.fsPath).replace(/\\/g, '/') : path.basename(uri.fsPath);
+      // Always reload latest text immediately before running so mark status is 100% current
+      await this.updateFileTests(uri);
 
-        run.appendOutput(`Executing Testform suite: ${relPath}\r\n`);
-        // Always execute at the Feature level
-        runTestformCommand(`apply --auto-approve --target="${relPath}"`);
-      }
+      const isScenario = item.id.includes('::scenario_');
+      const isFeature = !item.id.includes('::');
 
-      // Propagate mark status to scenario items
-      const reportScenarioStatus = (node: vscode.TestItem) => {
-        const status = this.scenarioStatusMap.get(node.id);
-        run.started(node);
+      if (isScenario) {
+        // Individual Scenario execution
+        const targetAddress = this.scenarioAddressMap.get(item.id) || item.label;
+        run.appendOutput(`[Testform] Running scenario target: ${targetAddress}\r\n`);
+        run.started(item);
 
+        // Execute apply targeted specifically to this scenario
+        runTestformCommand(`apply --auto-approve --target="${targetAddress}"`);
+
+        // Re-read status immediately
+        const status = this.scenarioStatusMap.get(item.id) || 'passed';
         if (status === 'passed') {
-          run.passed(node);
+          run.passed(item);
         } else if (status === 'failed') {
-          run.failed(node, new vscode.TestMessage('Status in ledger: failed'));
+          run.failed(item, new vscode.TestMessage(`Scenario failed according to Testform mark status.`));
         } else if (status === 'skipped' || status === 'blocked') {
-          run.skipped(node);
+          run.skipped(item);
         } else {
-          run.enqueued(node);
+          run.enqueued(item);
         }
+      } else {
+        // Feature / Full Testrun execution
+        const relPath = rootPath ? path.relative(rootPath, uri.fsPath).replace(/\\/g, '/') : path.basename(uri.fsPath);
+        run.appendOutput(`[Testform] Running testrun suite: ${relPath}\r\n`);
+        run.started(item);
 
-        node.children.forEach(c => reportScenarioStatus(c));
-      };
+        // Execute apply on the whole suite
+        runTestformCommand(`apply --auto-approve --target="${relPath}"`);
 
-      reportScenarioStatus(item);
+        // Propagate status to all scenarios
+        let hasFailures = false;
+        const reportChildren = (parent: vscode.TestItem) => {
+          parent.children.forEach(child => {
+            if (child.id.includes('::scenario_')) {
+              run.started(child);
+              const status = this.scenarioStatusMap.get(child.id);
+              if (status === 'passed') {
+                run.passed(child);
+              } else if (status === 'failed') {
+                hasFailures = true;
+                run.failed(child, new vscode.TestMessage('Testcase failed in Testform run ledger.'));
+              } else if (status === 'skipped' || status === 'blocked') {
+                run.skipped(child);
+              } else {
+                run.enqueued(child);
+              }
+            } else {
+              reportChildren(child);
+            }
+          });
+        };
+
+        reportChildren(item);
+
+        if (hasFailures) {
+          run.failed(item, new vscode.TestMessage('One or more scenarios in the testrun failed.'));
+        } else {
+          run.passed(item);
+        }
+      }
     }
 
     run.end();

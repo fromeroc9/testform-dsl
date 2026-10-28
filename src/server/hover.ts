@@ -309,5 +309,42 @@ export function provideHover(
     }
   }
 
+  // 7. Match DSL Field: * field <name> = <value>
+  const fieldMatch = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
+  if (fieldMatch) {
+    const fieldName = fieldMatch[1].trim();
+    const fieldValue = fieldMatch[2].trim().replace(/^["']|["']$/g, '');
+    const customDef = scanner.customFields.get(fieldName.toLowerCase());
+
+    const fieldDescriptions: Record<string, string> = {
+      priority: 'Nivel de prioridad de ejecución para la suite y orden de triaje.',
+      severity: 'Impacto del defecto si este caso de prueba llega a fallar.',
+      component: 'Componente o dominio arquitectónico asociado al caso.',
+      assignee: 'Responsable o equipo asignado al mantenimiento de este escenario.'
+    };
+
+    const desc = customDef?.source
+      ? `Definido en \`${customDef.source}\`${customDef.required ? ' *(Requerido)*' : ''}`
+      : (fieldDescriptions[fieldName.toLowerCase()] || 'Metadato estructurado personalizado para el recurso en el ledger.');
+
+    const enumInfo = customDef?.enum && customDef.enum.length > 0
+      ? `**Valores permitidos:** ${customDef.enum.map(e => `\`${e}\``).join(', ')}`
+      : '';
+
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: [
+          `### 🏷️ Testform Field: \`${fieldName}\``,
+          `**Valor asignado:** \`${fieldValue}\``,
+          `**Descripción:** ${desc}`,
+          enumInfo,
+          `---`,
+          `*Efecto:* Se almacena en \`custom_fields.${fieldName}\` dentro de \`testform.state\` al ejecutar \`testform apply\`.*`
+        ].filter(Boolean).join('\n\n')
+      }
+    };
+  }
+
   return null;
 }

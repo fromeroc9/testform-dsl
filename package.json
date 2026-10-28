@@ -39,7 +39,10 @@
     "workspaceContains:**/testform.yaml",
     "workspaceContains:**/*.case.feature",
     "workspaceContains:**/*.run.feature",
-    "workspaceContains:**/*.plan.feature"
+    "workspaceContains:**/*.plan.feature",
+    "onView:testform.views.state",
+    "onView:testform.views.modules",
+    "onView:testform.views.reports"
   ],
   "contributes": {
     "languages": [
@@ -333,6 +336,24 @@
         "title": "Testform: Select Workspace",
         "category": "Testform",
         "icon": "$(layers)"
+      },
+      {
+        "command": "testform.modules.refresh",
+        "title": "Testform: Refresh Modules & .testform",
+        "category": "Testform",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "testform.applyCurrent",
+        "title": "Testform: Run Apply Current Feature",
+        "category": "Testform",
+        "icon": "$(play)"
+      },
+      {
+        "command": "testform.planCurrent",
+        "title": "Testform: Speculative Plan Current Feature",
+        "category": "Testform",
+        "icon": "$(search)"
       }
     ],
     "menus": {
@@ -353,9 +374,26 @@
           "group": "navigation"
         },
         {
+          "command": "testform.modules.refresh",
+          "when": "view == testform.views.modules",
+          "group": "navigation@1"
+        },
+        {
           "command": "testform.modules.update",
           "when": "view == testform.views.modules",
-          "group": "navigation"
+          "group": "navigation@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "testform.applyCurrent",
+          "when": "resourceExtname == .feature",
+          "group": "navigation@1"
+        },
+        {
+          "command": "testform.planCurrent",
+          "when": "resourceExtname == .feature",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [

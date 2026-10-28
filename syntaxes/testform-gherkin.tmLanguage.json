@@ -17,6 +17,9 @@
       "include": "#dsl-status"
     },
     {
+      "include": "#dsl-field"
+    },
+    {
       "include": "#tags"
     },
     {
@@ -125,6 +128,20 @@
             "3": { "name": "support.type.property-name.testform" },
             "4": { "name": "keyword.operator.assignment.testform" },
             "5": { "name": "constant.language.status.testform" }
+          }
+        }
+      ]
+    },
+    "dsl-field": {
+      "patterns": [
+        {
+          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(field)\\b\\s+([a-zA-Z0-9_.-]+)\\s*(=)\\s*(.*)$",
+          "captures": {
+            "1": { "name": "keyword.control.step.gherkin" },
+            "2": { "name": "keyword.control.testform.field" },
+            "3": { "name": "variable.other.member.testform" },
+            "4": { "name": "keyword.operator.assignment.testform" },
+            "5": { "name": "string.unquoted.testform" }
           }
         }
       ]
