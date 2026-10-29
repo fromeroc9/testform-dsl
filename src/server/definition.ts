@@ -154,7 +154,52 @@ export function provideDefinition(
     }
   }
 
-  // 4. Line context: @tc-X reference in step or tag
+  // 4. Line context: Scenario target under Rule in testrun
+  const scenarioHeaderMatch = lineText.match(/^(?:\s*Scenario|\s*Escenario|\s*Scenario Outline|\s*Esquema del escenario):\s*(.*)$/i);
+  if (scenarioHeaderMatch) {
+    const rawTarget = scenarioHeaderMatch[1].trim();
+    const docLines = document.getText().split(/\r?\n/);
+    let enclosingRule: string | null = null;
+    for (let j = position.line - 1; j >= 0; j--) {
+      const rm = docLines[j].trim().match(/^(?:Rule|Regla):\s*(.*)$/i);
+      if (rm) {
+        enclosingRule = rm[1].trim();
+        break;
+      }
+    }
+
+    if (enclosingRule) {
+      const normRule = enclosingRule.replace(/\\/g, '/').toLowerCase();
+      const normBase = normRule.split('/').pop() || normRule;
+      const cleanTarget = rawTarget.toLowerCase().replace(/^@/, '');
+
+      for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+        const normAddr = addr.replace(/\\/g, '/').toLowerCase();
+        const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+        const matchesRule = normAddr.includes(normBase) || normSource.includes(normBase);
+        if (!matchesRule) continue;
+
+        const cleanTag = info.tag.replace(/^@/, '').toLowerCase();
+        const cleanTitle = info.title.toLowerCase();
+
+        if (
+          cleanTarget === cleanTag ||
+          rawTarget.toLowerCase() === info.tag.toLowerCase() ||
+          cleanTarget === cleanTitle ||
+          rawTarget.toLowerCase() === cleanTitle ||
+          normAddr === rawTarget.toLowerCase().replace(/\\/g, '/') ||
+          normAddr.endsWith(cleanTarget)
+        ) {
+          return Location.create(pathToFileURL(info.sourceFile).href, {
+            start: { line: info.line, character: 0 },
+            end: { line: info.line, character: 100 }
+          });
+        }
+      }
+    }
+  }
+
+  // 5. Line context: @tc-X reference in step or tag
   const tcTagMatch = lineText.match(/@(tc|tr|tp)-([0-9]+)/i);
   if (tcTagMatch) {
     const tag = `@${tcTagMatch[1].toLowerCase()}-${tcTagMatch[2]}`;

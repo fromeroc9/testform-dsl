@@ -188,7 +188,76 @@ export function provideHover(
     }
   }
 
-  // 3. Hover on Identity Tag: @tc-X, @tr-X, @tp-X
+  // 3. Hover on Scenario Target under Rule in testrun
+  const scenarioHeaderMatch = lineText.match(/^(?:\s*Scenario|\s*Escenario|\s*Scenario Outline|\s*Esquema del escenario):\s*(.*)$/i);
+  if (scenarioHeaderMatch) {
+    const rawTarget = scenarioHeaderMatch[1].trim();
+    let ruleFileName = '';
+    const docLines = document.getText().split(/\r?\n/);
+    for (let j = position.line - 1; j >= 0; j--) {
+      const rm = docLines[j].trim().match(/^(?:Rule|Regla):\s*(.*)$/i);
+      if (rm) {
+        ruleFileName = rm[1].trim();
+        break;
+      }
+    }
+
+    if (ruleFileName) {
+      if (rawTarget === '*') {
+        return {
+          contents: {
+            kind: MarkupKind.Markdown,
+            value: [
+              `### 🌐 Wildcard Target (\`*\`)`,
+              `**Alcance:** Aplica a **todos** los escenarios de la Rule \`${ruleFileName}\`.`,
+              `---`,
+              `*Archivo Rule:* \`${ruleFileName}\``
+            ].join('\n\n')
+          }
+        };
+      }
+
+      const normRule = ruleFileName.replace(/\\/g, '/').toLowerCase();
+      const normBase = normRule.split('/').pop() || normRule;
+      const cleanTarget = rawTarget.toLowerCase().replace(/^@/, '');
+
+      for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+        const normAddr = addr.replace(/\\/g, '/').toLowerCase();
+        const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+        const matchesRule = normAddr.includes(normBase) || normSource.includes(normBase);
+        if (!matchesRule) continue;
+
+        const cleanTag = info.tag.replace(/^@/, '').toLowerCase();
+        const cleanTitle = info.title.toLowerCase();
+
+        if (
+          cleanTarget === cleanTag ||
+          rawTarget.toLowerCase() === info.tag.toLowerCase() ||
+          cleanTarget === cleanTitle ||
+          rawTarget.toLowerCase() === cleanTitle ||
+          normAddr === rawTarget.toLowerCase().replace(/\\/g, '/') ||
+          normAddr.endsWith(cleanTarget)
+        ) {
+          const fileName = info.sourceFile.split(/[/\\]/).pop();
+          return {
+            contents: {
+              kind: MarkupKind.Markdown,
+              value: [
+                `### 🧪 Test Case Target: \`${info.tag}\``,
+                `**Título:** ${info.title}`,
+                `**Resource Scope:** \`${info.scope}\``,
+                `**Dirección de Estado:** \`${info.address}\``,
+                `---`,
+                `*Archivo Rule:* \`${ruleFileName}\` -> \`${fileName}\` (línea ${info.line + 1})`
+              ].join('\n\n')
+            }
+          };
+        }
+      }
+    }
+  }
+
+  // 3.1 Hover on Identity Tag: @tc-X, @tr-X, @tp-X
   const idTagMatch = lineText.match(/@(tc|tr|tp)-[0-9]+/i);
   if (idTagMatch) {
     const tag = idTagMatch[0].toLowerCase();

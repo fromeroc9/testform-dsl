@@ -256,8 +256,42 @@ export function provideCompletions(
     }
   }
 
-  // 4.6 Scenario completion inside a testrun Rule
-  const scenarioKeywordMatch = lineText.match(/^\s*(?:Scenario|Escenario):\s*(@?[a-zA-Z0-9_./-]*)$/i);
+  // 4.55 Scenario declaration snippet under a testrun Rule
+  const scenarioSnippetMatch = lineText.match(/^\s*(s|sc|sce|scen|scena|scenar|scenari|scenario|e|es|esc|esce|escen|escena|escenar|escenari|escenario)?\s*$/i);
+  if (scenarioSnippetMatch) {
+    const docText = document.getText();
+    const uri = document.uri.toLowerCase();
+    const isTestrun = uri.endsWith('.run.feature') || /@testrun\b/i.test(docText);
+
+    if (isTestrun) {
+      const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
+      let enclosingRulePath = '';
+      for (let i = linesBefore.length - 1; i >= 0; i--) {
+        const m = linesBefore[i].trim().match(/^(?:Rule|Regla):\s*(.+)$/i);
+        if (m) {
+          enclosingRulePath = m[1].trim();
+          break;
+        }
+      }
+
+      if (enclosingRulePath) {
+        items.push({
+          label: 'Scenario: [Target]',
+          kind: CompletionItemKind.Snippet,
+          detail: `Declarar target de ejecución para Rule '${enclosingRulePath}'`,
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: `Crea un bloque de escenario para la ejecución de un caso de prueba:\n\`\`\`gherkin\nScenario: \${1:target}\n  * mark status = \${2|passed,failed,pending,skipped,blocked,unexecuted|}\n\`\`\``
+          },
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `Scenario: \${1:target}\n  * mark status = \${2|passed,failed,pending,skipped,blocked,unexecuted|}`
+        });
+      }
+    }
+  }
+
+  // 4.6 Scenario target completion inside a testrun Rule
+  const scenarioKeywordMatch = lineText.match(/^\s*(?:Scenario|Escenario|Scenario Outline|Esquema del escenario):\s*(.*)$/i);
   if (scenarioKeywordMatch) {
     const docText = document.getText();
     const uri = document.uri.toLowerCase();
@@ -277,29 +311,112 @@ export function provideCompletions(
       if (enclosingRulePath) {
         const normRule = enclosingRulePath.toLowerCase().replace(/\\/g, '/');
         const normRuleBase = normRule.split('/').pop() || normRule;
+        const typedTarget = scenarioKeywordMatch[1].trim();
+        const hasAt = typedTarget.startsWith('@');
+
+        // Target: Wildcard (*) to run all scenarios of this Rule
+        items.push({
+          label: '*',
+          kind: CompletionItemKind.Keyword,
+          detail: `Wildcard: Ejecutar todos los casos de ${enclosingRulePath}`,
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: `### 🌐 Target Wildcard (\`*\`)\n\nTestform evalúa \`*\` como un selector global que ejecuta y aplica el estado a **todos los casos de prueba** definidos en la Rule:\n\`${enclosingRulePath}\``
+          },
+          insertText: '*'
+        });
+
+        // Snippet Wildcard with mark status
+        items.push({
+          label: '* (con * mark status)',
+          kind: CompletionItemKind.Snippet,
+          detail: `Wildcard + paso de estado`,
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: `Ejecuta todos los casos de la regla con un estado consolidado:\n\`\`\`gherkin\nScenario: *\n  * mark status = passed\n\`\`\``
+          },
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `*\n      * mark status = \${1|passed,failed,pending,skipped,blocked,unexecuted|}`
+        });
+
+        const seenTags = new Set<string>();
 
         for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
           const normSource = info.sourceFile.toLowerCase().replace(/\\/g, '/');
           const normAddr = addr.toLowerCase().replace(/\\/g, '/');
 
           if (normSource.endsWith(normRule) || normSource.endsWith(normRuleBase) || normAddr.includes(normRuleBase)) {
-            // Suggest the tag directly (e.g. @tc-01) with its title
-            items.push({
-              label: info.tag,
-              kind: CompletionItemKind.Reference,
-              detail: `${info.tag}: ${info.title}`,
-              documentation: {
-                kind: MarkupKind.Markdown,
-                value: `### 🧪 Test Case Target\n\n**Tag:** \`${info.tag}\`\n\n**Título:** ${info.title}\n\n*Archivo:* \`${enclosingRulePath}\``
-              },
-              insertText: info.tag
-            });
+            const cleanTag = info.tag.replace(/^@/, '');
+            const insertTag = hasAt ? cleanTag : info.tag;
 
-            // Also provide canonical address as reference
+            if (!seenTags.has(cleanTag)) {
+              seenTags.add(cleanTag);
+
+              // 1. Target por Tag (@tc-01)
+              items.push({
+                label: info.tag,
+                kind: CompletionItemKind.Reference,
+                detail: `[Tag Target] ${info.tag}: ${info.title}`,
+                filterText: `@${cleanTag} ${cleanTag} ${info.title}`,
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: `### 🧪 Test Case Target (por Tag)\n\n**Tag:** \`${info.tag}\`\n\n**Título:** ${info.title}\n\n*Rule:* \`${enclosingRulePath}\``
+                },
+                insertText: insertTag
+              });
+
+              // 2. Target por Título descriptivo
+              items.push({
+                label: info.title,
+                kind: CompletionItemKind.Value,
+                detail: `[Title Target] ${info.tag}`,
+                filterText: `${info.title} ${info.tag} ${cleanTag}`,
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: `### 📝 Test Case Target (por Título)\n\nTestform resuelve escenarios por su título exacto declarado en el feature.\n\n**Título:** ${info.title}\n\n**Tag asociado:** \`${info.tag}\`\n\n*Rule:* \`${enclosingRulePath}\``
+                },
+                insertText: info.title
+              });
+
+              // 3. Snippet con mark status por Tag
+              items.push({
+                label: `${info.tag} (con * mark status)`,
+                kind: CompletionItemKind.Snippet,
+                detail: `Target ${info.tag} + * mark status`,
+                filterText: `@${cleanTag} ${cleanTag} ${info.title} mark status`,
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: `Inserta el target \`${info.tag}\` junto con el paso de ejecución:\n\`\`\`gherkin\nScenario: ${info.tag}\n      * mark status = passed\n\`\`\``
+                },
+                insertTextFormat: InsertTextFormat.Snippet,
+                insertText: `${insertTag}\n      * mark status = \${1|passed,failed,pending,skipped,blocked,unexecuted|}`
+              });
+
+              // 4. Snippet con mark status por Título
+              items.push({
+                label: `${info.title} (con * mark status)`,
+                kind: CompletionItemKind.Snippet,
+                detail: `Target por título + * mark status`,
+                filterText: `${info.title} ${cleanTag} mark status`,
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: `Inserta el target por título junto con el paso de ejecución:\n\`\`\`gherkin\nScenario: ${info.title}\n      * mark status = passed\n\`\`\``
+                },
+                insertTextFormat: InsertTextFormat.Snippet,
+                insertText: `${info.title}\n      * mark status = \${1|passed,failed,pending,skipped,blocked,unexecuted|}`
+              });
+            }
+
+            // 5. Target por Dirección Canónica (Magento/cart.case.feature.@tc-01)
             items.push({
               label: addr,
               kind: CompletionItemKind.Reference,
-              detail: `Canonical: ${addr}`,
+              detail: `[Canonical Address] ${info.tag}`,
+              filterText: `${addr} ${cleanTag} ${info.title}`,
+              documentation: {
+                kind: MarkupKind.Markdown,
+                value: `### 📍 Target por Dirección Canónica\n\n\`${addr}\`\n\n**Título:** ${info.title}`
+              },
               insertText: addr
             });
           }
