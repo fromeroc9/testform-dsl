@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-export type StateNodeKind = 'category' | 'resource' | 'cases_group' | 'executed_case' | 'attribute' | 'output' | 'info';
+export type StateNodeKind = 'category' | 'resource' | 'cases_group' | 'executed_case' | 'runs_group' | 'associated_run' | 'attribute' | 'output' | 'info';
 
 export class StateTreeItem extends vscode.TreeItem {
   constructor(
@@ -36,8 +36,20 @@ export class StateTreeItem extends vscode.TreeItem {
     } else if (kind === 'cases_group') {
       this.contextValue = 'testformCasesGroup';
       this.iconPath = new vscode.ThemeIcon('checklist');
+    } else if (kind === 'runs_group') {
+      this.contextValue = 'testformRunsGroup';
+      this.iconPath = new vscode.ThemeIcon('layers');
     } else if (kind === 'executed_case') {
       this.contextValue = 'testformExecutedCase';
+      if (address) {
+        this.command = {
+          command: 'testform.state.inspectResource',
+          title: 'Inspect Resource in Editor',
+          arguments: [this]
+        };
+      }
+    } else if (kind === 'associated_run') {
+      this.contextValue = 'testformAssociatedRun';
       if (address) {
         this.command = {
           command: 'testform.state.inspectResource',
@@ -102,18 +114,40 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         ]);
       }
 
-      // Build a title lookup map for testcase identities
-      // Maps e.g. "auth/login.case.feature.@tc-1" -> "Inicio de sesión exitoso con usuario estándar"
-      // and "@tc-1" -> "Inicio de sesión..."
+      // Build lookup maps for resolving real names in runs and plans
       const caseTitleMap = new Map<string, string>();
+      const runLookupMap = new Map<string, { title: string; issueNumber?: number; status?: string }>();
+
       for (const r of resources) {
         const id = (r.identity || '').replace(/\\/g, '/').toLowerCase();
+        const type = r.type || '';
         const title = r.attributes?.title;
-        if (id && title) {
+
+        if (type.includes('testcase') && id && title) {
           caseTitleMap.set(id, title);
+          const cleanNoScope = id.replace(/^(?:testcase\/|tests\/)/i, '');
+          caseTitleMap.set(cleanNoScope, title);
+
           const tagMatch = id.match(/@(tc|tr|tp)-[0-9]+/i);
           if (tagMatch) {
             caseTitleMap.set(tagMatch[0].toLowerCase(), title);
+          }
+          const baseName = id.split('/').pop() || id;
+          caseTitleMap.set(baseName, title);
+        } else if (type.includes('testrun') && id) {
+          const runInfo = {
+            title: title || id,
+            issueNumber: r.attributes?.issueNumber,
+            status: r.attributes?.status || 'pending'
+          };
+          runLookupMap.set(id, runInfo);
+          const cleanNoScope = id.replace(/^(?:testcycle\/|testrun\/|testruns\/)/i, '');
+          runLookupMap.set(cleanNoScope, runInfo);
+          const baseName = id.split('/').pop() || id;
+          runLookupMap.set(baseName, runInfo);
+          const tagMatch = id.match(/@tr-[0-9]+/i);
+          if (tagMatch) {
+            runLookupMap.set(tagMatch[0].toLowerCase(), runInfo);
           }
         }
       }
@@ -135,11 +169,16 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         // Build detail child attributes
         const childNodes: StateTreeItem[] = [];
 
-        // Group executed testcases into a dedicated collapsible sub-tree
-        if (attrs.testcaseStatuses && typeof attrs.testcaseStatuses === 'object') {
+        // 1.1 In Testrun: Group executed testcases into a dedicated collapsible sub-tree
+        const rawCases = attrs.testcases || attrs.testcaseStatuses;
+        if (rawCases) {
           const executedCaseNodes: StateTreeItem[] = [];
+          const entries: [string, any][] = Array.isArray(rawCases)
+            ? rawCases.map((tc: any) => [typeof tc === 'string' ? tc : tc.identity || '', tc.status || 'pending'])
+            : Object.entries(rawCases);
 
-          for (const [tcAddr, stVal] of Object.entries(attrs.testcaseStatuses)) {
+          for (const [tcAddr, stVal] of entries) {
+            if (!tcAddr) continue;
             const shortAddr = tcAddr.replace(/\\/g, '/');
             const normAddr = shortAddr.toLowerCase();
             const tagMatch = shortAddr.match(/@(tc|tr|tp)-[0-9]+/i);
@@ -148,10 +187,11 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
             // Resolve real scenario name
             const scenarioName =
               caseTitleMap.get(normAddr) ||
+              caseTitleMap.get(normAddr.replace(/^(?:testcase\/|tests\/)/i, '')) ||
               (tag ? caseTitleMap.get(tag.toLowerCase()) : undefined) ||
               shortAddr;
 
-            const st = String(stVal).toLowerCase();
+            const st = String(stVal || 'pending').toLowerCase();
             const caseItem = new StateTreeItem(
               scenarioName,
               vscode.TreeItemCollapsibleState.None,
@@ -188,7 +228,62 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
               undefined,
               executedCaseNodes
             );
+            casesGroup.iconPath = new vscode.ThemeIcon('checklist');
             childNodes.push(casesGroup);
+          }
+        }
+
+        // 1.2 In Testplan: Group associated testruns into a dedicated collapsible sub-tree
+        const rawRuns = attrs.testruns;
+        if (rawRuns) {
+          const runNodes: StateTreeItem[] = [];
+          const runEntries: [string, any][] = Array.isArray(rawRuns)
+            ? rawRuns.map((tr: any) => [typeof tr === 'string' ? tr : tr.identity || '', tr.status || 'pending'])
+            : Object.entries(rawRuns);
+
+          for (const [trAddr, stVal] of runEntries) {
+            if (!trAddr) continue;
+            const normTr = trAddr.replace(/\\/g, '/').toLowerCase();
+            const lookup = runLookupMap.get(normTr) ||
+              runLookupMap.get(normTr.replace(/^(?:testcycle\/|testrun\/|testruns\/)/i, '')) ||
+              runLookupMap.get(normTr.split('/').pop() || normTr);
+
+            const runTitle = lookup?.title || trAddr;
+            const runStatus = String(lookup?.status || stVal || 'pending').toLowerCase();
+            const runRemote = lookup?.issueNumber ? `#${lookup.issueNumber}` : '';
+
+            const runItem = new StateTreeItem(
+              runTitle,
+              vscode.TreeItemCollapsibleState.None,
+              'associated_run',
+              trAddr,
+              runRemote ? `[${runStatus.toUpperCase()}] ${runRemote}` : `[${runStatus.toUpperCase()}]`
+            );
+
+            runItem.tooltip = `Test Run: ${runTitle}\nAddress: ${trAddr}\nStatus: ${runStatus}`;
+
+            if (runStatus === 'passed') {
+              runItem.iconPath = new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'));
+            } else if (runStatus === 'failed') {
+              runItem.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed'));
+            } else {
+              runItem.iconPath = new vscode.ThemeIcon('play-circle', new vscode.ThemeColor('charts.green'));
+            }
+
+            runNodes.push(runItem);
+          }
+
+          if (runNodes.length > 0) {
+            const runsGroup = new StateTreeItem(
+              `Associated Test Runs (${runNodes.length})`,
+              vscode.TreeItemCollapsibleState.Expanded,
+              'runs_group',
+              undefined,
+              undefined,
+              runNodes
+            );
+            runsGroup.iconPath = new vscode.ThemeIcon('layers');
+            childNodes.push(runsGroup);
           }
         }
 

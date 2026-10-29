@@ -313,31 +313,7 @@ export function provideCompletions(
         const normRuleBase = normRule.split('/').pop() || normRule;
         const typedTarget = scenarioKeywordMatch[1].trim();
         const hasAt = typedTarget.startsWith('@');
-
-        // Target: Wildcard (*) to run all scenarios of this Rule
-        items.push({
-          label: '*',
-          kind: CompletionItemKind.Keyword,
-          detail: `Wildcard: Ejecutar todos los casos de ${enclosingRulePath}`,
-          documentation: {
-            kind: MarkupKind.Markdown,
-            value: `### 🌐 Target Wildcard (\`*\`)\n\nTestform evalúa \`*\` como un selector global que ejecuta y aplica el estado a **todos los casos de prueba** definidos en la Rule:\n\`${enclosingRulePath}\``
-          },
-          insertText: '*'
-        });
-
-        // Snippet Wildcard with mark status
-        items.push({
-          label: '* (con * mark status)',
-          kind: CompletionItemKind.Snippet,
-          detail: `Wildcard + paso de estado`,
-          documentation: {
-            kind: MarkupKind.Markdown,
-            value: `Ejecuta todos los casos de la regla con un estado consolidado:\n\`\`\`gherkin\nScenario: *\n  * mark status = passed\n\`\`\``
-          },
-          insertTextFormat: InsertTextFormat.Snippet,
-          insertText: `*\n      * mark status = \${1|passed,failed,pending,skipped,blocked,unexecuted|}`
-        });
+        const isClassic = (scanner.config as any).targetFormat === 'classic';
 
         const seenTags = new Set<string>();
 
@@ -347,78 +323,38 @@ export function provideCompletions(
 
           if (normSource.endsWith(normRule) || normSource.endsWith(normRuleBase) || normAddr.includes(normRuleBase)) {
             const cleanTag = info.tag.replace(/^@/, '');
-            const insertTag = hasAt ? cleanTag : info.tag;
+            const targetVal = isClassic ? addr : (hasAt ? cleanTag : info.tag);
 
             if (!seenTags.has(cleanTag)) {
               seenTags.add(cleanTag);
 
-              // 1. Target por Tag (@tc-01)
+              // 1. Mostrar formato limpio: "tc-01: <scenario name>"
               items.push({
-                label: info.tag,
+                label: `${cleanTag}: ${info.title}`,
                 kind: CompletionItemKind.Reference,
-                detail: `[Tag Target] ${info.tag}: ${info.title}`,
-                filterText: `@${cleanTag} ${cleanTag} ${info.title}`,
+                detail: `Target: ${info.tag} (${enclosingRulePath})`,
+                filterText: `${cleanTag} @${cleanTag} ${info.title}`,
                 documentation: {
                   kind: MarkupKind.Markdown,
-                  value: `### 🧪 Test Case Target (por Tag)\n\n**Tag:** \`${info.tag}\`\n\n**Título:** ${info.title}\n\n*Rule:* \`${enclosingRulePath}\``
+                  value: `### 🧪 Test Case Target\n\n**Tag:** \`${info.tag}\`\n\n**Título:** ${info.title}\n\n*Rule:* \`${enclosingRulePath}\`\n\n*Target insertado:* \`${targetVal}\``
                 },
-                insertText: insertTag
+                insertText: targetVal
               });
 
-              // 2. Target por Título descriptivo
+              // 2. Variante con paso de ejecución (* mark status = ...)
               items.push({
-                label: info.title,
-                kind: CompletionItemKind.Value,
-                detail: `[Title Target] ${info.tag}`,
-                filterText: `${info.title} ${info.tag} ${cleanTag}`,
-                documentation: {
-                  kind: MarkupKind.Markdown,
-                  value: `### 📝 Test Case Target (por Título)\n\nTestform resuelve escenarios por su título exacto declarado en el feature.\n\n**Título:** ${info.title}\n\n**Tag asociado:** \`${info.tag}\`\n\n*Rule:* \`${enclosingRulePath}\``
-                },
-                insertText: info.title
-              });
-
-              // 3. Snippet con mark status por Tag
-              items.push({
-                label: `${info.tag} (con * mark status)`,
+                label: `${cleanTag}: ${info.title} (con * mark status)`,
                 kind: CompletionItemKind.Snippet,
                 detail: `Target ${info.tag} + * mark status`,
-                filterText: `@${cleanTag} ${cleanTag} ${info.title} mark status`,
+                filterText: `${cleanTag} @${cleanTag} ${info.title} mark status`,
                 documentation: {
                   kind: MarkupKind.Markdown,
-                  value: `Inserta el target \`${info.tag}\` junto con el paso de ejecución:\n\`\`\`gherkin\nScenario: ${info.tag}\n      * mark status = passed\n\`\`\``
+                  value: `Inserta el target \`${targetVal}\` junto con el paso de ejecución:\n\`\`\`gherkin\nScenario: ${targetVal}\n      * mark status = passed\n\`\`\``
                 },
                 insertTextFormat: InsertTextFormat.Snippet,
-                insertText: `${insertTag}\n      * mark status = \${1|passed,failed,pending,skipped,blocked,unexecuted|}`
-              });
-
-              // 4. Snippet con mark status por Título
-              items.push({
-                label: `${info.title} (con * mark status)`,
-                kind: CompletionItemKind.Snippet,
-                detail: `Target por título + * mark status`,
-                filterText: `${info.title} ${cleanTag} mark status`,
-                documentation: {
-                  kind: MarkupKind.Markdown,
-                  value: `Inserta el target por título junto con el paso de ejecución:\n\`\`\`gherkin\nScenario: ${info.title}\n      * mark status = passed\n\`\`\``
-                },
-                insertTextFormat: InsertTextFormat.Snippet,
-                insertText: `${info.title}\n      * mark status = \${1|passed,failed,pending,skipped,blocked,unexecuted|}`
+                insertText: `${targetVal}\n      * mark status = \${1|passed,failed,pending,skipped,blocked,unexecuted|}`
               });
             }
-
-            // 5. Target por Dirección Canónica (Magento/cart.case.feature.@tc-01)
-            items.push({
-              label: addr,
-              kind: CompletionItemKind.Reference,
-              detail: `[Canonical Address] ${info.tag}`,
-              filterText: `${addr} ${cleanTag} ${info.title}`,
-              documentation: {
-                kind: MarkupKind.Markdown,
-                value: `### 📍 Target por Dirección Canónica\n\n\`${addr}\`\n\n**Título:** ${info.title}`
-              },
-              insertText: addr
-            });
           }
         }
         if (items.length > 0) return items;
@@ -448,8 +384,8 @@ export function provideCompletions(
     }));
   }
 
-  // 5.1 Suggest field names after "field "
-  const fieldNameMatch = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]*)$/i);
+  // 5.1 Suggest field names when typing "field" or "field <name>"
+  const fieldNameMatch = lineText.match(/(?:^|\s+)field(?:\s+([a-zA-Z0-9_.-]*))?$/i);
   if (fieldNameMatch) {
     const docUri = document.uri.toLowerCase();
     const docContent = document.getText();
@@ -478,7 +414,7 @@ export function provideCompletions(
         const cleanChoices = info.enum.map(e => e.replace(/[,|\\]/g, ''));
         items.push({
           label: info.name,
-          kind: CompletionItemKind.Property,
+          kind: CompletionItemKind.Field, // Icono de campo oficial
           detail: `Field: ${info.name}${requiredText}${enumDetail}`,
           documentation: {
             kind: MarkupKind.Markdown,
@@ -490,7 +426,7 @@ export function provideCompletions(
       } else if (info.default !== undefined) {
         items.push({
           label: info.name,
-          kind: CompletionItemKind.Property,
+          kind: CompletionItemKind.Field,
           detail: `Field: ${info.name}${requiredText} (default: ${info.default})`,
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: `${info.name} = \${1:${info.default}}`
@@ -498,7 +434,7 @@ export function provideCompletions(
       } else {
         items.push({
           label: info.name,
-          kind: CompletionItemKind.Property,
+          kind: CompletionItemKind.Field,
           detail: `Field: ${info.name}${requiredText}`,
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: `${info.name} = \${1:value}`
@@ -519,7 +455,7 @@ export function provideCompletions(
         if (f.enum) {
           items.push({
             label: f.name,
-            kind: CompletionItemKind.Property,
+            kind: CompletionItemKind.Field,
             detail: f.desc,
             insertTextFormat: InsertTextFormat.Snippet,
             insertText: `${f.name} = \${1|${f.enum.join(',')}|}`
@@ -527,7 +463,7 @@ export function provideCompletions(
         } else {
           items.push({
             label: f.name,
-            kind: CompletionItemKind.Property,
+            kind: CompletionItemKind.Field,
             detail: f.desc,
             insertTextFormat: InsertTextFormat.Snippet,
             insertText: `${f.name} = \${1:value}`
@@ -542,7 +478,7 @@ export function provideCompletions(
   if (/^\s*(?:\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)?\s*(f|fi|fie|fiel)$/i.test(lineText)) {
     items.push({
       label: 'field <name> = ...',
-      kind: CompletionItemKind.Snippet,
+      kind: CompletionItemKind.Keyword,
       detail: 'Testform DSL: Asignar metadato personalizado de campo',
       insertTextFormat: InsertTextFormat.Snippet,
       insertText: 'field ${1:name} = ${2:value}'
@@ -550,10 +486,12 @@ export function provideCompletions(
     return items;
   }
 
-  // 5.3 Suggest values after "field <name> = "
-  const fieldValueMatch = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*([a-zA-Z0-9_.-]*)$/i);
+  // 5.3 Suggest values after "field <name> = " (ensuring space after =)
+  const fieldValueMatch = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*(=)(\s*)([a-zA-Z0-9_.-]*)$/i);
   if (fieldValueMatch) {
     const fieldName = fieldValueMatch[1].toLowerCase();
+    const hasSpaceAfterEquals = fieldValueMatch[3].length > 0;
+    const formatValueInsert = (v: string) => hasSpaceAfterEquals ? v : ` ${v}`;
     const custom = scanner.customFields.get(fieldName);
 
     if (custom && custom.enum && custom.enum.length > 0) {
@@ -561,7 +499,7 @@ export function provideCompletions(
         label: e,
         kind: CompletionItemKind.Value,
         detail: `Allowed Value for '${custom.name}': ${e}`,
-        insertText: e
+        insertText: formatValueInsert(e)
       }));
     }
 
@@ -570,7 +508,7 @@ export function provideCompletions(
         label: v,
         kind: CompletionItemKind.Value,
         detail: `Priority: ${v}`,
-        insertText: v
+        insertText: formatValueInsert(v)
       }));
     }
     if (fieldName === 'severity') {
@@ -578,7 +516,7 @@ export function provideCompletions(
         label: v,
         kind: CompletionItemKind.Value,
         detail: `Severity: ${v}`,
-        insertText: v
+        insertText: formatValueInsert(v)
       }));
     }
   }
@@ -788,8 +726,10 @@ export function provideCompletions(
         } else {
           items.push({
             label: `${fieldInfo.name}`,
-            kind: CompletionItemKind.Property,
+            filterText: `${fieldInfo.name} @${fieldInfo.name}`,
+            kind: CompletionItemKind.EnumMember,
             detail: `field: ${fieldInfo.name} (tag)`,
+            documentation: `Campo de tag configurado en main.yml: '${fieldInfo.name}'`,
             insertText: fieldInfo.name
           });
         }

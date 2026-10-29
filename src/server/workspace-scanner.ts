@@ -39,7 +39,8 @@ export class WorkspaceScanner {
         testcase: '*.case.feature',
         testrun: '*.run.feature',
         testplan: '*.plan.feature'
-      }
+      },
+      targetFormat: 'short'
     };
   }
 

@@ -294,6 +294,9 @@ export class TestformTestController implements vscode.Disposable {
       let currentScenarioItem: vscode.TestItem | null = null;
       let currentScenarioTarget = '';
 
+      const seenRuleIds = new Set<string>();
+      const seenScenIdsByParent = new Map<string, Set<string>>();
+
       for (let i = 0; i < lines.length; i++) {
         const rawLine = lines[i];
         const trimmed = rawLine.trim();
@@ -307,7 +310,9 @@ export class TestformTestController implements vscode.Disposable {
           currentRefInfo = this.resolveReferencedFeature(rootPath, currentRuleText);
 
           const ruleLabel = currentRefInfo?.featureTitle || currentRuleText;
-          const ruleId = `${uri.toString()}::rule_${i}`;
+          // Stable rule ID based on rule target instead of line index
+          const ruleId = `${uri.toString()}::rule::${currentRuleText}`;
+          seenRuleIds.add(ruleId);
 
           let ruleNode = fileTestItem.children.get(ruleId);
           if (!ruleNode) {
@@ -352,20 +357,25 @@ export class TestformTestController implements vscode.Disposable {
             }
           }
 
-          const scenId = `${uri.toString()}::rule_${currentRuleText}::scenario_${i}`;
-          let scenNode: vscode.TestItem;
-
           const parent = currentRuleItem || fileTestItem;
-          const existing = parent.children.get(scenId);
-          if (existing) {
-            scenNode = existing;
-            scenNode.label = displayTitle;
-          } else {
+          // Stable scenario ID based on target tag / name instead of line index
+          const scenKey = tag || rawScenarioText;
+          const scenId = `${parent.id}::scen::${scenKey}`;
+
+          if (!seenScenIdsByParent.has(parent.id)) {
+            seenScenIdsByParent.set(parent.id, new Set());
+          }
+          seenScenIdsByParent.get(parent.id)!.add(scenId);
+
+          let scenNode = parent.children.get(scenId);
+          if (!scenNode) {
             scenNode = this.controller.createTestItem(scenId, displayTitle, uri);
             parent.children.add(scenNode);
+          } else {
+            scenNode.label = displayTitle;
           }
 
-          // Gutter play icon on each Scenario!
+          // Gutter play icon on each Scenario header line ONLY
           scenNode.range = new vscode.Range(
             new vscode.Position(i, 0),
             new vscode.Position(i, rawLine.length)
@@ -389,6 +399,20 @@ export class TestformTestController implements vscode.Disposable {
             : `[${status.toUpperCase()}]`;
         }
       }
+
+      // Prune orphan rules and scenarios from previous edits to prevent duplication
+      fileTestItem.children.forEach(child => {
+        if (child.id.includes('::rule::') && !seenRuleIds.has(child.id)) {
+          fileTestItem.children.delete(child.id);
+        } else {
+          const allowedScens = seenScenIdsByParent.get(child.id) || new Set();
+          child.children.forEach(scenChild => {
+            if (!allowedScens.has(scenChild.id)) {
+              child.children.delete(scenChild.id);
+            }
+          });
+        }
+      });
     } catch {
       // ignore read errors
     }
@@ -505,7 +529,7 @@ export class TestformTestController implements vscode.Disposable {
       // Always reload latest text immediately before running so mark status is 100% current
       await this.updateFileTests(uri);
 
-      const isScenario = item.id.includes('::scenario_');
+      const isScenario = item.id.includes('::scen::') || item.id.includes('::scenario_');
 
       if (isScenario) {
         // Individual Scenario execution: prompt with form to choose status
@@ -625,7 +649,7 @@ export class TestformTestController implements vscode.Disposable {
         let hasFailures = false;
         const reportChildren = (parent: vscode.TestItem) => {
           parent.children.forEach(child => {
-            if (child.id.includes('::scenario_')) {
+            if (child.id.includes('::scen::') || child.id.includes('::scenario_')) {
               run.started(child);
               const status = this.scenarioStatusMap.get(child.id);
               if (status === 'passed') {

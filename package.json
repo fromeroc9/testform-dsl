@@ -439,6 +439,19 @@
           "default": true,
           "description": "Enable native VS Code Test Controller integration (Test Explorer tree and gutter run icons)."
         },
+        "testform.testrun.targetFormat": {
+          "type": "string",
+          "enum": [
+            "short",
+            "classic"
+          ],
+          "enumDescriptions": [
+            "Short identity tag (@tc-01)",
+            "Classic canonical address (e.g. Magento/cart.case.feature.@tc-01)"
+          ],
+          "default": "short",
+          "description": "Formato de autocompletado e inserción para targets de escenarios en testruns."
+        },
         "testform.trace.server": {
           "type": "string",
           "enum": [

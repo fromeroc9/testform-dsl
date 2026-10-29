@@ -136,6 +136,23 @@ export function validateTextDocument(
 
     // Strip comments and @depends_on references so dependencies aren't treated as declared scenario IDs
     const lineWithoutDepends = line.replace(/#.*$/, '').replace(/@depends_on\s*\([^)]*\)/gi, '');
+
+    // Check for stray / loose '@' tokens (orphan tag prefix with no tag name, e.g. "@testcase @" or standalone "@")
+    const strayAtRegex = /(?:^|\s)(@)(?=\s|$|[^\w-])/g;
+    let strayMatch: RegExpExecArray | null;
+    while ((strayMatch = strayAtRegex.exec(lineWithoutDepends)) !== null) {
+      const atCol = strayMatch.index + strayMatch[0].indexOf('@');
+      diagnostics.push({
+        severity: DiagnosticSeverity.Error,
+        range: {
+          start: { line: i, character: atCol },
+          end: { line: i, character: atCol + 1 }
+        },
+        message: "Etiqueta incompleta o huérfana: '@' no tiene identificador de tag.",
+        source: 'Testform'
+      });
+    }
+
     const idMatches = [...lineWithoutDepends.matchAll(/@(tc|tr|tp)-([0-9]+)/gi)];
     for (const idMatch of idMatches) {
       const tag = idMatch[0].toLowerCase();

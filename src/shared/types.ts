@@ -48,6 +48,7 @@ export interface TestformWorkspaceConfig {
     testrun: string;
     testplan: string;
   };
+  targetFormat?: 'short' | 'classic';
 }
 
 export interface TestformStateResource {
