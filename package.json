@@ -460,6 +460,21 @@
           "default": true,
           "description": "Automatically prune obsolete test items on file edits to maintain tree consistency."
         },
+        "testform.testController.scenarioPlayTarget": {
+          "type": "string",
+          "enum": [
+            "testrun",
+            "testcase",
+            "suiteFile"
+          ],
+          "enumDescriptions": [
+            "Target the parent TestRun identity (e.g. testcycle/run.feature.@tr-7) to reconcile and persist execution status in state ledger",
+            "Target the specific referenced TestCase address (e.g. Magento/checkout.case.feature.@tc-1)",
+            "Target the TestRun suite file path (e.g. testcycle/run.feature)"
+          ],
+          "default": "testrun",
+          "description": "Specifies the target address passed to 'testform apply' when executing a scenario play action from the editor or Testing view."
+        },
         "testform.testrun.targetFormat": {
           "type": "string",
           "enum": [

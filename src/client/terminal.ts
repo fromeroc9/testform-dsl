@@ -20,6 +20,6 @@ export function runTestformCommand(commandArgs: string): void {
   const config = vscode.workspace.getConfiguration('testform');
   const executable = config.get<string>('executablePath') || 'testform';
 
-  term.show();
-  term.sendText(`${executable} ${commandArgs}`);
+  term.show(true);
+  term.sendText(`${executable} ${commandArgs}`, true);
 }
