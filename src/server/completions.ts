@@ -41,6 +41,36 @@ export const BUILTIN_FUNCTIONS = [
   { name: 'file', desc: 'Reads the contents of a local file as a string.', snippet: 'file("${1:path/to/file}")' }
 ];
 
+function getNextIdForDocument(docText: string, prefix: 'tc' | 'tr' | 'tp', fallbackMax: number): string {
+  const regex = new RegExp(`@${prefix}-([0-9]+)\\b`, 'gi');
+  let maxNum = 0;
+  let padLength = 0;
+
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(docText)) !== null) {
+    const digits = match[1];
+    const num = parseInt(digits, 10);
+    if (!isNaN(num) && num > maxNum) {
+      maxNum = num;
+      padLength = digits.length;
+    }
+  }
+
+  if (maxNum === 0) {
+    if (prefix === 'tc') {
+      return 'tc-01';
+    }
+    return `${prefix}-${fallbackMax + 1}`;
+  }
+
+  const nextNum = maxNum + 1;
+  const nextStr = padLength > 1
+    ? String(nextNum).padStart(padLength, '0')
+    : String(nextNum);
+
+  return `${prefix}-${nextStr}`;
+}
+
 export function provideCompletions(
   document: TextDocument,
   position: Position,
@@ -458,16 +488,15 @@ export function provideCompletions(
   }
 
   // 8. Identity Tag next-ID completion (@tc-, @tr-, @tp-)
-  const tcPrefixMatch = lineText.match(/@(tc|tr|tp)-([0-9]*)$/i);
+  const tcPrefixMatch = lineText.match(/@(tc|tr|tp)-?([0-9]*)$/i);
   if (tcPrefixMatch) {
     const prefix = tcPrefixMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp';
-    const nextId = scanner.config.maxIdentityIds[prefix] + 1;
-    const nextTag = `${prefix}-${nextId}`;
+    const nextTag = getNextIdForDocument(document.getText(), prefix, scanner.config.maxIdentityIds[prefix]);
 
     items.push({
       label: nextTag,
       kind: CompletionItemKind.Value,
-      detail: `Siguiente ID secuencial sugerido (@${nextTag})`,
+      detail: `Siguiente ID sugerido para este archivo (@${nextTag})`,
       insertText: nextTag
     });
 
@@ -515,30 +544,6 @@ export function provideCompletions(
         insertText: 'depends_on("${1:target}")'
       },
       {
-        label: 'smoke',
-        kind: CompletionItemKind.Constant,
-        detail: 'Flag: Smoke test suite (@smoke)',
-        insertText: 'smoke'
-      },
-      {
-        label: 'regression',
-        kind: CompletionItemKind.Constant,
-        detail: 'Flag: Regression test suite (@regression)',
-        insertText: 'regression'
-      },
-      {
-        label: 'critical',
-        kind: CompletionItemKind.Constant,
-        detail: 'Flag: Critical path test (@critical)',
-        insertText: 'critical'
-      },
-      {
-        label: 'flaky',
-        kind: CompletionItemKind.Constant,
-        detail: 'Flag: Known flaky test (@flaky)',
-        insertText: 'flaky'
-      },
-      {
         label: 'retry',
         kind: CompletionItemKind.Snippet,
         detail: 'Directive: Retry count on failure (@retry(3))',
@@ -554,15 +559,47 @@ export function provideCompletions(
       }
     );
 
-    // Suggest next available TC/TR/TP IDs
-    items.push(
-      {
-        label: `tc-${scanner.config.maxIdentityIds.tc + 1}`,
-        kind: CompletionItemKind.Value,
-        detail: `Siguiente TestCase ID (@tc-${scanner.config.maxIdentityIds.tc + 1})`,
-        insertText: `tc-${scanner.config.maxIdentityIds.tc + 1}`
+    // Dynamic tags declared in workspace configuration (fields with source: "tag")
+    for (const [fieldName, fieldInfo] of scanner.customFields.entries()) {
+      if (fieldInfo.source === 'tag') {
+        if (fieldInfo.enum && fieldInfo.enum.length > 0) {
+          for (const enumVal of fieldInfo.enum) {
+            const cleanTag = enumVal.replace(/^@/, '');
+            items.push({
+              label: cleanTag,
+              kind: CompletionItemKind.Constant,
+              detail: `Tag (${fieldInfo.name}): @${cleanTag}`,
+              insertText: cleanTag
+            });
+          }
+        } else {
+          items.push({
+            label: fieldName,
+            kind: CompletionItemKind.Constant,
+            detail: `Tag: @${fieldName}`,
+            insertText: fieldName
+          });
+        }
       }
-    );
+    }
+
+    // Next ID computed for THIS document
+    const docText = document.getText();
+    const docUri = document.uri.toLowerCase();
+    let activePrefix: 'tc' | 'tr' | 'tp' = 'tc';
+    if (docUri.includes('.run.') || docText.includes('@testrun')) {
+      activePrefix = 'tr';
+    } else if (docUri.includes('.plan.') || docText.includes('@testplan')) {
+      activePrefix = 'tp';
+    }
+
+    const nextIdTag = getNextIdForDocument(docText, activePrefix, scanner.config.maxIdentityIds[activePrefix]);
+    items.push({
+      label: nextIdTag,
+      kind: CompletionItemKind.Value,
+      detail: `Siguiente ID sugerido para este archivo (@${nextIdTag})`,
+      insertText: nextIdTag
+    });
 
     // Modules
     for (const mod of scanner.installedModules) {
