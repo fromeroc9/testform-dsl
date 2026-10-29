@@ -526,33 +526,33 @@ export function provideCompletions(
       },
       {
         label: 'testrun',
-        kind: CompletionItemKind.Keyword,
+        kind: CompletionItemKind.Event,
         detail: 'Resource: Execution run feature (@testrun)',
         insertText: 'testrun'
       },
       {
         label: 'testplan',
-        kind: CompletionItemKind.Keyword,
+        kind: CompletionItemKind.Module,
         detail: 'Resource: Master quality gate plan (@testplan)',
         insertText: 'testplan'
       },
       {
         label: 'depends_on',
-        kind: CompletionItemKind.Snippet,
+        kind: CompletionItemKind.Reference,
         detail: 'Dependency constraint: @depends_on("path/to.case.feature.@tc-1")',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'depends_on("${1:target}")'
       },
       {
         label: 'retry',
-        kind: CompletionItemKind.Snippet,
+        kind: CompletionItemKind.Operator,
         detail: 'Directive: Retry count on failure (@retry(3))',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'retry(${1:3})'
       },
       {
         label: 'timeout',
-        kind: CompletionItemKind.Snippet,
+        kind: CompletionItemKind.Property,
         detail: 'Directive: Timeout threshold (@timeout("30s"))',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'timeout("${1:30s}")'
@@ -567,17 +567,18 @@ export function provideCompletions(
             const cleanTag = enumVal.replace(/^@/, '');
             items.push({
               label: cleanTag,
-              kind: CompletionItemKind.Constant,
-              detail: `Tag (${fieldInfo.name}): @${cleanTag}`,
+              kind: CompletionItemKind.EnumMember,
+              detail: `field: ${fieldInfo.name}`,
               insertText: cleanTag
             });
           }
         } else {
           items.push({
             label: fieldName,
-            kind: CompletionItemKind.Constant,
-            detail: `Tag: @${fieldName}`,
-            insertText: fieldName
+            kind: CompletionItemKind.Snippet,
+            detail: `field: ${fieldName} (custom)`,
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: fieldName + '("${1:value}")'
           });
         }
       }

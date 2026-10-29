@@ -208,7 +208,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           vscode.TreeItemCollapsibleState.Collapsed,
           'resource',
           identity,
-          remoteRef ? `${identity} (${remoteRef})` : identity,
+          remoteRef || '',
           childNodes,
           r,
           isTainted

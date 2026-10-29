@@ -355,12 +355,12 @@
       ],
       "editor/title": [
         {
-          "command": "testform.applyCurrent",
+          "command": "testform.planCurrent",
           "when": "resourceExtname == .feature",
           "group": "navigation@1"
         },
         {
-          "command": "testform.planCurrent",
+          "command": "testform.applyCurrent",
           "when": "resourceExtname == .feature",
           "group": "navigation@2"
         }

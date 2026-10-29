@@ -1,3 +1,19 @@
+
+function findProjectRoot(filePath: string): string {
+  let curr = path.dirname(filePath);
+  while (curr && curr !== path.dirname(curr)) {
+    if (fs.existsSync(path.join(curr, 'main.yml')) ||
+        fs.existsSync(path.join(curr, 'main.yaml')) ||
+        fs.existsSync(path.join(curr, 'testform.yml')) ||
+        fs.existsSync(path.join(curr, 'testform.yaml'))) {
+      return curr;
+    }
+    curr = path.dirname(curr);
+  }
+  const ws = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+  return ws ? ws.uri.fsPath : path.dirname(filePath);
+}
+
 import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
@@ -90,6 +106,13 @@ export function activate(context: vscode.ExtensionContext) {
   // 3. Tree Views
   const stateProvider = new StateTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.state', stateProvider);
+  // Auto-refresh state view on state file updates (native OS file system watcher)
+  const stateWatcher = vscode.workspace.createFileSystemWatcher('**/testform.state');
+  stateWatcher.onDidChange(() => stateProvider.refresh());
+  stateWatcher.onDidCreate(() => stateProvider.refresh());
+  stateWatcher.onDidDelete(() => stateProvider.refresh());
+  context.subscriptions.push(stateWatcher);
+
 
   const modulesProvider = new ModulesTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.modules', modulesProvider);
@@ -393,10 +416,9 @@ export function activate(context: vscode.ExtensionContext) {
       const activeEditor = vscode.window.activeTextEditor;
       const targetUri = uri || activeEditor?.document.uri;
       if (targetUri && targetUri.fsPath.endsWith('.feature')) {
-        const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri);
-        const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
-        const relPath = rootPath ? path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/') : path.basename(targetUri.fsPath);
-        runTestformCommand(`apply -auto-approve -target="${relPath}"`);
+        const rootPath = findProjectRoot(targetUri.fsPath);
+        const relPath = path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/');
+        runTestformCommand(`-chdir="${rootPath}" apply -auto-approve -target="${relPath}"`);
       } else {
         runTestformCommand('apply -auto-approve');
       }
@@ -405,10 +427,9 @@ export function activate(context: vscode.ExtensionContext) {
       const activeEditor = vscode.window.activeTextEditor;
       const targetUri = uri || activeEditor?.document.uri;
       if (targetUri && targetUri.fsPath.endsWith('.feature')) {
-        const workspaceFolder = vscode.workspace.getWorkspaceFolder(targetUri);
-        const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
-        const relPath = rootPath ? path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/') : path.basename(targetUri.fsPath);
-        runTestformCommand(`plan -target="${relPath}"`);
+        const rootPath = findProjectRoot(targetUri.fsPath);
+        const relPath = path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/');
+        runTestformCommand(`-chdir="${rootPath}" plan -target="${relPath}"`);
       } else {
         runTestformCommand('plan');
       }

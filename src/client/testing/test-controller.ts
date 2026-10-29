@@ -1,3 +1,19 @@
+
+function findProjectRoot(filePath: string): string {
+  let curr = path.dirname(filePath);
+  while (curr && curr !== path.dirname(curr)) {
+    if (fs.existsSync(path.join(curr, 'main.yml')) ||
+        fs.existsSync(path.join(curr, 'main.yaml')) ||
+        fs.existsSync(path.join(curr, 'testform.yml')) ||
+        fs.existsSync(path.join(curr, 'testform.yaml'))) {
+      return curr;
+    }
+    curr = path.dirname(curr);
+  }
+  const ws = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+  return ws ? ws.uri.fsPath : path.dirname(filePath);
+}
+
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -111,12 +127,17 @@ export class TestformTestController implements vscode.Disposable {
    */
   private resolveReferencedFeature(rootPath: string, ruleText: string): ReferencedFeatureInfo | null {
     try {
-      let candidatePath = path.resolve(rootPath, ruleText);
-      if (!fs.existsSync(candidatePath)) {
-        if (!candidatePath.endsWith('.feature')) {
-          candidatePath = `${candidatePath}.feature`;
-        }
-      }
+      const candidates = [
+        path.resolve(rootPath, ruleText),
+        path.resolve(rootPath, ruleText.endsWith('.feature') ? ruleText : `${ruleText}.feature`),
+        path.resolve(rootPath, 'testcase', ruleText),
+        path.resolve(rootPath, 'testcase', ruleText.endsWith('.feature') ? ruleText : `${ruleText}.feature`),
+        path.resolve(rootPath, 'tests', ruleText),
+        path.resolve(rootPath, 'tests', ruleText.endsWith('.feature') ? ruleText : `${ruleText}.feature`),
+        path.resolve(rootPath, 'testruns', ruleText),
+        path.resolve(rootPath, 'testplans', ruleText)
+      ];
+      let candidatePath = candidates.find(c => fs.existsSync(c)) || candidates[0];
 
       if (!fs.existsSync(candidatePath)) {
         const base = path.basename(ruleText);
@@ -230,8 +251,7 @@ export class TestformTestController implements vscode.Disposable {
         return;
       }
 
-      const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-      const rootPath = workspaceFolder ? workspaceFolder.uri.fsPath : '';
+      const rootPath = findProjectRoot(uri.fsPath);
       const relPath = rootPath ? path.relative(rootPath, uri.fsPath).replace(/\\/g, '/') : path.basename(uri.fsPath);
       const fileName = path.basename(uri.fsPath);
 
@@ -332,7 +352,7 @@ export class TestformTestController implements vscode.Disposable {
             }
           }
 
-          const scenId = `${uri.toString()}::scenario_${i}`;
+          const scenId = `${uri.toString()}::rule_${currentRuleText}::scenario_${i}`;
           let scenNode: vscode.TestItem;
 
           const parent = currentRuleItem || fileTestItem;
