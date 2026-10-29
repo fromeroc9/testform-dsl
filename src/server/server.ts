@@ -156,6 +156,13 @@ connection.onDocumentFormatting(
   (params: DocumentFormattingParams): TextEdit[] => {
     const document = documents.get(params.textDocument.uri);
     if (!document) return [];
+
+    const uri = document.uri.toLowerCase();
+    // Only format .feature / Gherkin documents. Never format YAML files with Gherkin rules.
+    if (!uri.endsWith('.feature') && document.languageId !== 'gherkin') {
+      return [];
+    }
+
     return formatGherkinDocument(document);
   }
 );
