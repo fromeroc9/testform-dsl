@@ -371,16 +371,23 @@ export class WorkspaceScanner {
                     line: targetLine
                   };
 
-                  // Check duplicates across different files
-                  const existing = this.config.scenarios.get(tag);
-                  if (existing && path.resolve(existing.sourceFile) !== path.resolve(fullPath)) {
-                    const list = this.config.duplicateScenarioTags.get(tag) || [
-                      `${path.basename(existing.sourceFile)}:${existing.line + 1}`
-                    ];
-                    list.push(`${path.basename(fullPath)}:${targetLine + 1}`);
-                    this.config.duplicateScenarioTags.set(tag, list);
-                  } else {
-                    this.config.scenarios.set(tag, info);
+                  // Check duplicates across different files (only primary definitions are tracked)
+                  const isPrimaryDeclaration =
+                    (prefix === 'tc' && relPath.includes('.case.')) ||
+                    (prefix === 'tr' && relPath.includes('.run.')) ||
+                    (prefix === 'tp' && relPath.includes('.plan.'));
+
+                  if (isPrimaryDeclaration) {
+                    const existing = this.config.scenarios.get(tag);
+                    if (existing && path.resolve(existing.sourceFile) !== path.resolve(fullPath)) {
+                      const list = this.config.duplicateScenarioTags.get(tag) || [
+                        `${path.basename(existing.sourceFile)}:${existing.line + 1}`
+                      ];
+                      list.push(`${path.basename(fullPath)}:${targetLine + 1}`);
+                      this.config.duplicateScenarioTags.set(tag, list);
+                    } else {
+                      this.config.scenarios.set(tag, info);
+                    }
                   }
 
                   // Address mapping (full relative: auth/login.case.feature.@tc-1)

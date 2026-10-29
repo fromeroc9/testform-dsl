@@ -158,6 +158,34 @@ export function provideDefinition(
   const tcTagMatch = lineText.match(/@(tc|tr|tp)-([0-9]+)/i);
   if (tcTagMatch) {
     const tag = `@${tcTagMatch[1].toLowerCase()}-${tcTagMatch[2]}`;
+
+    // If within an enclosing Rule: in a testrun, resolve specifically against that Rule's feature target
+    const docLines = document.getText().split(/\r?\n/);
+    let enclosingRule: string | null = null;
+    for (let j = position.line - 1; j >= 0; j--) {
+      const rm = docLines[j].trim().match(/^(?:Rule|Regla):\s*(.*)$/i);
+      if (rm) {
+        enclosingRule = rm[1].trim();
+        break;
+      }
+    }
+
+    if (enclosingRule) {
+      const normRule = enclosingRule.replace(/\\/g, '/').toLowerCase();
+      const normBase = normRule.split('/').pop() || normRule;
+
+      for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+        const normAddr = addr.replace(/\\/g, '/').toLowerCase();
+        const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+        if ((normAddr.includes(normBase) || normSource.includes(normBase)) && normAddr.endsWith(tag)) {
+          return Location.create(pathToFileURL(info.sourceFile).href, {
+            start: { line: info.line, character: 0 },
+            end: { line: info.line, character: 100 }
+          });
+        }
+      }
+    }
+
     const scenario = scanner.config.scenarios.get(tag);
     if (scenario) {
       const uri = pathToFileURL(scenario.sourceFile).href;

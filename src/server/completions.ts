@@ -200,7 +200,7 @@ export function provideCompletions(
     for (const fn of BUILTIN_FUNCTIONS) {
       items.push({
         label: fn.name,
-        kind: CompletionItemKind.Function,
+        kind: CompletionItemKind.Event,
         detail: `Testform Function: ${fn.name}()`,
         documentation: fn.desc,
         insertTextFormat: InsertTextFormat.Snippet,
@@ -256,8 +256,8 @@ export function provideCompletions(
     }
   }
 
-  // 4.6 Scenario address completion inside a testrun Rule
-  const scenarioKeywordMatch = lineText.match(/^\s*(?:Scenario|Escenario):\s*([a-zA-Z0-9_./-]*)$/i);
+  // 4.6 Scenario completion inside a testrun Rule
+  const scenarioKeywordMatch = lineText.match(/^\s*(?:Scenario|Escenario):\s*(@?[a-zA-Z0-9_./-]*)$/i);
   if (scenarioKeywordMatch) {
     const docText = document.getText();
     const uri = document.uri.toLowerCase();
@@ -275,17 +275,31 @@ export function provideCompletions(
       }
 
       if (enclosingRulePath) {
-        const normRule = enclosingRulePath.toLowerCase();
+        const normRule = enclosingRulePath.toLowerCase().replace(/\\/g, '/');
+        const normRuleBase = normRule.split('/').pop() || normRule;
+
         for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
-          if (info.sourceFile.toLowerCase().endsWith(normRule) || addr.toLowerCase().startsWith(normRule)) {
+          const normSource = info.sourceFile.toLowerCase().replace(/\\/g, '/');
+          const normAddr = addr.toLowerCase().replace(/\\/g, '/');
+
+          if (normSource.endsWith(normRule) || normSource.endsWith(normRuleBase) || normAddr.includes(normRuleBase)) {
+            // Suggest the tag directly (e.g. @tc-01) with its title
+            items.push({
+              label: info.tag,
+              kind: CompletionItemKind.Reference,
+              detail: `${info.tag}: ${info.title}`,
+              documentation: {
+                kind: MarkupKind.Markdown,
+                value: `### 🧪 Test Case Target\n\n**Tag:** \`${info.tag}\`\n\n**Título:** ${info.title}\n\n*Archivo:* \`${enclosingRulePath}\``
+              },
+              insertText: info.tag
+            });
+
+            // Also provide canonical address as reference
             items.push({
               label: addr,
               kind: CompletionItemKind.Reference,
-              detail: info.title,
-              documentation: {
-                kind: MarkupKind.Markdown,
-                value: `### Linked Test Case\n\n**Title:** ${info.title}\n\n**Tag:** \`${info.tag}\`\n\n*Address:* \`${addr}\``
-              },
+              detail: `Canonical: ${addr}`,
               insertText: addr
             });
           }
@@ -317,50 +331,105 @@ export function provideCompletions(
     }));
   }
 
-  // 5.1 DSL Field Step completion: * field <name> = <value>
-  if (/^\s*(?:\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)?\s*(f|fi|fie|fiel|field)\s*$/i.test(lineText)) {
-    items.push({
-      label: 'field <name> = ...',
-      kind: CompletionItemKind.Snippet,
-      detail: 'Testform DSL: Asignar metadato personalizado de campo',
-      insertTextFormat: InsertTextFormat.Snippet,
-      insertText: 'field ${1:priority} = ${2:High}'
-    });
-    return items;
-  }
-
-  // 5.2 Suggest field names after "field "
+  // 5.1 Suggest field names after "field "
   const fieldNameMatch = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]*)$/i);
   if (fieldNameMatch) {
-    // 1. Defined fields in main.yml / workspace
+    const docUri = document.uri.toLowerCase();
+    const docContent = document.getText();
+    let currentResourceType: 'testcase' | 'testrun' | 'testplan' | 'other' = 'other';
+    const tcPat = scanner.config.scopes.testcase || '*.case.feature';
+    const trPat = scanner.config.scopes.testrun || '*.run.feature';
+    const tpPat = scanner.config.scopes.testplan || '*.plan.feature';
+
+    const matchesPat = (p: string, pat: string) => new RegExp(pat.replace(/\*/g, '.*') + '$', 'i').test(p);
+    if (matchesPat(docUri, tcPat) || docContent.includes('@testcase')) currentResourceType = 'testcase';
+    else if (matchesPat(docUri, trPat) || docContent.includes('@testrun')) currentResourceType = 'testrun';
+    else if (matchesPat(docUri, tpPat) || docContent.includes('@testplan')) currentResourceType = 'testplan';
+
+    // 1. Defined fields in main.yml / workspace filtered by resource scope
     for (const [name, info] of scanner.customFields.entries()) {
+      if (info.scopes && info.scopes.length > 0 && !info.scopes.includes('global')) {
+        if (currentResourceType !== 'other' && !info.scopes.includes(currentResourceType)) {
+          continue; // Skip fields belonging strictly to other resources!
+        }
+      }
+
       const enumDetail = info.enum && info.enum.length > 0 ? ` [${info.enum.join(' | ')}]` : '';
-      items.push({
-        label: name,
-        kind: CompletionItemKind.Property,
-        detail: `Testform Field: ${name}${info.required ? ' (required)' : ''}${enumDetail}`,
-        insertText: `${name} = `
-      });
+      const requiredText = info.required ? ' (required)' : '';
+
+      if (info.enum && info.enum.length > 0) {
+        const cleanChoices = info.enum.map(e => e.replace(/[,|\\]/g, ''));
+        items.push({
+          label: info.name,
+          kind: CompletionItemKind.Property,
+          detail: `Field: ${info.name}${requiredText}${enumDetail}`,
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: `**Testform Field:** \`${info.name}\`${requiredText}\n\n**Scope:** \`${(info.scopes || ['global']).join(', ')}\`\n\n**Valores permitidos:**\n${info.enum.map(e => `- \`${e}\``).join('\n')}`
+          },
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `${info.name} = \${1|${cleanChoices.join(',')}|}`
+        });
+      } else if (info.default !== undefined) {
+        items.push({
+          label: info.name,
+          kind: CompletionItemKind.Property,
+          detail: `Field: ${info.name}${requiredText} (default: ${info.default})`,
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `${info.name} = \${1:${info.default}}`
+        });
+      } else {
+        items.push({
+          label: info.name,
+          kind: CompletionItemKind.Property,
+          detail: `Field: ${info.name}${requiredText}`,
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `${info.name} = \${1:value}`
+        });
+      }
     }
 
     // 2. Default standard fields if not already declared
     const defaultKnown = [
-      { name: 'priority', desc: 'Execution priority [Critical | High | Medium | Low]' },
-      { name: 'severity', desc: 'Defect impact [Blocker | Critical | Major | Minor | Trivial]' },
+      { name: 'priority', desc: 'Execution priority [Critical | High | Medium | Low]', enum: ['Critical', 'High', 'Medium', 'Low'] },
+      { name: 'severity', desc: 'Defect impact [Blocker | Critical | Major | Minor | Trivial]', enum: ['Blocker', 'Critical', 'Major', 'Minor', 'Trivial'] },
       { name: 'component', desc: 'System component or domain' },
       { name: 'assignee', desc: 'Responsible tester or owner' }
     ];
 
     for (const f of defaultKnown) {
       if (!scanner.customFields.has(f.name.toLowerCase())) {
-        items.push({
-          label: f.name,
-          kind: CompletionItemKind.Property,
-          detail: f.desc,
-          insertText: `${f.name} = `
-        });
+        if (f.enum) {
+          items.push({
+            label: f.name,
+            kind: CompletionItemKind.Property,
+            detail: f.desc,
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: `${f.name} = \${1|${f.enum.join(',')}|}`
+          });
+        } else {
+          items.push({
+            label: f.name,
+            kind: CompletionItemKind.Property,
+            detail: f.desc,
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: `${f.name} = \${1:value}`
+          });
+        }
       }
     }
+    return items;
+  }
+
+  // 5.2 Snippet when typing "field" before space
+  if (/^\s*(?:\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)?\s*(f|fi|fie|fiel)$/i.test(lineText)) {
+    items.push({
+      label: 'field <name> = ...',
+      kind: CompletionItemKind.Snippet,
+      detail: 'Testform DSL: Asignar metadato personalizado de campo',
+      insertTextFormat: InsertTextFormat.Snippet,
+      insertText: 'field ${1:name} = ${2:value}'
+    });
     return items;
   }
 
@@ -516,77 +585,101 @@ export function provideCompletions(
 
   // 8. General Tags completion: @
   if (/@([a-zA-Z0-9_-]*)$/.test(lineText)) {
-    // Scopes
+    const docText = document.getText();
+    const docUri = document.uri.toLowerCase();
+    const isTestrun = docUri.endsWith('.run.feature') || /@testrun\b/i.test(docText);
+
+    // If inside a testrun Rule, suggest testcases of that specific Rule
+    if (isTestrun) {
+      const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
+      let enclosingRule = '';
+      for (let i = linesBefore.length - 1; i >= 0; i--) {
+        const m = linesBefore[i].trim().match(/^(?:Rule|Regla):\s*(.+)$/i);
+        if (m) {
+          enclosingRule = m[1].trim();
+          break;
+        }
+      }
+
+      if (enclosingRule) {
+        const normRule = enclosingRule.replace(/\\/g, '/').toLowerCase();
+        const normBase = normRule.split('/').pop() || normRule;
+
+        for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+          const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+          const normAddr = addr.replace(/\\/g, '/').toLowerCase();
+
+          if (normSource.endsWith(normRule) || normSource.endsWith(normBase) || normAddr.includes(normBase)) {
+            const cleanTag = info.tag.replace(/^@/, '');
+            items.push({
+              label: cleanTag,
+              kind: CompletionItemKind.Reference,
+              detail: `${info.tag}: ${info.title}`,
+              documentation: `Testcase perteneciente a Rule '${enclosingRule}'`,
+              insertText: cleanTag
+            });
+          }
+        }
+      }
+    }
+
+    // Resources: All three use the exact same Class icon (standard Resource representation)
     items.push(
       {
         label: 'testcase',
-        kind: CompletionItemKind.Keyword,
+        kind: CompletionItemKind.Class,
         detail: 'Resource: Testcase feature (@testcase)',
         insertText: 'testcase'
       },
       {
         label: 'testrun',
-        kind: CompletionItemKind.Event,
+        kind: CompletionItemKind.Class,
         detail: 'Resource: Execution run feature (@testrun)',
         insertText: 'testrun'
       },
       {
         label: 'testplan',
-        kind: CompletionItemKind.Module,
+        kind: CompletionItemKind.Class,
         detail: 'Resource: Master quality gate plan (@testplan)',
         insertText: 'testplan'
       },
       {
         label: 'depends_on',
-        kind: CompletionItemKind.Reference,
+        kind: CompletionItemKind.Property, // 🔧 Llave francesa / inglesa
         detail: 'Dependency constraint: @depends_on("path/to.case.feature.@tc-1")',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'depends_on("${1:target}")'
-      },
-      {
-        label: 'retry',
-        kind: CompletionItemKind.Operator,
-        detail: 'Directive: Retry count on failure (@retry(3))',
-        insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'retry(${1:3})'
-      },
-      {
-        label: 'timeout',
-        kind: CompletionItemKind.Property,
-        detail: 'Directive: Timeout threshold (@timeout("30s"))',
-        insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'timeout("${1:30s}")'
       }
     );
 
     // Dynamic tags declared in workspace configuration (fields with source: "tag")
+    // Formatted with field name and value so multiple fields with tags are easy to identify
     for (const [fieldName, fieldInfo] of scanner.customFields.entries()) {
       if (fieldInfo.source === 'tag') {
         if (fieldInfo.enum && fieldInfo.enum.length > 0) {
           for (const enumVal of fieldInfo.enum) {
             const cleanTag = enumVal.replace(/^@/, '');
             items.push({
-              label: cleanTag,
+              label: `${fieldInfo.name}: @${cleanTag}`,
+              filterText: `${fieldInfo.name} ${cleanTag} @${cleanTag}`,
               kind: CompletionItemKind.EnumMember,
-              detail: `field: ${fieldInfo.name}`,
+              detail: `field: ${fieldInfo.name} = @${cleanTag}`,
+              documentation: `Valor permitido para el campo de tag '${fieldInfo.name}'.\nOpciones: ${fieldInfo.enum.join(', ')}`,
               insertText: cleanTag
             });
           }
         } else {
           items.push({
-            label: fieldName,
-            kind: CompletionItemKind.Snippet,
-            detail: `field: ${fieldName} (custom)`,
-            insertTextFormat: InsertTextFormat.Snippet,
-            insertText: fieldName + '("${1:value}")'
+            label: `${fieldInfo.name}`,
+            kind: CompletionItemKind.Property,
+            detail: `field: ${fieldInfo.name} (tag)`,
+            insertText: fieldInfo.name
           });
         }
       }
     }
 
     // Next ID computed for THIS document
-    const docText = document.getText();
-    const docUri = document.uri.toLowerCase();
     let activePrefix: 'tc' | 'tr' | 'tp' = 'tc';
     if (docUri.includes('.run.') || docText.includes('@testrun')) {
       activePrefix = 'tr';

@@ -192,14 +192,46 @@ export function provideHover(
   const idTagMatch = lineText.match(/@(tc|tr|tp)-[0-9]+/i);
   if (idTagMatch) {
     const tag = idTagMatch[0].toLowerCase();
-    const scenario = scanner.config.scenarios.get(tag);
+
+    // Check if within an enclosing Rule: in a testrun file
+    let scenario = null;
+    let ruleFileName = '';
+    const docLines = document.getText().split(/\r?\n/);
+    for (let j = position.line - 1; j >= 0; j--) {
+      const rm = docLines[j].trim().match(/^(?:Rule|Regla):\s*(.*)$/i);
+      if (rm) {
+        ruleFileName = rm[1].trim();
+        break;
+      }
+    }
+
+    if (ruleFileName) {
+      const normRule = ruleFileName.replace(/\\/g, '/').toLowerCase();
+      const normBase = normRule.split('/').pop() || normRule;
+      for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+        const normAddr = addr.replace(/\\/g, '/').toLowerCase();
+        const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+        if ((normAddr.includes(normBase) || normSource.includes(normBase)) && normAddr.endsWith(tag)) {
+          scenario = info;
+          break;
+        }
+      }
+    }
+
+    if (!scenario) {
+      scenario = scanner.config.scenarios.get(tag);
+    }
+
     if (scenario) {
       const fileName = scenario.sourceFile.split(/[/\\]/).pop();
+      const headerTitle = ruleFileName
+        ? `### 🧪 Test Case Target: \`${scenario.tag}\``
+        : `### 🏷️ Identificador de Escenario: \`${scenario.tag}\``;
       return {
         contents: {
           kind: MarkupKind.Markdown,
           value: [
-            `### 🏷️ Identificador de Escenario: \`${scenario.tag}\``,
+            headerTitle,
             `**Título:** ${scenario.title}`,
             `**Resource Scope:** \`${scenario.scope}\``,
             `**Dirección de Estado:** \`${scenario.address}\``,

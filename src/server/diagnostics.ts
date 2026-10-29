@@ -117,31 +117,43 @@ export function validateTextDocument(
     }
   }
 
-  // 4. Check for duplicate identity tags WITHIN THIS SAME FEATURE FILE
+  // 4. Check for duplicate identity tags (scoped per Rule or file)
   const lines = text.split(/\r?\n/);
-  const seenTagsInFile = new Map<string, number>(); // tag -> first line 0-based
+  const seenTagsInScope = new Map<string, number>(); // tag -> first line 0-based
+  let currentRuleName: string | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const trimmed = line.trim();
+
+    // In files with Rules (like testruns), each Rule scopes its own testcases independently
+    const ruleMatch = trimmed.match(/^(?:Rule|Regla):\s*(.*)$/i);
+    if (ruleMatch) {
+      currentRuleName = ruleMatch[1].trim();
+      seenTagsInScope.clear(); // Clear scope for the new Rule!
+      continue;
+    }
+
     // Strip comments and @depends_on references so dependencies aren't treated as declared scenario IDs
     const lineWithoutDepends = line.replace(/#.*$/, '').replace(/@depends_on\s*\([^)]*\)/gi, '');
     const idMatches = [...lineWithoutDepends.matchAll(/@(tc|tr|tp)-([0-9]+)/gi)];
     for (const idMatch of idMatches) {
       const tag = idMatch[0].toLowerCase();
-      if (seenTagsInFile.has(tag)) {
-        const firstLine = seenTagsInFile.get(tag)!;
+      if (seenTagsInScope.has(tag)) {
+        const firstLine = seenTagsInScope.get(tag)!;
         const tagCol = line.indexOf(idMatch[0]);
+        const scopeDesc = currentRuleName ? `en la Rule '${currentRuleName}'` : `en este archivo`;
         diagnostics.push({
           severity: DiagnosticSeverity.Error,
           range: {
             start: { line: i, character: tagCol },
             end: { line: i, character: tagCol + idMatch[0].length }
           },
-          message: `ID de escenario duplicado en este archivo: '${idMatch[0]}' ya fue declarado en la línea ${firstLine + 1}.`,
+          message: `ID de escenario duplicado ${scopeDesc}: '${idMatch[0]}' ya fue declarado en la línea ${firstLine + 1}.`,
           source: 'Testform'
         });
       } else {
-        seenTagsInFile.set(tag, i);
+        seenTagsInScope.set(tag, i);
       }
     }
   }
