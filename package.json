@@ -73,10 +73,6 @@
     ],
     "snippets": [
       {
-        "language": "gherkin",
-        "path": "./snippets/gherkin.json"
-      },
-      {
         "language": "yaml",
         "path": "./snippets/yaml.json"
       }

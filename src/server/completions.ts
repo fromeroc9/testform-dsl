@@ -76,6 +76,43 @@ export function provideCompletions(
   position: Position,
   scanner: WorkspaceScanner
 ): CompletionItem[] {
+  // 0. Starter scaffolding snippets ONLY when the document is empty ("en la nada")
+  const docFullText = document.getText().trim();
+  if (docFullText === '') {
+    return [
+      {
+        label: 'tf-testcase',
+        kind: CompletionItemKind.Snippet,
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: '### 🧪 Starter Test Case Feature\n\nCreate a new declarative test case manifest with standard tags and scenarios.'
+        },
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: '@testcase\nFeature: ${1:Feature Name}\n\n  @${2:tc-01}\n  Scenario: ${3:Scenario Title}\n    Given ${4:precondition}\n    When ${5:action}\n    Then ${6:expected outcome}\n'
+      },
+      {
+        label: 'tf-testrun',
+        kind: CompletionItemKind.Snippet,
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: '### 🚀 Starter Test Run Suite\n\nCreate a new TestRun suite linking testcase feature rules.'
+        },
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: '@testrun @${1:tr-1}\nFeature: ${2:Execution Suite}\n\n  Rule: ${3:path/to.case.feature}\n\n    Scenario: ${4:@tc-01}\n      * mark status = ${5|passed,failed,pending,skipped,blocked|}\n'
+      },
+      {
+        label: 'tf-testplan',
+        kind: CompletionItemKind.Snippet,
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: '### 📋 Starter Test Plan\n\nCreate a new Master TestPlan linking testrun rules.'
+        },
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: '@testplan @${1:tp-1}\nFeature: ${2:Master Test Plan}\n\n  Rule: ${3:path/to.run.feature}\n'
+      }
+    ];
+  }
+
   const lineText = document.getText({
     start: { line: position.line, character: 0 },
     end: position
@@ -226,10 +263,9 @@ export function provideCompletions(
           items.push({
             label: relPath,
             kind: CompletionItemKind.File,
-            detail: 'testrun',
             documentation: {
               kind: MarkupKind.Markdown,
-              value: `**${feat.title}**\n\n*Target:* \`${relPath}\``
+              value: `### 🚀 Test Run Target\n\n**Title:** ${feat.title}\n\n**Path:** \`${relPath}\``
             },
             insertText: relPath
           });
@@ -243,10 +279,9 @@ export function provideCompletions(
           items.push({
             label: relPath,
             kind: CompletionItemKind.File,
-            detail: 'feature',
             documentation: {
               kind: MarkupKind.Markdown,
-              value: `**${feat.title}**\n\n*Target:* \`${relPath}\``
+              value: `### 🧪 Test Case Feature Target\n\n**Title:** ${feat.title}\n\n**Path:** \`${relPath}\``
             },
             insertText: relPath
           });
@@ -298,11 +333,10 @@ export function provideCompletions(
               items.push({
                 label: `${cleanTag}: ${info.title}`,
                 kind: CompletionItemKind.Unit, // Icono oficial de testing / prueba
-                detail: 'testcase',
                 filterText: `${cleanTag} @${cleanTag} ${info.title}`,
                 documentation: {
                   kind: MarkupKind.Markdown,
-                  value: `**${info.title}**\n\n- **Tag:** \`${info.tag}\`\n- **Address:** \`${addr}\`\n- **Target:** \`${targetVal}\``
+                  value: `### 🧪 Test Case Target\n\n**Título:** ${info.title}\n\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRulePath}\`\n- **Target:** \`${targetVal}\``
                 },
                 insertText: targetVal
               });
@@ -621,8 +655,10 @@ export function provideCompletions(
             items.push({
               label: cleanTag,
               kind: CompletionItemKind.Unit,
-              detail: 'testcase',
-              documentation: `Testcase perteneciente a Rule '${enclosingRule}':\n${info.title}`,
+              documentation: {
+                kind: MarkupKind.Markdown,
+                value: `### 🧪 Test Case Target\n\n**Título:** ${info.title}\n\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRule}\``
+              },
               insertText: cleanTag
             });
           }
