@@ -186,20 +186,83 @@ export function validateTextDocument(
     }
   }
 
-  // 6. Validate DSL Field: * field <name> = <value>
-  const requiredFields = [...scanner.customFields.values()].filter(f => f.required);
-  let currentScenarioLine = -1;
-  let currentScenarioFields = new Set<string>();
+  // 6. Validate DSL Field & Tag Requirements across all resource types (.case., .run., .plan.)
+  let resourceType: 'testcase' | 'testrun' | 'testplan' | 'other' = 'other';
+  if (matchesPattern(uri, tcPattern) || text.includes('@testcase')) {
+    resourceType = 'testcase';
+  } else if (matchesPattern(uri, trPattern) || text.includes('@testrun')) {
+    resourceType = 'testrun';
+  } else if (matchesPattern(uri, tpPattern) || text.includes('@testplan')) {
+    resourceType = 'testplan';
+  }
 
-  const checkRequiredFields = () => {
-    if (currentScenarioLine >= 0 && uri.includes('.case.')) {
-      for (const rf of requiredFields) {
-        if (!currentScenarioFields.has(rf.name.toLowerCase())) {
+  // Filter required fields that apply to this resource type
+  const requiredFields = [...scanner.customFields.values()].filter(f => {
+    if (!f.required) return false;
+    if (!f.scopes || f.scopes.length === 0 || f.scopes.includes('global')) return true;
+    if (resourceType !== 'other' && f.scopes.includes(resourceType)) return true;
+    return false;
+  });
+
+  const featureTags = new Set<string>();
+  const backgroundFields = new Map<string, string>();
+  let featureLineIndex = -1;
+
+  // Extract feature-level tags (all tags before the Feature: / Característica: header)
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith('#')) continue;
+    if (/^(?:Feature|Característica):/i.test(trimmed)) {
+      featureLineIndex = i;
+      break;
+    }
+    const tags = trimmed.match(/@[a-zA-Z0-9_.-]+/g);
+    if (tags) {
+      for (const t of tags) featureTags.add(t.toLowerCase());
+    }
+  }
+
+  const isScenarioHeader = (str: string) =>
+    /^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):/i.test(str);
+
+  let hasScenarios = false;
+  let currentScenarioLine = -1;
+  let currentScenarioFields = new Map<string, string>();
+  let currentScenarioTags = new Set<string>();
+  let pendingTagsForScenario = new Set<string>();
+
+  const checkRequiredFieldsForTarget = (targetLine: number, fields: Map<string, string>, tags: Set<string>) => {
+    for (const rf of requiredFields) {
+      const lowerName = rf.name.toLowerCase();
+
+      if (rf.source === 'tag') {
+        const hasTagDirect = tags.has(`@${lowerName}`);
+        const hasEnumMatch = rf.enum && rf.enum.some(e => {
+          const cleanE = e.toLowerCase().startsWith('@') ? e.toLowerCase() : `@${e.toLowerCase()}`;
+          return tags.has(cleanE);
+        });
+        const hasStepFallback = fields.has(lowerName);
+
+        if (!hasTagDirect && !hasEnumMatch && !hasStepFallback) {
+          const sample = rf.enum && rf.enum.length > 0 ? rf.enum.join(' | ') : `@${rf.name}`;
           diagnostics.push({
             severity: DiagnosticSeverity.Warning,
             range: {
-              start: { line: currentScenarioLine, character: 0 },
-              end: { line: currentScenarioLine, character: lines[currentScenarioLine]?.length || 10 }
+              start: { line: targetLine, character: 0 },
+              end: { line: targetLine, character: lines[targetLine]?.length || 10 }
+            },
+            message: `Campo requerido ausente: tag de '${rf.name}' (${sample}) es obligatorio según la configuración del workspace.`,
+            source: 'Testform'
+          });
+        }
+      } else {
+        // Step-based field check (* field <name> = ...)
+        if (!fields.has(lowerName)) {
+          diagnostics.push({
+            severity: DiagnosticSeverity.Warning,
+            range: {
+              start: { line: targetLine, character: 0 },
+              end: { line: targetLine, character: lines[targetLine]?.length || 10 }
             },
             message: `Missing required field: '* field ${rf.name} = ...' is required by workspace configuration.`,
             source: 'Testform'
@@ -214,12 +277,33 @@ export function validateTextDocument(
     const trimmed = rawLine.trim();
     if (trimmed.startsWith('#')) continue;
 
-    // Detect scenario header to track required fields
-    if (/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):/i.test(trimmed)) {
-      checkRequiredFields();
-      currentScenarioLine = i;
-      currentScenarioFields = new Set<string>();
+    // Detect tags immediately preceding a Scenario
+    const tagMatches = trimmed.match(/@[a-zA-Z0-9_.-]+/g);
+    if (tagMatches && !isScenarioHeader(trimmed) && !/^(?:Feature|Característica|Background|Antecedentes|Rule|Regla):/i.test(trimmed)) {
+      for (const t of tagMatches) pendingTagsForScenario.add(t.toLowerCase());
+    }
+
+    if (/^(?:Background|Antecedentes):/i.test(trimmed)) {
+      pendingTagsForScenario.clear();
       continue;
+    }
+
+    if (isScenarioHeader(trimmed)) {
+      hasScenarios = true;
+      if (currentScenarioLine >= 0) {
+        checkRequiredFieldsForTarget(currentScenarioLine, currentScenarioFields, currentScenarioTags);
+      }
+      currentScenarioLine = i;
+      // Inherit all fields declared in Background / file-level!
+      currentScenarioFields = new Map(backgroundFields);
+      // Inherit Feature tags + local scenario tags
+      currentScenarioTags = new Set([...featureTags, ...pendingTagsForScenario]);
+      pendingTagsForScenario.clear();
+      continue;
+    }
+
+    if (/^(?:Rule|Regla):/i.test(trimmed)) {
+      pendingTagsForScenario.clear();
     }
 
     const fieldMatch = trimmed.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
@@ -227,21 +311,32 @@ export function validateTextDocument(
       const fieldName = fieldMatch[1].trim();
       const rawVal = fieldMatch[2].trim().replace(/^["']|["']$/g, '');
       const lowerField = fieldName.toLowerCase();
-      currentScenarioFields.add(lowerField);
 
+      if (currentScenarioLine >= 0) {
+        currentScenarioFields.set(lowerField, rawVal);
+      } else {
+        // Defined in Background: or file header -> Global inheritance for all scenarios
+        backgroundFields.set(lowerField, rawVal);
+      }
+
+      // Check allowed enum values if configured
       const customDef = scanner.customFields.get(lowerField);
       let allowedEnums: string[] | undefined = customDef?.enum;
 
       if (!allowedEnums) {
         if (lowerField === 'priority') {
-          allowedEnums = ['Critical', 'High', 'Medium', 'Low'];
+          allowedEnums = ['Critical', 'High', 'Medium', 'Low', '@critical', '@high', '@medium', '@low'];
         } else if (lowerField === 'severity') {
           allowedEnums = ['Blocker', 'Critical', 'Major', 'Minor', 'Trivial'];
         }
       }
 
       if (allowedEnums && allowedEnums.length > 0) {
-        const isAllowed = allowedEnums.some(e => e.toLowerCase() === rawVal.toLowerCase());
+        const isAllowed = allowedEnums.some(e => {
+          const cleanE = e.toLowerCase().replace(/^@/, '');
+          const cleanVal = rawVal.toLowerCase().replace(/^@/, '');
+          return e.toLowerCase() === rawVal.toLowerCase() || cleanE === cleanVal;
+        });
         if (!isAllowed) {
           const valStartChar = rawLine.lastIndexOf(fieldMatch[2].trim());
           const startChar = valStartChar >= 0 ? valStartChar : rawLine.indexOf('=') + 1;
@@ -259,8 +354,14 @@ export function validateTextDocument(
     }
   }
 
-  // Check last scenario in file
-  checkRequiredFields();
+  // Check the last scenario in the file
+  if (currentScenarioLine >= 0) {
+    checkRequiredFieldsForTarget(currentScenarioLine, currentScenarioFields, currentScenarioTags);
+  } else if (!hasScenarios && (resourceType === 'testplan' || resourceType === 'testrun' || resourceType === 'testcase')) {
+    // If resource file has no explicit Scenario headers (e.g. Testplans with Rules), validate at file/feature level
+    const targetLine = featureLineIndex >= 0 ? featureLineIndex : 0;
+    checkRequiredFieldsForTarget(targetLine, backgroundFields, featureTags);
+  }
 
   return diagnostics;
 }

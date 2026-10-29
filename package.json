@@ -1,5 +1,5 @@
 {
-  "name": "testform",
+  "name": "testform-ide",
   "displayName": "Testform",
   "description": "Declarative Test-as-Code orchestration for Git: Gherkin IntelliSense, variables autoload, native Test Explorer, state management, and quality gates.",
   "version": "1.0.0",

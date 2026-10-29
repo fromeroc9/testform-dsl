@@ -16,6 +16,7 @@ export class WorkspaceScanner {
     required?: boolean;
     default?: any;
     enum?: string[];
+    scopes?: Array<'global' | 'testcase' | 'testrun' | 'testplan'>;
   }> = new Map();
   public featureFiles: Map<string, {
     relPath: string;
@@ -89,22 +90,39 @@ export class WorkspaceScanner {
               if (resBlock.testrun?.match) this.config.scopes.testrun = resBlock.testrun.match;
               if (resBlock.testplan?.match) this.config.scopes.testplan = resBlock.testplan.match;
 
-              const extractFields = (fObj: any) => {
+              const extractFields = (fObj: any, scope: 'global' | 'testcase' | 'testrun' | 'testplan' = 'global') => {
                 if (!fObj) return;
+
+                const registerField = (name: string, source?: string, required?: boolean, defVal?: any, enumArr?: string[]) => {
+                  const key = name.toLowerCase();
+                  const existing = this.customFields.get(key);
+                  if (existing) {
+                    if (!existing.scopes) existing.scopes = ['global'];
+                    if (!existing.scopes.includes(scope)) existing.scopes.push(scope);
+                    if (required !== undefined) existing.required = !!required;
+                    if (source) existing.source = source;
+                    if (defVal !== undefined) existing.default = defVal;
+                    if (enumArr && enumArr.length > 0) existing.enum = enumArr;
+                  } else {
+                    this.customFields.set(key, {
+                      name,
+                      source,
+                      required: !!required,
+                      default: defVal,
+                      enum: enumArr,
+                      scopes: [scope]
+                    });
+                  }
+                };
+
                 if (Array.isArray(fObj)) {
                   for (const f of fObj) {
                     if (typeof f === 'string') {
-                      this.customFields.set(f.toLowerCase(), { name: f });
+                      registerField(f, undefined, false, undefined, undefined);
                     } else if (f && typeof f === 'object' && f.name) {
                       const rawEnum = f.enum ?? f.values ?? f.options;
                       const enumArr = Array.isArray(rawEnum) ? rawEnum.map(String) : undefined;
-                      this.customFields.set(f.name.toLowerCase(), {
-                        name: f.name,
-                        source: f.source,
-                        required: !!f.required,
-                        default: f.default,
-                        enum: enumArr
-                      });
+                      registerField(f.name, f.source, f.required, f.default, enumArr);
                     }
                   }
                 } else if (typeof fObj === 'object') {
@@ -113,28 +131,22 @@ export class WorkspaceScanner {
                       const vo = v as any;
                       const rawEnum = vo.enum ?? vo.values ?? vo.options;
                       const enumArr = Array.isArray(rawEnum) ? rawEnum.map(String) : undefined;
-                      this.customFields.set(k.toLowerCase(), {
-                        name: vo.name ?? k,
-                        source: vo.source,
-                        required: !!vo.required,
-                        default: vo.default,
-                        enum: enumArr
-                      });
+                      registerField(vo.name ?? k, vo.source, vo.required, vo.default, enumArr);
                     } else {
-                      this.customFields.set(k.toLowerCase(), { name: k });
+                      registerField(k, undefined, false, undefined, undefined);
                     }
                   }
                 }
               };
 
-              extractFields(parsed.fields);
-              extractFields(resBlock.fields);
-              extractFields(resBlock.global?.fields);
-              extractFields(resBlock.testcase?.fields);
-              extractFields(resBlock.testrun?.fields);
-              extractFields(resBlock.testplan?.fields);
+              extractFields(parsed.fields, 'global');
+              extractFields(resBlock.fields, 'global');
+              extractFields(resBlock.global?.fields, 'global');
+              extractFields(resBlock.testcase?.fields, 'testcase');
+              extractFields(resBlock.testrun?.fields, 'testrun');
+              extractFields(resBlock.testplan?.fields, 'testplan');
             } else if (parsed.fields) {
-              const extractFields = (fObj: any) => {
+              const extractFields = (fObj: any, scope: 'global' | 'testcase' | 'testrun' | 'testplan' = 'global') => {
                 if (!fObj || typeof fObj !== 'object') return;
                 for (const [k, v] of Object.entries(fObj)) {
                   if (typeof v === 'object' && v !== null) {
@@ -146,12 +158,13 @@ export class WorkspaceScanner {
                       source: vo.source,
                       required: !!vo.required,
                       default: vo.default,
-                      enum: enumArr
+                      enum: enumArr,
+                      scopes: [scope]
                     });
                   }
                 }
               };
-              extractFields(parsed.fields);
+              extractFields(parsed.fields, 'global');
             }
           }
         } catch {
