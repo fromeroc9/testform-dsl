@@ -1,7 +1,6 @@
 node_modules
 dist
 out
-*.vsix
 .DS_Store
 *.log
 .testform
