@@ -226,10 +226,10 @@ export function provideCompletions(
           items.push({
             label: relPath,
             kind: CompletionItemKind.File,
-            detail: `Test Run: ${feat.title}`,
+            detail: 'testrun',
             documentation: {
               kind: MarkupKind.Markdown,
-              value: `### 🚀 Test Run Target\n\n**Title:** ${feat.title}\n\n**Path:** \`${relPath}\``
+              value: `**${feat.title}**\n\n*Target:* \`${relPath}\``
             },
             insertText: relPath
           });
@@ -243,10 +243,10 @@ export function provideCompletions(
           items.push({
             label: relPath,
             kind: CompletionItemKind.File,
-            detail: `Feature: ${feat.title}`,
+            detail: 'feature',
             documentation: {
               kind: MarkupKind.Markdown,
-              value: `### 🧪 Test Case Feature Target\n\n**Title:** ${feat.title}\n\n**Path:** \`${relPath}\``
+              value: `**${feat.title}**\n\n*Target:* \`${relPath}\``
             },
             insertText: relPath
           });
@@ -256,41 +256,7 @@ export function provideCompletions(
     }
   }
 
-  // 4.55 Scenario declaration snippet under a testrun Rule
-  const scenarioSnippetMatch = lineText.match(/^\s*(s|sc|sce|scen|scena|scenar|scenari|scenario|e|es|esc|esce|escen|escena|escenar|escenari|escenario)?\s*$/i);
-  if (scenarioSnippetMatch) {
-    const docText = document.getText();
-    const uri = document.uri.toLowerCase();
-    const isTestrun = uri.endsWith('.run.feature') || /@testrun\b/i.test(docText);
-
-    if (isTestrun) {
-      const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
-      let enclosingRulePath = '';
-      for (let i = linesBefore.length - 1; i >= 0; i--) {
-        const m = linesBefore[i].trim().match(/^(?:Rule|Regla):\s*(.+)$/i);
-        if (m) {
-          enclosingRulePath = m[1].trim();
-          break;
-        }
-      }
-
-      if (enclosingRulePath) {
-        items.push({
-          label: 'Scenario: [Target]',
-          kind: CompletionItemKind.Snippet,
-          detail: `Declarar target de ejecución para Rule '${enclosingRulePath}'`,
-          documentation: {
-            kind: MarkupKind.Markdown,
-            value: `Crea un bloque de escenario para la ejecución de un caso de prueba:\n\`\`\`gherkin\nScenario: \${1:target}\n  * mark status = \${2|passed,failed,pending,skipped,blocked,unexecuted|}\n\`\`\``
-          },
-          insertTextFormat: InsertTextFormat.Snippet,
-          insertText: `Scenario: \${1:target}\n  * mark status = \${2|passed,failed,pending,skipped,blocked,unexecuted|}`
-        });
-      }
-    }
-  }
-
-  // 4.6 Scenario target completion inside a testrun Rule
+  // 4.6 Scenario target completion inside a testrun Rule (Unit test icon, single item per testcase)
   const scenarioKeywordMatch = lineText.match(/^\s*(?:Scenario|Escenario|Scenario Outline|Esquema del escenario):\s*(.*)$/i);
   if (scenarioKeywordMatch) {
     const docText = document.getText();
@@ -328,31 +294,17 @@ export function provideCompletions(
             if (!seenTags.has(cleanTag)) {
               seenTags.add(cleanTag);
 
-              // 1. Mostrar formato limpio: "tc-01: <scenario name>"
+              // Single clean item with test icon (Unit), displaying clean label and non-redundant documentation
               items.push({
                 label: `${cleanTag}: ${info.title}`,
-                kind: CompletionItemKind.Reference,
-                detail: `Target: ${info.tag} (${enclosingRulePath})`,
+                kind: CompletionItemKind.Unit, // Icono oficial de testing / prueba
+                detail: 'testcase',
                 filterText: `${cleanTag} @${cleanTag} ${info.title}`,
                 documentation: {
                   kind: MarkupKind.Markdown,
-                  value: `### 🧪 Test Case Target\n\n**Tag:** \`${info.tag}\`\n\n**Título:** ${info.title}\n\n*Rule:* \`${enclosingRulePath}\`\n\n*Target insertado:* \`${targetVal}\``
+                  value: `**${info.title}**\n\n- **Tag:** \`${info.tag}\`\n- **Address:** \`${addr}\`\n- **Target:** \`${targetVal}\``
                 },
                 insertText: targetVal
-              });
-
-              // 2. Variante con paso de ejecución (* mark status = ...)
-              items.push({
-                label: `${cleanTag}: ${info.title} (con * mark status)`,
-                kind: CompletionItemKind.Snippet,
-                detail: `Target ${info.tag} + * mark status`,
-                filterText: `${cleanTag} @${cleanTag} ${info.title} mark status`,
-                documentation: {
-                  kind: MarkupKind.Markdown,
-                  value: `Inserta el target \`${targetVal}\` junto con el paso de ejecución:\n\`\`\`gherkin\nScenario: ${targetVal}\n      * mark status = passed\n\`\`\``
-                },
-                insertTextFormat: InsertTextFormat.Snippet,
-                insertText: `${targetVal}\n      * mark status = \${1|passed,failed,pending,skipped,blocked,unexecuted|}`
               });
             }
           }
@@ -668,9 +620,9 @@ export function provideCompletions(
             const cleanTag = info.tag.replace(/^@/, '');
             items.push({
               label: cleanTag,
-              kind: CompletionItemKind.Reference,
-              detail: `${info.tag}: ${info.title}`,
-              documentation: `Testcase perteneciente a Rule '${enclosingRule}'`,
+              kind: CompletionItemKind.Unit,
+              detail: 'testcase',
+              documentation: `Testcase perteneciente a Rule '${enclosingRule}':\n${info.title}`,
               insertText: cleanTag
             });
           }
@@ -683,32 +635,32 @@ export function provideCompletions(
       {
         label: 'testcase',
         kind: CompletionItemKind.Class,
-        detail: 'Resource: Testcase feature (@testcase)',
+        detail: 'resource',
         insertText: 'testcase'
       },
       {
         label: 'testrun',
         kind: CompletionItemKind.Class,
-        detail: 'Resource: Execution run feature (@testrun)',
+        detail: 'resource',
         insertText: 'testrun'
       },
       {
         label: 'testplan',
         kind: CompletionItemKind.Class,
-        detail: 'Resource: Master quality gate plan (@testplan)',
+        detail: 'resource',
         insertText: 'testplan'
       },
       {
         label: 'depends_on',
         kind: CompletionItemKind.Property, // 🔧 Llave francesa / inglesa
-        detail: 'Dependency constraint: @depends_on("path/to.case.feature.@tc-1")',
+        detail: 'directive',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'depends_on("${1:target}")'
       }
     );
 
     // Dynamic tags declared in workspace configuration (fields with source: "tag")
-    // Formatted with field name and value so multiple fields with tags are easy to identify
+    // Clean "field" label on the right side for immediate identification
     for (const [fieldName, fieldInfo] of scanner.customFields.entries()) {
       if (fieldInfo.source === 'tag') {
         if (fieldInfo.enum && fieldInfo.enum.length > 0) {
@@ -718,7 +670,7 @@ export function provideCompletions(
               label: `${fieldInfo.name}: @${cleanTag}`,
               filterText: `${fieldInfo.name} ${cleanTag} @${cleanTag}`,
               kind: CompletionItemKind.EnumMember,
-              detail: `field: ${fieldInfo.name} = @${cleanTag}`,
+              detail: 'field',
               documentation: `Valor permitido para el campo de tag '${fieldInfo.name}'.\nOpciones: ${fieldInfo.enum.join(', ')}`,
               insertText: cleanTag
             });
@@ -728,7 +680,7 @@ export function provideCompletions(
             label: `${fieldInfo.name}`,
             filterText: `${fieldInfo.name} @${fieldInfo.name}`,
             kind: CompletionItemKind.EnumMember,
-            detail: `field: ${fieldInfo.name} (tag)`,
+            detail: 'field',
             documentation: `Campo de tag configurado en main.yml: '${fieldInfo.name}'`,
             insertText: fieldInfo.name
           });
@@ -748,7 +700,7 @@ export function provideCompletions(
     items.push({
       label: nextIdTag,
       kind: CompletionItemKind.Value,
-      detail: `Siguiente ID sugerido para este archivo (@${nextIdTag})`,
+      detail: 'identity',
       insertText: nextIdTag
     });
 

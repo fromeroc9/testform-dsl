@@ -422,22 +422,47 @@
         "testform.executablePath": {
           "type": "string",
           "default": "testform",
-          "description": "Path to the testform executable binary. Defaults to globally installed 'testform'."
+          "description": "Path to the testform CLI executable binary. Defaults to globally installed testform."
         },
         "testform.format.enable": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Testform Gherkin formatter as the default formatter for .feature files."
+          "description": "Enable Testform Gherkin formatter as the default document formatter for .feature files."
         },
         "testform.diagnostics.enable": {
           "type": "boolean",
           "default": true,
-          "description": "Enable real-time syntax and variable resolution diagnostics."
+          "description": "Enable real-time syntax, field and variable resolution diagnostics."
+        },
+        "testform.diagnostics.validateRequiredFields": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate that all mandatory fields configured in main.yml are specified in feature scenarios."
+        },
+        "testform.diagnostics.validateLooseTags": {
+          "type": "boolean",
+          "default": true,
+          "description": "Report diagnostics errors for orphan or trailing @ tag prefixes missing a valid identifier."
+        },
+        "testform.completions.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable intelligent completions for Gherkin keywords, Testform DSL directives, and metadata."
+        },
+        "testform.completions.autoSpaceAfterEquals": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically insert a leading space when completing field values immediately following =."
         },
         "testform.testController.enable": {
           "type": "boolean",
           "default": true,
           "description": "Enable native VS Code Test Controller integration (Test Explorer tree and gutter run icons)."
+        },
+        "testform.testController.autoPrune": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically prune obsolete test items on file edits to maintain tree consistency."
         },
         "testform.testrun.targetFormat": {
           "type": "string",
@@ -450,7 +475,7 @@
             "Classic canonical address (e.g. Magento/cart.case.feature.@tc-01)"
           ],
           "default": "short",
-          "description": "Formato de autocompletado e inserción para targets de escenarios en testruns."
+          "description": "Target insertion format for scenario targets inside Testrun rules."
         },
         "testform.trace.server": {
           "type": "string",
@@ -487,4 +512,3 @@
     "@azure/msal-node": "^7.0.3"
   }
 }
-
