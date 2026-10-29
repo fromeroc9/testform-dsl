@@ -418,7 +418,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (targetUri && targetUri.fsPath.endsWith('.feature')) {
         const rootPath = findProjectRoot(targetUri.fsPath);
         const relPath = path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/');
-        runTestformCommand(`-chdir="${rootPath}" apply -auto-approve -target="${relPath}"`);
+        runTestformCommand(`apply -auto-approve -target="${relPath}"`);
       } else {
         runTestformCommand('apply -auto-approve');
       }
@@ -429,7 +429,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (targetUri && targetUri.fsPath.endsWith('.feature')) {
         const rootPath = findProjectRoot(targetUri.fsPath);
         const relPath = path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/');
-        runTestformCommand(`-chdir="${rootPath}" plan -target="${relPath}"`);
+        runTestformCommand(`plan -target="${relPath}"`);
       } else {
         runTestformCommand('plan');
       }

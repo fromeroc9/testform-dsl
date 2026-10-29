@@ -14,6 +14,14 @@ function findProjectRoot(filePath: string): string {
   return ws ? ws.uri.fsPath : path.dirname(filePath);
 }
 
+function normalizeIdentityTag(tag: string): string {
+  const m = tag.toLowerCase().match(/^@?(tc|tr|tp)-0*([0-9]+)$/);
+  if (m) {
+    return `@${m[1]}-${parseInt(m[2], 10)}`;
+  }
+  return tag.toLowerCase();
+}
+
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -197,6 +205,7 @@ export class TestformTestController implements vscode.Disposable {
           const identityTag = pendingTags.find(t => /^@(tc|tr|tp)-[0-9]+/i.test(t));
           if (identityTag) {
             scenariosByTag.set(identityTag.toLowerCase(), title);
+            scenariosByTag.set(normalizeIdentityTag(identityTag), title);
           }
 
           currentScen = {
@@ -334,6 +343,17 @@ export class TestformTestController implements vscode.Disposable {
         const scenarioMatch = trimmed.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
         if (scenarioMatch) {
           const rawScenarioText = scenarioMatch[1].trim();
+
+          // Ignore incomplete punctuation trigger tokens (e.g. while typing ".", "./", ".-", "@")
+          if (!rawScenarioText || /^[\.\/\@\-\s]+$/.test(rawScenarioText)) {
+            continue;
+          }
+
+          // In Testform testruns, scenarios MUST belong to a Rule: block
+          if (!currentRuleItem) {
+            continue;
+          }
+
           const tagMatch = rawScenarioText.match(/@(tc|tr|tp)-[0-9]+/i);
           const tag = tagMatch ? tagMatch[0].toLowerCase() : undefined;
 
@@ -351,13 +371,15 @@ export class TestformTestController implements vscode.Disposable {
           // Resolve display title from referenced feature
           let displayTitle = rawScenarioText;
           if (tag && currentRefInfo) {
-            const resolved = currentRefInfo.scenariosByTag.get(tag);
+            const resolved =
+              currentRefInfo.scenariosByTag.get(tag) ||
+              currentRefInfo.scenariosByTag.get(normalizeIdentityTag(tag));
             if (resolved) {
               displayTitle = resolved;
             }
           }
 
-          const parent = currentRuleItem || fileTestItem;
+          const parent = currentRuleItem;
           // Stable scenario ID based on target tag / name instead of line index
           const scenKey = tag || rawScenarioText;
           const scenId = `${parent.id}::scen::${scenKey}`;
@@ -393,7 +415,7 @@ export class TestformTestController implements vscode.Disposable {
           const status = statusMatch[1].toLowerCase();
           this.scenarioStatusMap.set(currentScenarioItem.id, status);
 
-          const tagPrefix = currentScenarioItem.description?.split(' ')[0] || '';
+          const tagPrefix = (currentScenarioItem.id.match(/@(tc|tr|tp)-[0-9]+/i)?.[0] || '').toUpperCase();
           currentScenarioItem.description = tagPrefix
             ? `${tagPrefix} [${status.toUpperCase()}]`
             : `[${status.toUpperCase()}]`;
@@ -402,7 +424,7 @@ export class TestformTestController implements vscode.Disposable {
 
       // Prune orphan rules and scenarios from previous edits to prevent duplication
       fileTestItem.children.forEach(child => {
-        if (child.id.includes('::rule::') && !seenRuleIds.has(child.id)) {
+        if (!seenRuleIds.has(child.id)) {
           fileTestItem.children.delete(child.id);
         } else {
           const allowedScens = seenScenIdsByParent.get(child.id) || new Set();
@@ -590,7 +612,7 @@ export class TestformTestController implements vscode.Disposable {
 
         // 3. Immediately reflect in memory and UI
         this.scenarioStatusMap.set(item.id, chosenStatus);
-        const tagPrefix = item.description?.split(' ')[0] || '';
+        const tagPrefix = (item.id.match(/@(tc|tr|tp)-[0-9]+/i)?.[0] || '').toUpperCase();
         item.description = tagPrefix
           ? `${tagPrefix} [${chosenStatus.toUpperCase()}]`
           : `[${chosenStatus.toUpperCase()}]`;

@@ -178,79 +178,79 @@
     "commands": [
       {
         "command": "testform.menu",
-        "title": "Testform: Open Control Center Menu",
+        "title": "Open Control Center Menu",
         "category": "Testform",
         "icon": "$(beaker)"
       },
       {
         "command": "testform.init",
-        "title": "Testform: Initialize Workspace (init)",
+        "title": "Initialize Workspace (init)",
         "category": "Testform",
         "icon": "$(repo-clone)"
       },
       {
         "command": "testform.validate",
-        "title": "Testform: Validate Configuration & Scopes",
+        "title": "Validate Configuration & Scopes",
         "category": "Testform",
         "icon": "$(check)"
       },
       {
         "command": "testform.plan",
-        "title": "Testform: Speculative Plan (plan)",
+        "title": "Speculative Plan (plan)",
         "category": "Testform",
         "icon": "$(git-compare)"
       },
       {
         "command": "testform.apply",
-        "title": "Testform: Apply Changes (apply)",
+        "title": "Apply Changes (apply)",
         "category": "Testform",
         "icon": "$(play)"
       },
       {
         "command": "testform.diff",
-        "title": "Testform: Show State Drift (diff)",
+        "title": "Show State Drift (diff)",
         "category": "Testform",
         "icon": "$(diff)"
       },
       {
         "command": "testform.show",
-        "title": "Testform: Inspect State or Plan (show)",
+        "title": "Inspect State or Plan (show)",
         "category": "Testform",
         "icon": "$(eye)"
       },
       {
         "command": "testform.providers",
-        "title": "Testform: Show Providers Tree (providers)",
+        "title": "Show Providers Tree (providers)",
         "category": "Testform",
         "icon": "$(list-tree)"
       },
       {
         "command": "testform.modules.list",
-        "title": "Testform: List Declared Modules (modules)",
+        "title": "List Declared Modules (modules)",
         "category": "Testform",
         "icon": "$(package)"
       },
       {
         "command": "testform.report",
-        "title": "Testform: Generate Report",
+        "title": "Generate Report",
         "category": "Testform",
         "icon": "$(file-text)"
       },
       {
         "command": "testform.state.refresh",
-        "title": "Testform: Refresh State Explorer",
+        "title": "Refresh State Explorer",
         "category": "Testform",
         "icon": "$(refresh)"
       },
       {
         "command": "testform.modules.update",
-        "title": "Testform: Update Modules (init)",
+        "title": "Update Modules (init)",
         "category": "Testform",
         "icon": "$(cloud-download)"
       },
       {
         "command": "testform.format",
-        "title": "Testform: Format Document",
+        "title": "Format Document",
         "category": "Testform"
       },
       {
@@ -261,13 +261,13 @@
       },
       {
         "command": "testform.state.showResource",
-        "title": "Testform: Show Resource CLI Details",
+        "title": "Show Resource CLI Details",
         "category": "Testform",
         "icon": "$(terminal)"
       },
       {
         "command": "testform.specs.openHub",
-        "title": "Testform: Open Test Cases, Runs & Plans Hub",
+        "title": "Open Test Cases, Runs & Plans Hub",
         "category": "Testform",
         "icon": "$(layout-sidebar-right-off)"
       },
@@ -291,31 +291,31 @@
       },
       {
         "command": "testform.state.forceUnlock",
-        "title": "Testform: Force Unlock State",
+        "title": "Force Unlock State",
         "category": "Testform",
         "icon": "$(unlock)"
       },
       {
         "command": "testform.workspace.select",
-        "title": "Testform: Select Workspace",
+        "title": "Select Workspace",
         "category": "Testform",
         "icon": "$(layers)"
       },
       {
         "command": "testform.modules.refresh",
-        "title": "Testform: Refresh Modules & .testform",
+        "title": "Refresh Modules & .testform",
         "category": "Testform",
         "icon": "$(refresh)"
       },
       {
         "command": "testform.applyCurrent",
-        "title": "Testform: Run Apply Current Feature",
+        "title": "Run Apply Current Feature",
         "category": "Testform",
         "icon": "$(play)"
       },
       {
         "command": "testform.planCurrent",
-        "title": "Testform: Speculative Plan Current Feature",
+        "title": "Speculative Plan Current Feature",
         "category": "Testform",
         "icon": "$(search)"
       }
