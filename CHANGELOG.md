@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-10-29
+
+### Added
+
+#### Test Execution & State Reconciliation
+- **Canonical TestRun Execution (`scenarioPlayTarget`)**:
+  - Gutter play button on scenarios inside TestRun suites (`*.run.feature`) now automatically resolves and targets the parent TestRun suite identity (`testcycle\run.feature.@tr-X`) instead of the referenced testcase identity (`testcase\case.feature.@tc-Y`). This ensures Testform properly executes the run and reconciles execution status updates directly into `testform.state`.
+  - Added setting `testform.testController.scenarioPlayTarget` (`testrun` | `testcase`) to configure whether playing a scenario targets the parent TestRun suite (default) or runs the individual testcase directly.
+- **Execution Mutex Guard**:
+  - Added concurrency lock (`isExecuting`) to prevent overlapping test executions, rapid double-clicks, and terminal command collision.
+- **State Explorer Relational Inspection**:
+  - Added support in State Explorer for expanding executed test cases under each TestRun (`Executed Cases (<count>)`), displaying scenario titles, identities, and live statuses.
+  - Added support for inspecting TestRuns associated with TestPlans.
+
+#### Language Server & Autocompletion
+- **Rule-Scoped Scenario Targets**:
+  - Scenario autocompletion inside `Rule: <path>` in a `*.run.feature` file is now strictly delimited to test cases declared within that referenced feature file.
+- **Configurable Scenario Target Formats (`testform.testrun.targetFormat`)**:
+  - Added support for autocompleting scenario targets using short tag identity (`@tc-1`), scenario title (`tc-1: Title`), or classic address (`path.@tc-1`), configurable via `testform.testrun.targetFormat`.
+- **Field & Enum Autocompletion Enhancements**:
+  - Enhanced autocompletion for `* field <name> = <value>` with automatic space formatting and enum value suggestions.
+  - Tag suggestions grouped by field name with clear semantic category labels (`field`, `resource`, `identity`).
+- **Orphan `@` Diagnostic Validator**:
+  - Added real-time diagnostic reporting for stray or malformed `@` characters not attached to valid tag identifiers.
+
+#### Documentation & Links
+- **Official Documentation Portal**:
+  - Added direct link to the official Testform documentation portal (`https://fromeroc9.github.io/testform-docs/`) in `README.md`.
+
+---
+
+### Changed
+
+#### Visual Polish & Clean Interface
+- **Intuitive Status Icons in Views**:
+  - Removed redundant text brackets (`[PASSED]`, `[PENDING]`, `[FAILED]`) from both State Explorer and Test Controller tree items, relying on native VS Code theme icons and status colors (green checkmark, yellow circle, red cross).
+- **Cleaner Autocompletion Popups**:
+  - Eliminated redundant detail header string in `Rule:` and `Scenario:` completion popups to prevent duplicate info blocks.
+  - Restored rich, structured Markdown info cards for Test Case Feature Targets, Test Run Targets, and Test Case Scenarios.
+- **Granular English Settings**:
+  - Standardized all extension settings in `package.json` into clear, granular English descriptions and categories.
+- **Command Palette Deduplication**:
+  - Removed redundant `"Testform: "` prefix from command titles in `package.json`, preventing double prefix display (`Testform: Testform: ...`) in the VS Code Command Palette.
+- **Authentic Branding Assets**:
+  - Restored high-resolution isometric logo with full transparency, eliminating background borders and cleaning up redundant asset files.
+
+---
+
+### Fixed
+
+#### Test Explorer & Gutter Controls
+- **Duplicate Test Items in Test Controller**:
+  - Resolved duplicate node keys when registering scenarios and rules in the native VS Code Test Explorer tree.
+- **Gutter Play Button Range Collision**:
+  - Restricted gutter run icons strictly to the `Scenario:` declaration line range, preventing execution buttons from appearing on metadata lines like `* mark status`.
+- **Orphan Zombie Scenario Nodes**:
+  - Fixed issue where scenario nodes from previous runs or malformed files appeared as root-level orphans in the Test Explorer tree by enforcing strict parent-child hierarchy under their declaring `Rule:`.
+- **CLI Flag Redundancy**:
+  - Removed redundant `-chdir="${rootPath}"` argument from `applyCurrent` and `planCurrent` terminal commands.
+
+#### Autocompletions & Snippets
+- **Snippet Pollution in Active Files**:
+  - Removed static `tf-*` snippet contributions from `package.json` that cluttered scenario and rule completion lists during regular editing.
+  - Template scaffolding snippets are now dynamically provided exclusively when opening or editing completely empty `.feature` files.
+
+---
+
 ## [1.0.0] - 2026-10-28
 
 ### Added
