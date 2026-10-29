@@ -441,9 +441,7 @@ export class TestformTestController implements vscode.Disposable {
           this.scenarioStatusMap.set(currentScenarioItem.id, status);
 
           const tagPrefix = (currentScenarioItem.id.match(/@(tc|tr|tp)-[0-9]+/i)?.[0] || '').toUpperCase();
-          currentScenarioItem.description = tagPrefix
-            ? `${tagPrefix} [${status.toUpperCase()}]`
-            : `[${status.toUpperCase()}]`;
+          currentScenarioItem.description = tagPrefix || undefined;
         }
       }
 
@@ -658,9 +656,7 @@ export class TestformTestController implements vscode.Disposable {
           // 3. Immediately reflect in memory and UI
           this.scenarioStatusMap.set(item.id, chosenStatus);
           const tagPrefix = (item.id.match(/@(tc|tr|tp)-[0-9]+/i)?.[0] || '').toUpperCase();
-          item.description = tagPrefix
-            ? `${tagPrefix} [${chosenStatus.toUpperCase()}]`
-            : `[${chosenStatus.toUpperCase()}]`;
+          item.description = tagPrefix || undefined;
 
           if (chosenStatus === 'passed') {
             run.passed(item);

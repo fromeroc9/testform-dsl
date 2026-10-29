@@ -197,7 +197,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
               vscode.TreeItemCollapsibleState.None,
               'executed_case',
               shortAddr,
-              tag ? `[${st.toUpperCase()}] ${tag}` : `[${st.toUpperCase()}]`
+              tag || undefined
             );
 
             caseItem.tooltip = `Scenario: ${scenarioName}\nAddress: ${shortAddr}\nStatus: ${st}`;
@@ -257,7 +257,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
               vscode.TreeItemCollapsibleState.None,
               'associated_run',
               trAddr,
-              runRemote ? `[${runStatus.toUpperCase()}] ${runRemote}` : `[${runStatus.toUpperCase()}]`
+              runRemote || undefined
             );
 
             runItem.tooltip = `Test Run: ${runTitle}\nAddress: ${trAddr}\nStatus: ${runStatus}`;
