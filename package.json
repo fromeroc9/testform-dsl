@@ -2,7 +2,7 @@
   "name": "testform-dsl",
   "displayName": "Testform DSL",
   "description": "Declarative Test-as-Code orchestration for Git: Gherkin IntelliSense, variables autoload, native Test Explorer, state management, and quality gates.",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "publisher": "fromeroc9",
   "license": "GPL-3.0-or-later",
   "author": "Flavio Romero <flavio.arc9@gmail.com>",

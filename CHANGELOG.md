@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.1.0] - 2026-10-29
+## [1.0.0] - 2026-10-29
 
 ### Added
 
@@ -38,23 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-### Changed
-
-#### Visual Polish & Clean Interface
-- **Intuitive Status Icons in Views**:
-  - Removed redundant text brackets (`[PASSED]`, `[PENDING]`, `[FAILED]`) from both State Explorer and Test Controller tree items, relying on native VS Code theme icons and status colors (green checkmark, yellow circle, red cross).
-- **Cleaner Autocompletion Popups**:
-  - Eliminated redundant detail header string in `Rule:` and `Scenario:` completion popups to prevent duplicate info blocks.
-  - Restored rich, structured Markdown info cards for Test Case Feature Targets, Test Run Targets, and Test Case Scenarios.
-- **Granular English Settings**:
-  - Standardized all extension settings in `package.json` into clear, granular English descriptions and categories.
-- **Command Palette Deduplication**:
-  - Removed redundant `"Testform: "` prefix from command titles in `package.json`, preventing double prefix display (`Testform: Testform: ...`) in the VS Code Command Palette.
-- **Authentic Branding Assets**:
-  - Restored high-resolution isometric logo with full transparency, eliminating background borders and cleaning up redundant asset files.
-
----
-
 ### Fixed
 
 #### Test Explorer & Gutter Controls
@@ -71,10 +54,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Snippet Pollution in Active Files**:
   - Removed static `tf-*` snippet contributions from `package.json` that cluttered scenario and rule completion lists during regular editing.
   - Template scaffolding snippets are now dynamically provided exclusively when opening or editing completely empty `.feature` files.
-
----
-
-## [1.0.0] - 2026-10-28
 
 ### Added
 
@@ -131,6 +110,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ### Changed
+
+#### Visual Polish & Clean Interface
+- **Intuitive Status Icons in Views**:
+  - Removed redundant text brackets (`[PASSED]`, `[PENDING]`, `[FAILED]`) from both State Explorer and Test Controller tree items, relying on native VS Code theme icons and status colors (green checkmark, yellow circle, red cross).
+- **Cleaner Autocompletion Popups**:
+  - Eliminated redundant detail header string in `Rule:` and `Scenario:` completion popups to prevent duplicate info blocks.
+  - Restored rich, structured Markdown info cards for Test Case Feature Targets, Test Run Targets, and Test Case Scenarios.
+- **Granular English Settings**:
+  - Standardized all extension settings in `package.json` into clear, granular English descriptions and categories.
+- **Command Palette Deduplication**:
+  - Removed redundant `"Testform: "` prefix from command titles in `package.json`, preventing double prefix display (`Testform: Testform: ...`) in the VS Code Command Palette.
+- **Authentic Branding Assets**:
+  - Restored high-resolution isometric logo with full transparency, eliminating background borders and cleaning up redundant asset files.
 - **Pure Standard Language Architecture**: Deprecated proprietary `testform-yaml` and `testform-gherkin` language IDs in favor of standard `yaml` and `gherkin`, eliminating conflicts with Red Hat YAML, Prettier, and third-party linters.
 - **Single Dash CLI Standards**: Enforced single dash flags (`-target`, `-auto-approve`, `-format`, `-lock`) across all CLI terminal commands.
 - **Clean Feature Views**: Removed redundant and noisy CodeLens buttons from scenario headers.
