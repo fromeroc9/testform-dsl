@@ -155,6 +155,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
       const testruns: StateTreeItem[] = [];
       const testcases: StateTreeItem[] = [];
       const testplans: StateTreeItem[] = [];
+      const bugs: StateTreeItem[] = [];
       const outputItems: StateTreeItem[] = [];
 
       // 1. Process resources
@@ -291,6 +292,28 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         if (remoteRef) {
           childNodes.push(new StateTreeItem(`Remote: ${remoteRef}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
         }
+        const targetVal = attrs.target || attrs.execution?.target;
+        if (targetVal) {
+          childNodes.push(new StateTreeItem(`Target: ${targetVal}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
+        }
+        const statusVal = attrs.status || attrs.execution?.status;
+        if (statusVal) {
+          childNodes.push(new StateTreeItem(`Status: ${statusVal}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
+        }
+        const customFields = attrs.custom_fields || attrs.fields;
+        if (customFields && typeof customFields === 'object') {
+          for (const [cfKey, cfVal] of Object.entries(customFields)) {
+            childNodes.push(new StateTreeItem(`${cfKey}: ${cfVal}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
+          }
+        }
+        const traceVal = attrs.trace || attrs.execution?.trace;
+        if (traceVal) {
+          childNodes.push(new StateTreeItem(`Trace: ${traceVal}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
+        }
+        const evidenceVal = attrs.evidence || attrs.execution?.evidence;
+        if (evidenceVal) {
+          childNodes.push(new StateTreeItem(`Evidence: ${evidenceVal}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
+        }
         if (attrs.labels && Array.isArray(attrs.labels)) {
           childNodes.push(new StateTreeItem(`Labels: ${attrs.labels.join(', ')}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
         }
@@ -317,6 +340,9 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         } else if (type.includes('testplan')) {
           resItem.iconPath = new vscode.ThemeIcon('notebook', new vscode.ThemeColor('charts.blue'));
           testplans.push(resItem);
+        } else if (type.includes('bug')) {
+          resItem.iconPath = new vscode.ThemeIcon('bug', new vscode.ThemeColor('charts.red'));
+          bugs.push(resItem);
         } else {
           resItem.iconPath = new vscode.ThemeIcon('beaker', new vscode.ThemeColor('charts.purple'));
           testcases.push(resItem);
@@ -355,6 +381,12 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
       if (testplans.length > 0) {
         const cat = new StateTreeItem(`Test Plans (${testplans.length})`, vscode.TreeItemCollapsibleState.Collapsed, 'category', undefined, undefined, testplans);
         cat.iconPath = new vscode.ThemeIcon('notebook');
+        categories.push(cat);
+      }
+
+      if (bugs.length > 0) {
+        const cat = new StateTreeItem(`Bugs & Defects (${bugs.length})`, vscode.TreeItemCollapsibleState.Expanded, 'category', undefined, undefined, bugs);
+        cat.iconPath = new vscode.ThemeIcon('bug');
         categories.push(cat);
       }
 

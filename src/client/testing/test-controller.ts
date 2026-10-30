@@ -360,7 +360,7 @@ export class TestformTestController implements vscode.Disposable {
           continue;
         }
 
-        // 2. Scenario block in testrun: Scenario: login.case.feature.@tc-1
+        // 2. Scenario block in testrun: Scenario: login.case.feature.@tc-1 or Scenario: Description
         const scenarioMatch = trimmed.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
         if (scenarioMatch) {
           const rawScenarioText = scenarioMatch[1].trim();
@@ -370,12 +370,7 @@ export class TestformTestController implements vscode.Disposable {
             continue;
           }
 
-          // In Testform testruns, scenarios MUST belong to a Rule: block
-          if (!currentRuleItem) {
-            continue;
-          }
-
-          const tagMatch = rawScenarioText.match(/@(tc|tr|tp)-[0-9]+/i);
+          const tagMatch = rawScenarioText.match(/@(tc|tr|tp|bg)-[0-9]+/i);
           const tag = tagMatch ? tagMatch[0].toLowerCase() : undefined;
 
           // Determine testcase target address
@@ -390,16 +385,33 @@ export class TestformTestController implements vscode.Disposable {
 
           // Resolve display title from referenced feature
           let displayTitle = rawScenarioText;
-          if (tag && currentRefInfo) {
+          if (currentRuleItem && tag && currentRefInfo) {
             const resolved =
               currentRefInfo.scenariosByTag.get(tag) ||
               currentRefInfo.scenariosByTag.get(normalizeIdentityTag(tag));
             if (resolved) {
               displayTitle = resolved;
             }
+          } else if (!currentRuleItem) {
+            // Evolved direct canonical format (without Rule:)
+            const featMatch = rawScenarioText.match(/^([^@]+?\.feature)(?:\.@|\.|\/)?/i);
+            if (featMatch) {
+              const refFeaturePath = featMatch[1];
+              const refInfo = this.resolveReferencedFeature(rootPath, refFeaturePath);
+              if (refInfo && tag) {
+                const resolved =
+                  refInfo.scenariosByTag.get(tag) ||
+                  refInfo.scenariosByTag.get(normalizeIdentityTag(tag));
+                if (resolved) {
+                  displayTitle = resolved;
+                } else if (refInfo.featureTitle) {
+                  displayTitle = `${refInfo.featureTitle} (${tag})`;
+                }
+              }
+            }
           }
 
-          const parent = currentRuleItem;
+          const parent = currentRuleItem || fileTestItem;
           // Stable scenario ID based on target tag / name instead of line index
           const scenKey = tag || rawScenarioText;
           const scenId = `${parent.id}::scen::${scenKey}`;
@@ -434,28 +446,56 @@ export class TestformTestController implements vscode.Disposable {
           continue;
         }
 
-        // 3. Status mark step: * mark status = passed | failed | pending | skipped | blocked
+        // 3. Mark target step: * mark target = ...
+        const targetMarkMatch = trimmed.match(/^\*\s+mark\s+target\s*=\s*(.+)$/i);
+        if (targetMarkMatch && currentScenarioItem) {
+          const targetVal = targetMarkMatch[1].trim().replace(/^["']|["']$/g, '');
+          const info = this.scenarioTargetInfoMap.get(currentScenarioItem.id);
+          if (info) {
+            info.testcaseTarget = targetVal;
+          }
+          const tTagMatch = targetVal.match(/@(tc|tr|tp|bg)-[0-9]+/i);
+          if (tTagMatch) {
+            const tTag = tTagMatch[0].toLowerCase();
+            const featMatch = targetVal.match(/^([^@]+?\.feature)/i);
+            if (featMatch) {
+              const refInfo = this.resolveReferencedFeature(rootPath, featMatch[1]);
+              const resolved =
+                refInfo?.scenariosByTag.get(tTag) ||
+                refInfo?.scenariosByTag.get(normalizeIdentityTag(tTag));
+              if (resolved) {
+                currentScenarioItem.label = resolved;
+              }
+            }
+          }
+        }
+
+        // 4. Status mark step: * mark status = passed | failed | pending | skipped | blocked
         const statusMatch = trimmed.match(/^\*\s+mark\s+status\s*=\s*([a-zA-Z]+)/i);
         if (statusMatch && currentScenarioItem) {
           const status = statusMatch[1].toLowerCase();
           this.scenarioStatusMap.set(currentScenarioItem.id, status);
 
-          const tagPrefix = (currentScenarioItem.id.match(/@(tc|tr|tp)-[0-9]+/i)?.[0] || '').toUpperCase();
+          const tagPrefix = (currentScenarioItem.id.match(/@(tc|tr|tp|bg)-[0-9]+/i)?.[0] || '').toUpperCase();
           currentScenarioItem.description = tagPrefix || undefined;
         }
       }
 
       // Prune orphan rules and scenarios from previous edits to prevent duplication
       fileTestItem.children.forEach(child => {
-        if (!seenRuleIds.has(child.id)) {
-          fileTestItem.children.delete(child.id);
-        } else {
+        if (seenRuleIds.has(child.id)) {
           const allowedScens = seenScenIdsByParent.get(child.id) || new Set();
           child.children.forEach(scenChild => {
             if (!allowedScens.has(scenChild.id)) {
               child.children.delete(scenChild.id);
             }
           });
+        } else {
+          // Direct scenario under fileTestItem
+          const fileAllowedScens = seenScenIdsByParent.get(fileTestItem.id) || new Set();
+          if (!fileAllowedScens.has(child.id)) {
+            fileTestItem.children.delete(child.id);
+          }
         }
       });
     } catch {
@@ -655,7 +695,7 @@ export class TestformTestController implements vscode.Disposable {
 
           // 3. Immediately reflect in memory and UI
           this.scenarioStatusMap.set(item.id, chosenStatus);
-          const tagPrefix = (item.id.match(/@(tc|tr|tp)-[0-9]+/i)?.[0] || '').toUpperCase();
+          const tagPrefix = (item.id.match(/@(tc|tr|tp|bg)-[0-9]+/i)?.[0] || '').toUpperCase();
           item.description = tagPrefix || undefined;
 
           if (chosenStatus === 'passed') {

@@ -254,11 +254,53 @@ export function provideHover(
           };
         }
       }
+    } else {
+      // Direct scenario target lookup without Rule:
+      const targetScenario = scanner.config.scenarioAddresses.get(rawTarget) || scanner.config.scenarios.get(rawTarget);
+      if (targetScenario) {
+        const fileName = targetScenario.sourceFile.split(/[/\\]/).pop();
+        return {
+          contents: {
+            kind: MarkupKind.Markdown,
+            value: [
+              `### 🧪 Target Referenciado: \`${targetScenario.tag}\``,
+              `**Título:** ${targetScenario.title}`,
+              `**Resource Scope:** \`${targetScenario.scope}\``,
+              `**Dirección en Ledger:** \`${targetScenario.address}\``,
+              `---`,
+              `*Archivo:* \`${fileName}\` (línea ${targetScenario.line + 1})`
+            ].join('\n\n')
+          }
+        };
+      }
     }
   }
 
-  // 3.1 Hover on Identity Tag: @tc-X, @tr-X, @tp-X
-  const idTagMatch = lineText.match(/@(tc|tr|tp)-[0-9]+/i);
+  // 3.01 Hover on mark target = ...
+  const markTargetHoverMatch = lineText.match(/^\s*\*\s*mark\s+target\s*=\s*(.+)$/i);
+  if (markTargetHoverMatch) {
+    const rawTarget = markTargetHoverMatch[1].trim().replace(/^["']|["']$/g, '');
+    const targetScenario = scanner.config.scenarioAddresses.get(rawTarget) || scanner.config.scenarios.get(rawTarget);
+    if (targetScenario) {
+      const fileName = targetScenario.sourceFile.split(/[/\\]/).pop();
+      return {
+        contents: {
+          kind: MarkupKind.Markdown,
+          value: [
+            `### 🎯 Target Canónico: \`${targetScenario.tag}\``,
+            `**Título:** ${targetScenario.title}`,
+            `**Resource Scope:** \`${targetScenario.scope}\``,
+            `**Dirección en Ledger:** \`${targetScenario.address}\``,
+            `---`,
+            `*Archivo:* \`${fileName}\` (línea ${targetScenario.line + 1})`
+          ].join('\n\n')
+        }
+      };
+    }
+  }
+
+  // 3.1 Hover on Identity Tag: @tc-X, @tr-X, @tp-X, @bg-X
+  const idTagMatch = lineText.match(/@(tc|tr|tp|bg)-[0-9]+/i);
   if (idTagMatch) {
     const tag = idTagMatch[0].toLowerCase();
 
@@ -369,6 +411,40 @@ export function provideHover(
     };
   }
 
+  // 4.1 Hover on mark trace = ...
+  const traceMatch = lineText.match(/mark\s+trace\s*=\s*(.+)$/i);
+  if (traceMatch) {
+    const traceVal = traceMatch[1].trim().replace(/^["']|["']$/g, '');
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: [
+          `### 📝 Diagnostic Trace — Campo Canónico`,
+          `**Detalle:** \`${traceVal}\``,
+          `---`,
+          `*Efecto:* Registra la traza del error o mensaje de diagnóstico en \`execution.trace\` dentro de \`testform.state\`.*`
+        ].join('\n\n')
+      }
+    };
+  }
+
+  // 4.2 Hover on mark evidence = ...
+  const evidenceMatch = lineText.match(/mark\s+evidence\s*=\s*(.+)$/i);
+  if (evidenceMatch) {
+    const evidenceVal = evidenceMatch[1].trim().replace(/^["']|["']$/g, '');
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: [
+          `### 📎 Execution Evidence — Campo Canónico`,
+          `**Referencia:** \`${evidenceVal}\``,
+          `---`,
+          `*Efecto:* Adjunta la captura de pantalla, archivo de log o enlace externo a la ejecución del escenario en \`testform.state\`.*`
+        ].join('\n\n')
+      }
+    };
+  }
+
   // 5. Match tags hover: @module(...)
   const moduleMatch = lineText.match(/@module\s*\(\s*(?:name\s*=\s*)?["']?([^"',\s)]+)["']?/);
   if (moduleMatch) {
@@ -388,13 +464,13 @@ export function provideHover(
   }
 
   // 6. Match Rule path hover: Rule: auth/login.case.feature or Rule: suites/smoke.run.feature
-  const ruleMatch = lineText.match(/^(?:\s*Rule|\s*Regla):\s*([a-zA-Z0-9_./-]+\.(?:case|run|plan)\.feature)/i);
+  const ruleMatch = lineText.match(/^(?:\s*Rule|\s*Regla):\s*([a-zA-Z0-9_./-]+\.(?:case|run|plan|bug)\.feature)/i);
   if (ruleMatch) {
     const rawPath = ruleMatch[1].trim();
     const feat = scanner.featureFiles.get(rawPath) ||
       [...scanner.featureFiles.values()].find(f => f.relPath.endsWith(rawPath) || f.fullPath.endsWith(rawPath));
     if (feat) {
-      const scopeLabel = feat.scope === 'testrun' ? 'Test Run Suite' : (feat.scope === 'testplan' ? 'Test Plan' : 'Test Case Feature');
+      const scopeLabel = feat.scope === 'testrun' ? 'Test Run Suite' : (feat.scope === 'testplan' ? 'Test Plan' : (feat.scope === 'bug' ? 'Defect / Bug Report' : 'Test Case Feature'));
       return {
         contents: {
           kind: MarkupKind.Markdown,

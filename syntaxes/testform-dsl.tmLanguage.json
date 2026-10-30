@@ -69,7 +69,7 @@
                 },
                 {
                   "name": "variable.other.testform.state",
-                  "match": "\\b(testcase|testrun|testplan)\\.[a-zA-Z0-9_./@-]+"
+                  "match": "\\b(testcase|testrun|testplan|bug)\\.[a-zA-Z0-9_./@-]+"
                 },
                 {
                   "name": "variable.other.testform.env",
@@ -109,11 +109,11 @@
       "patterns": [
         {
           "name": "entity.name.tag.scope.testform",
-          "match": "@(testcase|testrun|testplan)\\b"
+          "match": "@(testcase|testrun|testplan|bug)\\b"
         },
         {
           "name": "entity.name.tag.identity.testform",
-          "match": "@(tc|tr|tp)-[0-9a-zA-Z_-]+"
+          "match": "@(tc|tr|tp|bg)-[0-9a-zA-Z_-]+"
         },
         {
           "name": "entity.name.tag.directive.testform",
@@ -143,6 +143,16 @@
             "3": { "name": "support.type.property-name.testform" },
             "4": { "name": "keyword.operator.assignment.testform" },
             "5": { "name": "constant.language.status.testform" }
+          }
+        },
+        {
+          "match": "(^\\s*\\*\\s+)?\\b(mark)\\b\\s+\\b(target|trace|evidence)\\b\\s*(=)\\s*(.*)$",
+          "captures": {
+            "1": { "name": "keyword.control.step.gherkin" },
+            "2": { "name": "keyword.control.testform.mark" },
+            "3": { "name": "support.type.property-name.testform" },
+            "4": { "name": "keyword.operator.assignment.testform" },
+            "5": { "name": "string.unquoted.testform" }
           }
         }
       ]

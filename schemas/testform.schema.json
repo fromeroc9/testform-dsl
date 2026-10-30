@@ -160,8 +160,10 @@
               "description": "GitLab Issues provider",
               "properties": {
                 "project_id": { "type": "string" },
-                "base_url": { "type": "string" }
-              }
+                "base_url": { "type": "string" },
+                "token_env": { "type": "string", "default": "GITLAB_TOKEN" }
+              },
+              "additionalProperties": true
             },
             "custom": {
               "type": "object",
@@ -172,7 +174,8 @@
               "required": ["source"],
               "additionalProperties": true
             }
-          }
+          },
+          "additionalProperties": true
         }
       ]
     },
@@ -258,6 +261,20 @@
           "type": "object",
           "properties": {
             "match": { "type": "string", "default": "*.plan.feature" },
+            "scaffold": {
+              "type": "object",
+              "properties": {
+                "directory": { "type": "string" },
+                "filename": { "type": "string" }
+              }
+            },
+            "fields": { "type": "array" }
+          }
+        },
+        "bug": {
+          "type": "object",
+          "properties": {
+            "match": { "type": "string", "default": "*.bug.feature" },
             "scaffold": {
               "type": "object",
               "properties": {

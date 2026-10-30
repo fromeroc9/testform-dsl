@@ -324,12 +324,15 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
     items.push(envItem);
 
     // 2. Backend Config
-    const backendJsonPath = path.join(rootPath, '.testform', 'backend.json');
+    const cacheBackendPath = path.join(rootPath, '.testform', 'cache', 'backend.json');
+    const legacyBackendPath = path.join(rootPath, '.testform', 'backend.json');
+    const backendJsonPath = fs.existsSync(cacheBackendPath) ? cacheBackendPath : legacyBackendPath;
     let backendName = 'local';
     if (fs.existsSync(backendJsonPath)) {
       try {
         const parsed = JSON.parse(fs.readFileSync(backendJsonPath, 'utf8'));
         if (parsed.type) backendName = parsed.type;
+        else if (parsed.name) backendName = parsed.name;
       } catch {}
     }
 
@@ -339,7 +342,9 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
       'env-item'
     );
     backendItem.iconPath = new vscode.ThemeIcon('database');
-    backendItem.description = fs.existsSync(backendJsonPath) ? '.testform/backend.json' : 'default';
+    backendItem.description = fs.existsSync(backendJsonPath)
+      ? (backendJsonPath === cacheBackendPath ? '.testform/cache/backend.json' : '.testform/backend.json')
+      : 'default';
     items.push(backendItem);
 
     // 3. Lock File Status

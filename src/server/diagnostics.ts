@@ -153,7 +153,7 @@ export function validateTextDocument(
       });
     }
 
-    const idMatches = [...lineWithoutDepends.matchAll(/@(tc|tr|tp)-([0-9]+)/gi)];
+    const idMatches = [...lineWithoutDepends.matchAll(/@(tc|tr|tp|bg)-([0-9]+)/gi)];
     for (const idMatch of idMatches) {
       const tag = idMatch[0].toLowerCase();
       if (seenTagsInScope.has(tag)) {
@@ -180,6 +180,7 @@ export function validateTextDocument(
   const tcPattern = scanner.config.scopes.testcase || '*.case.feature';
   const trPattern = scanner.config.scopes.testrun || '*.run.feature';
   const tpPattern = scanner.config.scopes.testplan || '*.plan.feature';
+  const bgPattern = scanner.config.scopes.bug || '*.bug.feature';
 
   const matchesPattern = (pathStr: string, pattern: string) => {
     const cleanPattern = pattern.replace(/\*/g, '.*');
@@ -213,16 +214,27 @@ export function validateTextDocument(
         source: 'Testform'
       });
     }
+  } else if (matchesPattern(uri, bgPattern)) {
+    if (!text.includes('@bug')) {
+      diagnostics.push({
+        severity: DiagnosticSeverity.Information,
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: lines[0]?.length || 1 } },
+        message: `Aviso de Resource: El archivo coincide con '${bgPattern}' pero no incluye la etiqueta de recurso '@bug'.`,
+        source: 'Testform'
+      });
+    }
   }
 
-  // 6. Validate DSL Field & Tag Requirements across all resource types (.case., .run., .plan.)
-  let resourceType: 'testcase' | 'testrun' | 'testplan' | 'other' = 'other';
+  // 6. Validate DSL Field & Tag Requirements across all resource types (.case., .run., .plan., .bug.)
+  let resourceType: 'testcase' | 'testrun' | 'testplan' | 'bug' | 'other' = 'other';
   if (matchesPattern(uri, tcPattern) || text.includes('@testcase')) {
     resourceType = 'testcase';
   } else if (matchesPattern(uri, trPattern) || text.includes('@testrun')) {
     resourceType = 'testrun';
   } else if (matchesPattern(uri, tpPattern) || text.includes('@testplan')) {
     resourceType = 'testplan';
+  } else if (matchesPattern(uri, bgPattern) || text.includes('@bug')) {
+    resourceType = 'bug';
   }
 
   // Filter required fields that apply to this resource type
@@ -386,7 +398,7 @@ export function validateTextDocument(
   // Check the last scenario in the file
   if (currentScenarioLine >= 0) {
     checkRequiredFieldsForTarget(currentScenarioLine, currentScenarioFields, currentScenarioTags);
-  } else if (!hasScenarios && (resourceType === 'testplan' || resourceType === 'testrun' || resourceType === 'testcase')) {
+  } else if (!hasScenarios && (resourceType === 'testplan' || resourceType === 'testrun' || resourceType === 'testcase' || resourceType === 'bug')) {
     // If resource file has no explicit Scenario headers (e.g. Testplans with Rules), validate at file/feature level
     const targetLine = featureLineIndex >= 0 ? featureLineIndex : 0;
     checkRequiredFieldsForTarget(targetLine, backgroundFields, featureTags);

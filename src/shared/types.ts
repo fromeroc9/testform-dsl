@@ -24,7 +24,7 @@ export interface DataInfo {
 export interface ScenarioIdentityInfo {
   tag: string;         // e.g. "@tc-1"
   idNumber: number;    // e.g. 1
-  scope: 'testcase' | 'testrun' | 'testplan';
+  scope: 'testcase' | 'testrun' | 'testplan' | 'bug';
   title: string;       // e.g. "Inicio de sesión exitoso con usuario estándar"
   address: string;     // e.g. "auth/login.case.feature.@tc-1"
   sourceFile: string;  // absolute path
@@ -42,11 +42,13 @@ export interface TestformWorkspaceConfig {
     tc: number;
     tr: number;
     tp: number;
+    bg: number;
   };
   scopes: {
     testcase: string;
     testrun: string;
     testplan: string;
+    bug: string;
   };
   targetFormat?: 'short' | 'classic';
 }

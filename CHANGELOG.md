@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-10-30
+
+### Added
+
+#### TestRun Architecture & Direct Canonical Addresses
+- **Dual Support (Direct Addresses & Rule-based Suites)**:
+  - Full support for the evolved testrun format with direct canonical targets (`Scenario: auth/login.case.feature.@tc-01`) or explicit target steps (`* mark target = ...`) without requiring an enclosing `Rule:` block.
+  - Maintained 100% retrocompatibility with legacy `Rule: <path>` + `Scenario: <target>` suites.
+  - Native Test Explorer and gutter play buttons automatically adapt whether scenarios are grouped under Rules or directly under the Feature.
+
+#### Defect & Bug Tracking Resource (`.bug.feature`)
+- **Native Support for Bugs & Defects**:
+  - Full support for `.bug.feature` file extension, `@bug` resource tag, and `@bg-X` identity tags.
+  - Automatic sequential ID suggestion (`@bg-01`, `@bg-02`) and duplicate ID detection diagnostics.
+  - New `tf-bug` scaffolding snippet in empty `.feature` files.
+  - Added `Bugs & Defects` category in State Explorer with `ThemeIcon('bug')`, displaying Target, Status, Custom Fields (`severity`, `priority`), Trace, and Evidence.
+
+#### DSL Mark & Field System
+- **Canonical Execution Marks**:
+  - Added completions, hover documentation, and syntax highlighting for `* mark target = ...`, `* mark trace = ...`, and `* mark evidence = ...`.
+  - Suggests workspace scenario addresses automatically when typing `* mark target = `.
+- **Custom Fields Transparency**:
+  - Clarified across hover tooltips and completions that `severity` and `priority` are user-configurable `custom_fields` stored in `custom_fields.*` in `testform.state`, declared via standard `* field <name> = <val>` steps or plain tags (`@critical`), strictly rejecting non-standard `@severity:...` syntax.
+
+#### Configuration, Cache & Environment
+- **Environment Variable Ingestion**:
+  - LSP workspace scanner automatically ingests `TESTFORM_VAR_*` and `TF_VAR_*` environment variables into `scanner.config.variables`, eliminating false "Undeclared variable" diagnostics.
+- **Cache Path Alignment**:
+  - Backend detector in Modules view now resolves `.testform/cache/backend.json` with fallback to `.testform/backend.json`.
+- **JSON Schema & Syntax Grammar**:
+  - Added `bug` resource definition and allowed `additionalProperties` for custom providers and GitLab configuration in `testform.schema.json`.
+  - Updated TextMate grammar for `@bug`, `@bg-`, and canonical marks.
+
+---
+
 ## [1.0.0] - 2026-10-29
 
 ### Added

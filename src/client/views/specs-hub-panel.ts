@@ -169,15 +169,17 @@ export class SpecsHubPanel {
         const relPath = path.relative(rootPath, uri.fsPath).replace(/\\/g, '/');
         const lowerName = path.basename(uri.fsPath).toLowerCase();
 
-        let scope: 'testcase' | 'testrun' | 'testplan' = 'testcase';
+        let scope: 'testcase' | 'testrun' | 'testplan' | 'bug' = 'testcase';
         if (lowerName.includes('.run.feature')) scope = 'testrun';
         else if (lowerName.includes('.plan.feature')) scope = 'testplan';
+        else if (lowerName.includes('.bug.feature')) scope = 'bug';
 
         for (let i = 0; i < Math.min(lines.length, 15); i++) {
           const l = lines[i].trim();
           if (l.includes('@testrun')) scope = 'testrun';
           else if (l.includes('@testplan')) scope = 'testplan';
           else if (l.includes('@testcase')) scope = 'testcase';
+          else if (l.includes('@bug')) scope = 'bug';
         }
 
         let featureTitle = path.basename(uri.fsPath);
@@ -197,7 +199,7 @@ export class SpecsHubPanel {
           }
         }
 
-        if (scope === 'testcase') {
+        if (scope === 'testcase' || scope === 'bug') {
           const scenarios: TestCaseItem[] = [];
           let pendingTags: string[] = [];
 
@@ -214,7 +216,7 @@ export class SpecsHubPanel {
             const scenMatch = trimmed.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
             if (scenMatch) {
               const scTitle = scenMatch[1].trim();
-              const tag = pendingTags.find(t => /^@tc-[0-9]+/i.test(t));
+              const tag = pendingTags.find(t => /^@(tc|bg)-[0-9]+/i.test(t));
               scenarios.push({
                 tag,
                 title: scTitle,
@@ -259,11 +261,12 @@ export class SpecsHubPanel {
               if (currentRule) {
                 currentRule.scenarios.push(scTitle);
               } else {
-                rules.push({
-                  title: '(Suite Level)',
-                  line: i,
-                  scenarios: [scTitle]
-                });
+                let suiteRule = rules.find(r => r.title === '(Direct Scenarios)');
+                if (!suiteRule) {
+                  suiteRule = { title: '(Direct Scenarios)', line: i, scenarios: [] };
+                  rules.push(suiteRule);
+                }
+                suiteRule.scenarios.push(scTitle);
               }
             }
           }

@@ -16,12 +16,12 @@ export class WorkspaceScanner {
     required?: boolean;
     default?: any;
     enum?: string[];
-    scopes?: Array<'global' | 'testcase' | 'testrun' | 'testplan'>;
+    scopes?: Array<'global' | 'testcase' | 'testrun' | 'testplan' | 'bug'>;
   }> = new Map();
   public featureFiles: Map<string, {
     relPath: string;
     fullPath: string;
-    scope: 'testcase' | 'testrun' | 'testplan';
+    scope: 'testcase' | 'testrun' | 'testplan' | 'bug';
     title: string;
   }> = new Map();
 
@@ -34,11 +34,12 @@ export class WorkspaceScanner {
       scenarios: new Map(),
       scenarioAddresses: new Map(),
       duplicateScenarioTags: new Map(),
-      maxIdentityIds: { tc: 0, tr: 0, tp: 0 },
+      maxIdentityIds: { tc: 0, tr: 0, tp: 0, bg: 0 },
       scopes: {
         testcase: '*.case.feature',
         testrun: '*.run.feature',
-        testplan: '*.plan.feature'
+        testplan: '*.plan.feature',
+        bug: '*.bug.feature'
       },
       targetFormat: 'short'
     };
@@ -51,7 +52,7 @@ export class WorkspaceScanner {
     this.config.scenarios.clear();
     this.config.scenarioAddresses.clear();
     this.config.duplicateScenarioTags.clear();
-    this.config.maxIdentityIds = { tc: 0, tr: 0, tp: 0 };
+    this.config.maxIdentityIds = { tc: 0, tr: 0, tp: 0, bg: 0 };
     this.declaredModules.clear();
     this.featureFiles.clear();
     this.customFields.clear();
@@ -65,10 +66,13 @@ export class WorkspaceScanner {
     // 3. Level 3: Auto-loaded *.vars.yml / *.vars.yaml files (sorted alphabetically)
     this.scanAutoVarFiles();
 
-    // 4. Scan .feature files for Scenarios, IDs and Addresses
+    // 4. Ingest TESTFORM_VAR_* and TF_VAR_* environment variables
+    this.scanEnvironmentVariables();
+
+    // 5. Scan .feature files for Scenarios, IDs and Addresses
     this.scanFeatureFiles();
 
-    // 5. Scan .testform directory (modules, reports, policies)
+    // 6. Scan .testform directory (modules, reports, policies)
     this.scanDotTestform();
   }
 
@@ -90,8 +94,9 @@ export class WorkspaceScanner {
               if (resBlock.testcase?.match) this.config.scopes.testcase = resBlock.testcase.match;
               if (resBlock.testrun?.match) this.config.scopes.testrun = resBlock.testrun.match;
               if (resBlock.testplan?.match) this.config.scopes.testplan = resBlock.testplan.match;
+              if (resBlock.bug?.match) this.config.scopes.bug = resBlock.bug.match;
 
-              const extractFields = (fObj: any, scope: 'global' | 'testcase' | 'testrun' | 'testplan' = 'global') => {
+              const extractFields = (fObj: any, scope: 'global' | 'testcase' | 'testrun' | 'testplan' | 'bug' = 'global') => {
                 if (!fObj) return;
 
                 const registerField = (name: string, source?: string, required?: boolean, defVal?: any, enumArr?: string[]) => {
@@ -146,8 +151,9 @@ export class WorkspaceScanner {
               extractFields(resBlock.testcase?.fields, 'testcase');
               extractFields(resBlock.testrun?.fields, 'testrun');
               extractFields(resBlock.testplan?.fields, 'testplan');
+              extractFields(resBlock.bug?.fields, 'bug');
             } else if (parsed.fields) {
-              const extractFields = (fObj: any, scope: 'global' | 'testcase' | 'testrun' | 'testplan' = 'global') => {
+              const extractFields = (fObj: any, scope: 'global' | 'testcase' | 'testrun' | 'testplan' | 'bug' = 'global') => {
                 if (!fObj || typeof fObj !== 'object') return;
                 for (const [k, v] of Object.entries(fObj)) {
                   if (typeof v === 'object' && v !== null) {
@@ -230,6 +236,7 @@ export class WorkspaceScanner {
                 if (targetRes.testcase?.match) this.config.scopes.testcase = targetRes.testcase.match;
                 if (targetRes.testrun?.match) this.config.scopes.testrun = targetRes.testrun.match;
                 if (targetRes.testplan?.match) this.config.scopes.testplan = targetRes.testplan.match;
+                if (targetRes.bug?.match) this.config.scopes.bug = targetRes.bug.match;
               }
 
               // 4. Data block (data: or naked object in data.yml)
@@ -288,6 +295,28 @@ export class WorkspaceScanner {
     } catch {}
   }
 
+  private scanEnvironmentVariables(): void {
+    for (const [envKey, envVal] of Object.entries(process.env)) {
+      let varName: string | null = null;
+      if (envKey.startsWith('TESTFORM_VAR_')) {
+        varName = envKey.slice('TESTFORM_VAR_'.length);
+      } else if (envKey.startsWith('TF_VAR_')) {
+        varName = envKey.slice('TF_VAR_'.length);
+      }
+      if (varName && envVal !== undefined) {
+        const existing = this.config.variables.get(varName);
+        this.config.variables.set(varName, {
+          name: varName,
+          type: existing?.type || 'string',
+          description: existing?.description || `Environment variable (${envKey})`,
+          defaultValue: envVal,
+          sourceFile: `env:${envKey}`,
+          line: 0
+        });
+      }
+    }
+  }
+
   private scanFeatureFiles(): void {
     const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', '.terraform', 'dist', 'coverage', '.system_generated']);
 
@@ -304,9 +333,10 @@ export class WorkspaceScanner {
             const relPath = path.relative(this.workspaceRoot, fullPath).replace(/\\/g, '/');
             const lowerRel = relPath.toLowerCase();
 
-            let fileScope: 'testcase' | 'testrun' | 'testplan' = 'testcase';
+            let fileScope: 'testcase' | 'testrun' | 'testplan' | 'bug' = 'testcase';
             if (lowerRel.endsWith('.run.feature')) fileScope = 'testrun';
             else if (lowerRel.endsWith('.plan.feature')) fileScope = 'testplan';
+            else if (lowerRel.endsWith('.bug.feature')) fileScope = 'bug';
 
             try {
               const content = fs.readFileSync(fullPath, 'utf8');
@@ -319,6 +349,7 @@ export class WorkspaceScanner {
                 if (line.includes('@testrun')) fileScope = 'testrun';
                 else if (line.includes('@testplan')) fileScope = 'testplan';
                 else if (line.includes('@testcase')) fileScope = 'testcase';
+                else if (line.includes('@bug')) fileScope = 'bug';
 
                 const featMatch = line.match(/^(?:Feature|Característica):\s*(.+)$/i);
                 if (featMatch) {
@@ -337,15 +368,15 @@ export class WorkspaceScanner {
                 const line = lines[i].trim();
                 // Strip comments and @depends_on references so dependencies aren't treated as declared scenario IDs
                 const lineWithoutDepends = line.replace(/#.*$/, '').replace(/@depends_on\s*\([^)]*\)/gi, '');
-                // Match identity tags: @tc-1, @tr-1, @tp-1
-                const idMatch = lineWithoutDepends.match(/@(tc|tr|tp)-([0-9]+)/i);
+                // Match identity tags: @tc-1, @tr-1, @tp-1, @bg-1
+                const idMatch = lineWithoutDepends.match(/@(tc|tr|tp|bg)-([0-9]+)/i);
                 if (idMatch) {
-                  const prefix = idMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp';
+                  const prefix = idMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp' | 'bg';
                   const idNumber = parseInt(idMatch[2], 10);
                   const tag = `@${prefix}-${idNumber}`;
 
                   // Update max ID tracker
-                  if (idNumber > this.config.maxIdentityIds[prefix]) {
+                  if (idNumber > (this.config.maxIdentityIds[prefix] || 0)) {
                     this.config.maxIdentityIds[prefix] = idNumber;
                   }
 
@@ -365,7 +396,7 @@ export class WorkspaceScanner {
                   const info: ScenarioIdentityInfo = {
                     tag,
                     idNumber,
-                    scope: prefix === 'tc' ? 'testcase' : (prefix === 'tr' ? 'testrun' : 'testplan'),
+                    scope: prefix === 'tc' ? 'testcase' : (prefix === 'tr' ? 'testrun' : (prefix === 'tp' ? 'testplan' : 'bug')),
                     title,
                     address: `${relPath}.${tag}`,
                     sourceFile: fullPath,
@@ -376,7 +407,8 @@ export class WorkspaceScanner {
                   const isPrimaryDeclaration =
                     (prefix === 'tc' && relPath.includes('.case.')) ||
                     (prefix === 'tr' && relPath.includes('.run.')) ||
-                    (prefix === 'tp' && relPath.includes('.plan.'));
+                    (prefix === 'tp' && relPath.includes('.plan.')) ||
+                    (prefix === 'bg' && relPath.includes('.bug.'));
 
                   if (isPrimaryDeclaration) {
                     const existing = this.config.scenarios.get(tag);

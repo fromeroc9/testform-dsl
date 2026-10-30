@@ -118,7 +118,7 @@ export function provideDefinition(
   }
 
   // 3. Line context: Rule file reference (e.g. Rule: auth/login.case.feature or Rule: suites/smoke.run.feature)
-  const ruleMatch = lineText.match(/^(?:\s*Rule|\s*Regla):\s*([a-zA-Z0-9_./-]+\.(?:case|run|plan)\.feature)/i);
+  const ruleMatch = lineText.match(/^(?:\s*Rule|\s*Regla):\s*([a-zA-Z0-9_./-]+\.(?:case|run|plan|bug)\.feature)/i);
   if (ruleMatch) {
     const rawPath = ruleMatch[1].trim();
     const feat = scanner.featureFiles.get(rawPath) ||
@@ -131,8 +131,11 @@ export function provideDefinition(
     }
   }
 
-  // 3.1 Line context: Scenario address in Testrun (e.g. Scenario: login.case.feature.@tc-1)
-  const addrMatch = lineText.match(/([a-zA-Z0-9_./-]+\.(?:case|run|plan)\.feature(?:\.@(?:tc|tr|tp)-[0-9]+)?)/i);
+  // 3.1 Line context: Scenario address or target in Testrun / Bug (e.g. Scenario: login.case.feature.@tc-1 or * mark target = login.case.feature.@tc-1)
+  const markTargetMatch = lineText.match(/^\s*\*\s*mark\s+target\s*=\s*(.+)$/i);
+  const targetExpr = markTargetMatch ? markTargetMatch[1].trim().replace(/^["']|["']$/g, '') : null;
+
+  const addrMatch = targetExpr ? [targetExpr, targetExpr] : lineText.match(/([a-zA-Z0-9_./-]+\.(?:case|run|plan|bug)\.feature(?:\.@(?:tc|tr|tp|bg)-[0-9]+)?)/i);
   if (addrMatch) {
     const rawAddr = addrMatch[1];
     const targetScenario = scanner.config.scenarioAddresses.get(rawAddr);
@@ -196,11 +199,20 @@ export function provideDefinition(
           });
         }
       }
+    } else {
+      // Direct scenario target lookup without enclosing Rule
+      const targetScenario = scanner.config.scenarioAddresses.get(rawTarget) || scanner.config.scenarios.get(rawTarget);
+      if (targetScenario) {
+        return Location.create(pathToFileURL(targetScenario.sourceFile).href, {
+          start: { line: targetScenario.line, character: 0 },
+          end: { line: targetScenario.line, character: 100 }
+        });
+      }
     }
   }
 
   // 5. Line context: @tc-X reference in step or tag
-  const tcTagMatch = lineText.match(/@(tc|tr|tp)-([0-9]+)/i);
+  const tcTagMatch = lineText.match(/@(tc|tr|tp|bg)-([0-9]+)/i);
   if (tcTagMatch) {
     const tag = `@${tcTagMatch[1].toLowerCase()}-${tcTagMatch[2]}`;
 

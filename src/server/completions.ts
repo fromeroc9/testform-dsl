@@ -41,7 +41,7 @@ export const BUILTIN_FUNCTIONS = [
   { name: 'file', desc: 'Reads the contents of a local file as a string.', snippet: 'file("${1:path/to/file}")' }
 ];
 
-function getNextIdForDocument(docText: string, prefix: 'tc' | 'tr' | 'tp', fallbackMax: number): string {
+function getNextIdForDocument(docText: string, prefix: 'tc' | 'tr' | 'tp' | 'bg', fallbackMax: number): string {
   const regex = new RegExp(`@${prefix}-([0-9]+)\\b`, 'gi');
   let maxNum = 0;
   let padLength = 0;
@@ -59,6 +59,9 @@ function getNextIdForDocument(docText: string, prefix: 'tc' | 'tr' | 'tp', fallb
   if (maxNum === 0) {
     if (prefix === 'tc') {
       return 'tc-01';
+    }
+    if (prefix === 'bg') {
+      return 'bg-01';
     }
     return `${prefix}-${fallbackMax + 1}`;
   }
@@ -109,6 +112,16 @@ export function provideCompletions(
         },
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: '@testplan @${1:tp-1}\nFeature: ${2:Master Test Plan}\n\n  Rule: ${3:path/to.run.feature}\n'
+      },
+      {
+        label: 'tf-bug',
+        kind: CompletionItemKind.Snippet,
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: '### 🐛 Starter Defect / Bug Feature\n\nCreate a new declarative bug report targeting an existing testcase scenario.'
+        },
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: '@bug @${1:bg-01}\nFeature: ${2:Bug Title}\n\n  Scenario: ${3:Defect Description}\n    * mark target = ${4:path/to.case.feature.@tc-01}\n    * mark status = ${5|failed,passed,pending|}\n    * field severity = ${6|critical,high,medium,low|}\n    * field priority = ${7|urgent,high,normal,low|}\n'
       }
     ];
   }
@@ -348,15 +361,38 @@ export function provideCompletions(
     }
   }
 
-  // 5. DSL Mark Status Step completion
+  // 5. DSL Mark Step completions (* mark ...)
   if (/^\s*\*\s*(m|ma|mar|mark)?\s*$/i.test(lineText)) {
-    items.push({
-      label: 'mark status = ...',
-      kind: CompletionItemKind.Snippet,
-      detail: 'Testform DSL: Asignar resultado de ejecución',
-      insertTextFormat: InsertTextFormat.Snippet,
-      insertText: 'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
-    });
+    items.push(
+      {
+        label: 'mark status = ...',
+        kind: CompletionItemKind.Snippet,
+        detail: 'Testform DSL: Asignar resultado de ejecución',
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: 'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+      },
+      {
+        label: 'mark target = ...',
+        kind: CompletionItemKind.Snippet,
+        detail: 'Testform DSL: Asignar target canónico de caso de prueba',
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: 'mark target = ${1:path/to.case.feature.@tc-01}'
+      },
+      {
+        label: 'mark trace = ...',
+        kind: CompletionItemKind.Snippet,
+        detail: 'Testform DSL: Registrar traza o detalle del fallo',
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: 'mark trace = "${1:trace description or error stack}"'
+      },
+      {
+        label: 'mark evidence = ...',
+        kind: CompletionItemKind.Snippet,
+        detail: 'Testform DSL: Adjuntar evidencia (captura, archivo, URL)',
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: 'mark evidence = "${1:evidence.png or url}"'
+      }
+    );
     return items;
   }
 
@@ -370,20 +406,38 @@ export function provideCompletions(
     }));
   }
 
+  if (/mark\s+target\s*=\s*.*$/i.test(lineText)) {
+    for (const [address, info] of scanner.config.scenarioAddresses.entries()) {
+      items.push({
+        label: address,
+        kind: CompletionItemKind.Reference,
+        detail: `${info.tag}: ${info.title}`,
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: `### 🎯 Canonical Target\n\n**Tag:** \`${info.tag}\`\n\n**Title:** ${info.title}\n\n*File:* \`${info.sourceFile}\``
+        },
+        insertText: address
+      });
+    }
+    return items;
+  }
+
   // 5.1 Suggest field names when typing "field" or "field <name>"
   const fieldNameMatch = lineText.match(/(?:^|\s+)field(?:\s+([a-zA-Z0-9_.-]*))?$/i);
   if (fieldNameMatch) {
     const docUri = document.uri.toLowerCase();
     const docContent = document.getText();
-    let currentResourceType: 'testcase' | 'testrun' | 'testplan' | 'other' = 'other';
+    let currentResourceType: 'testcase' | 'testrun' | 'testplan' | 'bug' | 'other' = 'other';
     const tcPat = scanner.config.scopes.testcase || '*.case.feature';
     const trPat = scanner.config.scopes.testrun || '*.run.feature';
     const tpPat = scanner.config.scopes.testplan || '*.plan.feature';
+    const bgPat = scanner.config.scopes.bug || '*.bug.feature';
 
     const matchesPat = (p: string, pat: string) => new RegExp(pat.replace(/\*/g, '.*') + '$', 'i').test(p);
     if (matchesPat(docUri, tcPat) || docContent.includes('@testcase')) currentResourceType = 'testcase';
     else if (matchesPat(docUri, trPat) || docContent.includes('@testrun')) currentResourceType = 'testrun';
     else if (matchesPat(docUri, tpPat) || docContent.includes('@testplan')) currentResourceType = 'testplan';
+    else if (matchesPat(docUri, bgPat) || docContent.includes('@bug')) currentResourceType = 'bug';
 
     // 1. Defined fields in main.yml / workspace filtered by resource scope
     for (const [name, info] of scanner.customFields.entries()) {
@@ -568,7 +622,7 @@ export function provideCompletions(
   if (/@depends_on\([^)]*["'][^"']*$/.test(lineText)) {
     // 7.1 Internal tags in the current document
     const docText = document.getText();
-    const internalTags = [...docText.matchAll(/@(tc|tr|tp)-[0-9]+/gi)].map(m => m[0].toLowerCase());
+    const internalTags = [...docText.matchAll(/@(tc|tr|tp|bg)-[0-9]+/gi)].map(m => m[0].toLowerCase());
     const uniqueInternal = [...new Set(internalTags)];
     for (const tag of uniqueInternal) {
       items.push({
@@ -597,10 +651,10 @@ export function provideCompletions(
     return items;
   }
 
-  // 8. Identity Tag next-ID completion (@tc-, @tr-, @tp-)
-  const tcPrefixMatch = lineText.match(/@(tc|tr|tp)-?([0-9]*)$/i);
+  // 8. Identity Tag next-ID completion (@tc-, @tr-, @tp-, @bg-)
+  const tcPrefixMatch = lineText.match(/@(tc|tr|tp|bg)-?([0-9]*)$/i);
   if (tcPrefixMatch) {
-    const prefix = tcPrefixMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp';
+    const prefix = tcPrefixMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp' | 'bg';
     const nextTag = getNextIdForDocument(document.getText(), prefix, scanner.config.maxIdentityIds[prefix]);
 
     items.push({
@@ -666,7 +720,7 @@ export function provideCompletions(
       }
     }
 
-    // Resources: All three use the exact same Class icon (standard Resource representation)
+    // Resources: All use the exact same Class icon (standard Resource representation)
     items.push(
       {
         label: 'testcase',
@@ -685,6 +739,12 @@ export function provideCompletions(
         kind: CompletionItemKind.Class,
         detail: 'resource',
         insertText: 'testplan'
+      },
+      {
+        label: 'bug',
+        kind: CompletionItemKind.Class,
+        detail: 'resource',
+        insertText: 'bug'
       },
       {
         label: 'depends_on',
@@ -725,11 +785,13 @@ export function provideCompletions(
     }
 
     // Next ID computed for THIS document
-    let activePrefix: 'tc' | 'tr' | 'tp' = 'tc';
+    let activePrefix: 'tc' | 'tr' | 'tp' | 'bg' = 'tc';
     if (docUri.includes('.run.') || docText.includes('@testrun')) {
       activePrefix = 'tr';
     } else if (docUri.includes('.plan.') || docText.includes('@testplan')) {
       activePrefix = 'tp';
+    } else if (docUri.includes('.bug.') || docText.includes('@bug')) {
+      activePrefix = 'bg';
     }
 
     const nextIdTag = getNextIdForDocument(docText, activePrefix, scanner.config.maxIdentityIds[activePrefix]);
