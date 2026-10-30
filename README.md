@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=fromeroc9.testform"><img src="https://img.shields.io/visual-studio-marketplace/v/fromeroc9.testform?color=blue&label=VS%20Marketplace" alt="Visual Studio Marketplace Version" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.1.0-blue.svg" alt="Extension Version v1.1.0" /></a>
   <a href="https://github.com/fromeroc9/testform-vscode/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-green.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://fromeroc9.github.io/testform-docs/"><img src="https://img.shields.io/badge/docs-testform-blue" alt="Documentation" /></a>
 </p>
@@ -22,6 +23,25 @@
 The **Testform** extension transforms Visual Studio Code into a full-featured Integrated Development Environment (IDE) for **Test-as-Code**. 
 
 Whether you are writing declarative test cases, orchestrating test runs, managing enterprise test plans, or executing speculative plans against your test management provider (GitHub, Jira, Zephyr, Xray, or local offline storage), Testform for VS Code delivers real-time language intelligence, instant execution feedback, and deep lifecycle tooling.
+
+---
+
+## 🚀 What's New in v1.1.0
+
+The **v1.1.0** release introduces major improvements to test execution accuracy, state reconciliation, autocompletion scoping, and UI ergonomics:
+
+- **🎯 Canonical TestRun State Reconciliation (`scenarioPlayTarget`)**:
+  - Gutter play buttons on scenarios inside TestRun suites (`*.run.feature`) now execute directly against the parent TestRun suite identity (`testcycle/run.feature.@tr-X`). This ensures execution results and status updates are persisted into `testform.state`.
+  - Configurable via `testform.testController.scenarioPlayTarget` (`"testrun"` by default, or `"testcase"`).
+- **🔒 Execution Mutex Guard**: Prevents terminal command collisions and accidental double-clicks during test execution.
+- **🔍 Rule-Scoped Scenario Autocompletions**: When authoring TestRuns, scenario targets are strictly filtered to the test cases declared in the referenced `Rule:` feature file.
+- **🏷️ Flexible Target Formatting (`testform.testrun.targetFormat`)**: Autocomplete targets using short identity tags (`@tc-1`) or classic addresses (`path.@tc-1`).
+- **📊 State Explorer Relational Inspection**: Drill down into executed test cases inside each TestRun (`Executed Cases (<count>)`), and review TestRuns associated with TestPlans.
+- **🎨 Visual & Gutter Polish**:
+  - Removed redundant text status brackets (`[PASSED]`, `[PENDING]`, `[FAILED]`) in favor of intuitive native VS Code status icons and theme colors.
+  - Restricted gutter play buttons strictly to `Scenario:` header lines, avoiding duplicate play icons on metadata rows.
+  - Eliminated duplicate `"Testform: Testform: ..."` prefixes in the Command Palette.
+  - Dynamically isolated starter snippets so they only suggest on empty files.
 
 ---
 
@@ -151,8 +171,21 @@ Customize extension behavior in your `settings.json`:
   // Enable real-time syntax, variable resolution, and dependency diagnostics
   "testform.diagnostics.enable": true,
 
-  // Enable native VS Code Test Controller integration (Test Explorer & gutter play buttons)
+  // Automatically insert a leading space when completing field values immediately following '='
+  "testform.editor.autoSpaceAfterEquals": true,
+
+  // Enable native VS Code Test Controller integration (Test Explorer tree & gutter run icons)
   "testform.testController.enable": true,
+
+  // Target address passed to 'testform apply' when executing a scenario play action
+  // "testrun" targets the parent TestRun suite (e.g. testcycle/run.feature.@tr-1) to reconcile state
+  // "testcase" targets the specific referenced TestCase address directly
+  "testform.testController.scenarioPlayTarget": "testrun",
+
+  // Target insertion format for scenario targets inside TestRun rules
+  // "short" inserts '@tc-01'
+  // "classic" inserts 'Magento/cart.case.feature.@tc-01'
+  "testform.testrun.targetFormat": "short",
 
   // Trace communication between VS Code and the Testform Language Server
   "testform.trace.server": "off" // "off" | "messages" | "verbose"
@@ -220,7 +253,7 @@ Customize extension behavior in your `settings.json`:
 - **From Visual Studio Code Marketplace:** Search for `Testform` by `fromeroc9` and click **Install**.
 - **Manual VSIX Installation:**
   ```bash
-  code --install-extension testform-0.1.0.vsix
+  code --install-extension testform-dsl-1.1.0.vsix
   ```
 
 ---
@@ -244,6 +277,15 @@ npm run build
 # 5. Package as VSIX
 npm run package
 ```
+
+---
+
+## 📋 Release Notes & Changelog
+
+For a complete and detailed log of changes across versions, see [CHANGELOG.md](CHANGELOG.md):
+
+- **[v1.1.0 (Latest)](CHANGELOG.md#110---2026-10-29)**: TestRun state reconciliation, rule-scoped autocompletion, configurable target formats, relational state explorer, and UI polish.
+- **[v1.0.0](CHANGELOG.md#100---2026-10-28)**: Initial production release: Full-Screen Specs Hub, bilingual Gherkin LSP, native Test Explorer, state management, and YAML manifest autoload.
 
 ---
 
