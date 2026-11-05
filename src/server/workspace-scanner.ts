@@ -41,7 +41,7 @@ export class WorkspaceScanner {
         testplan: '*.plan.feature',
         bug: '*.bug.feature'
       },
-      targetFormat: 'short'
+      targetFormat: 'tag'
     };
   }
 

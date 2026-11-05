@@ -50,7 +50,7 @@ export interface TestformWorkspaceConfig {
     testplan: string;
     bug: string;
   };
-  targetFormat?: 'short' | 'classic';
+  targetFormat?: 'tag' | 'tag-bare' | 'canonical' | 'file-tag' | 'slug-tag' | 'name' | 'short' | 'classic';
 }
 
 export interface TestformStateResource {

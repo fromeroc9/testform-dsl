@@ -126,6 +126,9 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
         if (element.label.startsWith('Installed Modules')) {
           return this.getInstalledModules(rootPath);
         }
+        if (element.label.startsWith('Providers')) {
+          return this.getProviders(rootPath);
+        }
         if (element.label.startsWith('Runtime Environment')) {
           return this.getEnvironmentItems(rootPath);
         }
@@ -140,6 +143,7 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
     // Root categories
     const declaredCount = this.countDeclaredModules(rootPath);
     const installedCount = this.countInstalledModules(rootPath);
+    const providersCount = this.getProviders(rootPath).length;
     const policiesCount = this.countPolicies(rootPath);
 
     const categories: ModuleTreeItem[] = [
@@ -154,21 +158,27 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
         'category'
       ),
       new ModuleTreeItem(
+        `Providers (${providersCount})`,
+        vscode.TreeItemCollapsibleState.Collapsed,
+        'category'
+      ),
+      new ModuleTreeItem(
         'Runtime Environment (.testform)',
         vscode.TreeItemCollapsibleState.Expanded,
         'category'
       ),
       new ModuleTreeItem(
         `Policies & Governance (${policiesCount})`,
-        policiesCount > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+        vscode.TreeItemCollapsibleState.Expanded,
         'category'
       )
     ];
 
     categories[0].iconPath = new vscode.ThemeIcon('package');
     categories[1].iconPath = new vscode.ThemeIcon('cloud-download');
-    categories[2].iconPath = new vscode.ThemeIcon('server-process');
-    categories[3].iconPath = new vscode.ThemeIcon('shield');
+    categories[2].iconPath = new vscode.ThemeIcon('plug');
+    categories[3].iconPath = new vscode.ThemeIcon('server-process');
+    categories[4].iconPath = new vscode.ThemeIcon('shield');
 
     return categories;
   }
@@ -369,11 +379,75 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
     return items;
   }
 
-  private countPolicies(rootPath: string): number {
-    return this.getPolicies(rootPath).filter(i => i.kind === 'policy').length;
+  private getProviders(rootPath: string): ModuleTreeItem[] {
+    const items: ModuleTreeItem[] = [];
+    const candidates = ['main.yml', 'main.yaml', 'testform.yml', 'testform.yaml'];
+
+    for (const f of candidates) {
+      const full = path.join(rootPath, f);
+      if (fs.existsSync(full)) {
+        try {
+          const doc = YAML.parse(fs.readFileSync(full, 'utf8'));
+          if (doc?.provider && typeof doc.provider === 'object') {
+            for (const [pName, pConfig] of Object.entries(doc.provider)) {
+              const cfgKeys = pConfig && typeof pConfig === 'object' ? Object.keys(pConfig) : [];
+              const pItem = new ModuleTreeItem(
+                `provider "${pName}"`,
+                vscode.TreeItemCollapsibleState.None,
+                'property',
+                full
+              );
+              pItem.iconPath = new vscode.ThemeIcon('plug');
+              pItem.description = cfgKeys.length > 0 ? cfgKeys.join(', ') : '(active)';
+              pItem.tooltip = `Provider: ${pName}\nConfiguration file: ${f}\nParameters: ${cfgKeys.join(', ') || 'default'}`;
+              items.push(pItem);
+            }
+          }
+        } catch {}
+        break;
+      }
+    }
+
+    if (items.length === 0) {
+      const defItem = new ModuleTreeItem('provider "local"', vscode.TreeItemCollapsibleState.None, 'property');
+      defItem.iconPath = new vscode.ThemeIcon('plug');
+      defItem.description = '(default offline)';
+      items.push(defItem);
+    }
+
+    return items;
   }
 
-  private getPolicies(rootPath: string): ModuleTreeItem[] {
+  private getDisabledPolicies(rootPath: string): Set<string> {
+    const disabled = new Set<string>();
+    const candidates = ['main.yml', 'main.yaml', 'testform.yml', 'testform.yaml'];
+
+    for (const f of candidates) {
+      const p = path.join(rootPath, f);
+      if (fs.existsSync(p)) {
+        try {
+          const doc = YAML.parse(fs.readFileSync(p, 'utf8'));
+          if (doc?.policy) {
+            if (Array.isArray(doc.policy.disabled)) {
+              doc.policy.disabled.forEach((d: string) => disabled.add(String(d)));
+            }
+            for (const [k, v] of Object.entries(doc.policy)) {
+              if (v === false) disabled.add(k);
+            }
+          }
+        } catch {}
+        break;
+      }
+    }
+
+    return disabled;
+  }
+
+  private countPolicies(rootPath: string): number {
+    return 7 + this.getCustomPolicies(rootPath).length;
+  }
+
+  private getCustomPolicies(rootPath: string): ModuleTreeItem[] {
     const items: ModuleTreeItem[] = [];
     const searchDirs = [
       path.join(rootPath, '.testform', 'policies'),
@@ -385,10 +459,11 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
         try {
           const files = fs.readdirSync(dir);
           for (const f of files) {
-            if (f.endsWith('.rego') || f.endsWith('.rego.yml') || f.endsWith('.yaml')) {
+            if (f.endsWith('.rego') || f.endsWith('.rego.yml') || f.endsWith('.yaml') || f.endsWith('.ts') || f.endsWith('.js')) {
               const full = path.join(dir, f);
               const pItem = new ModuleTreeItem(f, vscode.TreeItemCollapsibleState.None, 'policy', full);
               pItem.description = path.relative(rootPath, full).replace(/\\/g, '/');
+              pItem.iconPath = new vscode.ThemeIcon('shield');
               items.push(pItem);
             }
           }
@@ -396,10 +471,63 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
       }
     }
 
-    if (items.length === 0) {
-      items.push(new ModuleTreeItem('No custom policies in .testform/policies/', vscode.TreeItemCollapsibleState.None, 'info'));
+    return items;
+  }
+
+  private getPolicies(rootPath: string): ModuleTreeItem[] {
+    const disabledSet = this.getDisabledPolicies(rootPath);
+
+    const systemPoliciesDef = [
+      { id: 'required-fields', desc: 'Ensures required fields defined in configuration are present', scopes: 'testcase, testrun, testplan' },
+      { id: 'required-gherkin', desc: 'Validates required Gherkin structure and keywords Given/When/Then', scopes: 'testcase' },
+      { id: 'no-feature-tags', desc: 'Restricts non-standard tags at the Feature level', scopes: 'testcase, testrun, testplan' },
+      { id: 'identity-required', desc: 'Enforces identity tags (@tc-X, @tr-X, @tp-X)', scopes: 'testcase, testrun, testplan' },
+      { id: 'identity-unique', desc: 'Verifies identity tag uniqueness within scope', scopes: 'testcase, testrun, testplan' },
+      { id: 'duplicate-testruns-in-testplan', desc: 'Prevents duplicate testruns inside the same or across testplans', scopes: 'testplan' },
+      { id: 'undeclared-fields', desc: 'Warns about scenario fields not declared in configuration', scopes: 'testcase' }
+    ];
+
+    const systemItems: ModuleTreeItem[] = systemPoliciesDef.map(p => {
+      const isEnabled = !disabledSet.has(p.id);
+      const item = new ModuleTreeItem(
+        p.id,
+        vscode.TreeItemCollapsibleState.None,
+        'policy'
+      );
+      item.description = isEnabled ? `[Active] (${p.scopes})` : '[Disabled]';
+      item.tooltip = `System Policy: ${p.id}\n${p.desc}\nScopes: ${p.scopes}\nStatus: ${isEnabled ? 'Active' : 'Disabled in configuration'}`;
+      if (isEnabled) {
+        item.iconPath = new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'));
+      } else {
+        item.iconPath = new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('testing.iconSkipped'));
+      }
+      return item;
+    });
+
+    const systemCategory = new ModuleTreeItem(
+      `System Policies (${systemItems.length})`,
+      vscode.TreeItemCollapsibleState.Expanded,
+      'category'
+    );
+    systemCategory.iconPath = new vscode.ThemeIcon('shield');
+    systemCategory.children = systemItems;
+
+    const customItems = this.getCustomPolicies(rootPath);
+    const customCategory = new ModuleTreeItem(
+      `Custom Policies (${customItems.length})`,
+      customItems.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+      'category'
+    );
+    customCategory.iconPath = new vscode.ThemeIcon('shield');
+
+    if (customItems.length === 0) {
+      customCategory.children = [
+        new ModuleTreeItem('No custom policies in .testform/policies/', vscode.TreeItemCollapsibleState.None, 'info')
+      ];
+    } else {
+      customCategory.children = customItems;
     }
 
-    return items;
+    return [systemCategory, customCategory];
   }
 }

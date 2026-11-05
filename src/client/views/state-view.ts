@@ -2,7 +2,20 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-export type StateNodeKind = 'category' | 'resource' | 'cases_group' | 'executed_case' | 'runs_group' | 'associated_run' | 'attribute' | 'output' | 'info';
+export type StateNodeKind =
+  | 'category'
+  | 'resource'
+  | 'cases_group'
+  | 'executed_case'
+  | 'runs_group'
+  | 'associated_run'
+  | 'attribute'
+  | 'output'
+  | 'file'
+  | 'rule'
+  | 'scenario'
+  | 'bug'
+  | 'info';
 
 export class StateTreeItem extends vscode.TreeItem {
   constructor(
@@ -13,7 +26,9 @@ export class StateTreeItem extends vscode.TreeItem {
     public readonly details?: string,
     public readonly childrenNodes?: StateTreeItem[],
     public readonly rawResource?: any,
-    public readonly isTainted: boolean = false
+    public readonly isTainted: boolean = false,
+    public readonly fsPath?: string,
+    public readonly line?: number
   ) {
     super(label, collapsibleState);
 
@@ -21,50 +36,79 @@ export class StateTreeItem extends vscode.TreeItem {
       this.description = details;
     }
 
-    if (kind === 'category') {
-      this.contextValue = 'testformCategory';
-    } else if (kind === 'resource') {
-      this.contextValue = isTainted ? 'testformResourceTainted' : 'testformResource';
-      this.tooltip = `Address: ${address}\n${details || ''}`;
-      if (address) {
-        this.command = {
-          command: 'testform.state.inspectResource',
-          title: 'Inspect Resource in Editor',
-          arguments: [this]
-        };
-      }
-    } else if (kind === 'cases_group') {
-      this.contextValue = 'testformCasesGroup';
-      this.iconPath = new vscode.ThemeIcon('checklist');
-    } else if (kind === 'runs_group') {
-      this.contextValue = 'testformRunsGroup';
-      this.iconPath = new vscode.ThemeIcon('layers');
-    } else if (kind === 'executed_case') {
-      this.contextValue = 'testformExecutedCase';
-      if (address) {
-        this.command = {
-          command: 'testform.state.inspectResource',
-          title: 'Inspect Resource in Editor',
-          arguments: [this]
-        };
-      }
-    } else if (kind === 'associated_run') {
-      this.contextValue = 'testformAssociatedRun';
-      if (address) {
-        this.command = {
-          command: 'testform.state.inspectResource',
-          title: 'Inspect Resource in Editor',
-          arguments: [this]
-        };
-      }
-    } else if (kind === 'output') {
-      this.contextValue = 'testformOutput';
-      this.iconPath = new vscode.ThemeIcon('symbol-variable');
-    } else if (kind === 'attribute') {
-      this.contextValue = 'testformAttribute';
-      this.iconPath = new vscode.ThemeIcon('tag');
-    } else {
-      this.iconPath = new vscode.ThemeIcon('info');
+    if (fsPath && line !== undefined) {
+      this.command = {
+        command: 'vscode.open',
+        title: 'Open Specification',
+        arguments: [
+          vscode.Uri.file(fsPath),
+          { selection: new vscode.Range(line, 0, line, 0) }
+        ]
+      };
+    } else if (fsPath) {
+      this.command = {
+        command: 'vscode.open',
+        title: 'Open File',
+        arguments: [vscode.Uri.file(fsPath)]
+      };
+    } else if (address) {
+      this.command = {
+        command: 'testform.state.inspectResource',
+        title: 'Inspect Resource in Editor',
+        arguments: [this]
+      };
+    }
+
+    switch (kind) {
+      case 'category':
+        this.contextValue = 'testformCategory';
+        break;
+      case 'resource':
+        this.contextValue = isTainted ? 'testformResourceTainted' : 'testformResource';
+        this.tooltip = `Address: ${address}\n${details || ''}`;
+        break;
+      case 'cases_group':
+        this.contextValue = 'testformCasesGroup';
+        this.iconPath = new vscode.ThemeIcon('checklist');
+        break;
+      case 'runs_group':
+        this.contextValue = 'testformRunsGroup';
+        this.iconPath = new vscode.ThemeIcon('layers');
+        break;
+      case 'executed_case':
+        this.contextValue = 'testformExecutedCase';
+        break;
+      case 'associated_run':
+        this.contextValue = 'testformAssociatedRun';
+        break;
+      case 'output':
+        this.contextValue = 'testformOutput';
+        this.iconPath = new vscode.ThemeIcon('symbol-variable');
+        break;
+      case 'attribute':
+        this.contextValue = 'testformAttribute';
+        this.iconPath = new vscode.ThemeIcon('tag');
+        break;
+      case 'file':
+        this.contextValue = 'testformFeatureFile';
+        this.iconPath = new vscode.ThemeIcon('file-code');
+        this.tooltip = fsPath;
+        break;
+      case 'rule':
+        this.contextValue = 'testformFeatureRule';
+        this.iconPath = new vscode.ThemeIcon('symbol-namespace');
+        break;
+      case 'scenario':
+        this.contextValue = 'testformFeatureScenario';
+        this.iconPath = new vscode.ThemeIcon('symbol-method');
+        break;
+      case 'bug':
+        this.contextValue = 'testformFeatureBug';
+        this.iconPath = new vscode.ThemeIcon('bug', new vscode.ThemeColor('charts.red'));
+        break;
+      default:
+        this.iconPath = new vscode.ThemeIcon('info');
+        break;
     }
   }
 }
@@ -75,6 +119,30 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
   readonly onDidChangeTreeData: vscode.Event<StateTreeItem | undefined | null | void> =
     this._onDidChangeTreeData.event;
 
+  private mode: 'state' | 'files' = 'state';
+  private stateMeta: { version: number; serial: number } | null = null;
+
+  public getStateMeta(): { version: number; serial: number } | null {
+    return this.stateMeta;
+  }
+
+  public getMode(): 'state' | 'files' {
+    return this.mode;
+  }
+
+  public setMode(mode: 'state' | 'files'): void {
+    if (this.mode !== mode) {
+      this.mode = mode;
+      this.refresh();
+    }
+  }
+
+  public toggleMode(): 'state' | 'files' {
+    this.mode = this.mode === 'state' ? 'files' : 'state';
+    this.refresh();
+    return this.mode;
+  }
+
   refresh(): void {
     this._onDidChangeTreeData.fire();
   }
@@ -83,14 +151,23 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
     return element;
   }
 
-  getChildren(element?: StateTreeItem): Thenable<StateTreeItem[]> {
+  async getChildren(element?: StateTreeItem): Promise<StateTreeItem[]> {
     if (element) {
-      return Promise.resolve(element.childrenNodes || []);
+      return element.childrenNodes || [];
     }
 
+    if (this.mode === 'files') {
+      return this.getFilesChildren();
+    }
+
+    return this.getStateChildren();
+  }
+
+  // ─── STATE MODE: testform.state ──────────────────────────────────────────
+  private async getStateChildren(): Promise<StateTreeItem[]> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
-      return Promise.resolve([new StateTreeItem('No workspace open', vscode.TreeItemCollapsibleState.None, 'info')]);
+      return [new StateTreeItem('No workspace open', vscode.TreeItemCollapsibleState.None, 'info')];
     }
 
     const rootPath = workspaceFolders[0].uri.fsPath;
@@ -99,7 +176,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
     if (!fs.existsSync(statePath)) {
       const item = new StateTreeItem('No state file (run testform apply)', vscode.TreeItemCollapsibleState.None, 'info');
       item.iconPath = new vscode.ThemeIcon('info');
-      return Promise.resolve([item]);
+      return [item];
     }
 
     try {
@@ -109,12 +186,11 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
       const outputs: Record<string, any> = parsed.outputs || {};
 
       if (resources.length === 0 && Object.keys(outputs).length === 0) {
-        return Promise.resolve([
+        return [
           new StateTreeItem('Empty state (0 managed resources)', vscode.TreeItemCollapsibleState.None, 'info')
-        ]);
+        ];
       }
 
-      // Build lookup maps for resolving real names in runs and plans
       const caseTitleMap = new Map<string, string>();
       const runLookupMap = new Map<string, { title: string; issueNumber?: number; status?: string }>();
 
@@ -127,7 +203,6 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           caseTitleMap.set(id, title);
           const cleanNoScope = id.replace(/^(?:testcase\/|tests\/)/i, '');
           caseTitleMap.set(cleanNoScope, title);
-
           const tagMatch = id.match(/@(tc|tr|tp)-[0-9]+/i);
           if (tagMatch) {
             caseTitleMap.set(tagMatch[0].toLowerCase(), title);
@@ -158,7 +233,6 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
       const bugs: StateTreeItem[] = [];
       const outputItems: StateTreeItem[] = [];
 
-      // 1. Process resources
       for (const r of resources) {
         const type: string = r.type || '';
         const identity: string = (r.identity || '').replace(/\\/g, '/');
@@ -167,10 +241,9 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         const remoteRef = attrs.remoteId || (attrs.issueNumber ? `#${attrs.issueNumber}` : '');
         const isTainted = !!r.tainted;
 
-        // Build detail child attributes
         const childNodes: StateTreeItem[] = [];
 
-        // 1.1 In Testrun: Group executed testcases into a dedicated collapsible sub-tree
+        // Group executed testcases inside testrun
         const rawCases = attrs.testcases || attrs.testcaseStatuses;
         if (rawCases) {
           const executedCaseNodes: StateTreeItem[] = [];
@@ -185,7 +258,6 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
             const tagMatch = shortAddr.match(/@(tc|tr|tp)-[0-9]+/i);
             const tag = tagMatch ? tagMatch[0] : '';
 
-            // Resolve real scenario name
             const scenarioName =
               caseTitleMap.get(normAddr) ||
               caseTitleMap.get(normAddr.replace(/^(?:testcase\/|tests\/)/i, '')) ||
@@ -193,12 +265,36 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
               shortAddr;
 
             const st = String(stVal || 'pending').toLowerCase();
+            const caseChildNodes: StateTreeItem[] = [];
+            caseChildNodes.push(new StateTreeItem(`Status: ${st}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
+            caseChildNodes.push(new StateTreeItem(`Address: ${shortAddr}`, vscode.TreeItemCollapsibleState.None, 'attribute', shortAddr));
+
+            const matchedTc = resources.find(r => {
+              const rIdent = (r.identity || '').replace(/\\/g, '/').toLowerCase();
+              if (rIdent === normAddr) return true;
+              if (tag && rIdent.includes(tag.toLowerCase())) return true;
+              return false;
+            });
+
+            if (matchedTc && matchedTc.attributes) {
+              const customFields = matchedTc.attributes.custom_fields || matchedTc.attributes.fields;
+              if (customFields && typeof customFields === 'object') {
+                for (const [cfKey, cfVal] of Object.entries(customFields)) {
+                  caseChildNodes.push(new StateTreeItem(`${cfKey}: ${cfVal}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
+                }
+              }
+              if (matchedTc.attributes.labels && Array.isArray(matchedTc.attributes.labels)) {
+                caseChildNodes.push(new StateTreeItem(`Labels: ${matchedTc.attributes.labels.join(', ')}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
+              }
+            }
+
             const caseItem = new StateTreeItem(
               scenarioName,
-              vscode.TreeItemCollapsibleState.None,
+              caseChildNodes.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
               'executed_case',
               shortAddr,
-              tag || undefined
+              tag || undefined,
+              caseChildNodes
             );
 
             caseItem.tooltip = `Scenario: ${scenarioName}\nAddress: ${shortAddr}\nStatus: ${st}`;
@@ -234,7 +330,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           }
         }
 
-        // 1.2 In Testplan: Group associated testruns into a dedicated collapsible sub-tree
+        // Group associated testruns inside testplan
         const rawRuns = attrs.testruns;
         if (rawRuns) {
           const runNodes: StateTreeItem[] = [];
@@ -288,7 +384,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           }
         }
 
-        childNodes.push(new StateTreeItem(`Identity: ${identity}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
+        childNodes.push(new StateTreeItem(`Identity: ${identity}`, vscode.TreeItemCollapsibleState.None, 'attribute', identity));
         if (remoteRef) {
           childNodes.push(new StateTreeItem(`Remote: ${remoteRef}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
         }
@@ -349,7 +445,6 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         }
       }
 
-      // 2. Process outputs
       for (const [key, out] of Object.entries(outputs)) {
         const valStr = typeof out.value === 'object' ? JSON.stringify(out.value) : String(out.value);
         const desc = out.description ? ` - ${out.description}` : '';
@@ -363,8 +458,8 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         outputItems.push(outItem);
       }
 
-      // Build category roots
       const categories: StateTreeItem[] = [];
+      this.stateMeta = { version: parsed.version || 1, serial: parsed.serial ?? 1 };
 
       if (testruns.length > 0) {
         const cat = new StateTreeItem(`Test Runs (${testruns.length})`, vscode.TreeItemCollapsibleState.Expanded, 'category', undefined, undefined, testruns);
@@ -396,11 +491,544 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         categories.push(cat);
       }
 
-      return Promise.resolve(categories);
+      return categories;
     } catch (err: any) {
       const item = new StateTreeItem(`Error reading state: ${err.message}`, vscode.TreeItemCollapsibleState.None, 'info');
       item.iconPath = new vscode.ThemeIcon('error');
-      return Promise.resolve([item]);
+      return [item];
     }
+  }
+
+  // ─── FILES MODE: Workspace .feature files ────────────────────────────────
+  private async getFilesChildren(): Promise<StateTreeItem[]> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      return [new StateTreeItem('No workspace open', vscode.TreeItemCollapsibleState.None, 'info')];
+    }
+
+    const rootPath = workspaceFolders[0].uri.fsPath;
+    const uris = await vscode.workspace.findFiles('**/*.feature', '{**/node_modules/**,**/.git/**}');
+
+    if (uris.length === 0) {
+      return [new StateTreeItem('No .feature files found', vscode.TreeItemCollapsibleState.None, 'info')];
+    }
+
+    const testcaseFiles: StateTreeItem[] = [];
+    const testrunFiles: StateTreeItem[] = [];
+    const testplanFiles: StateTreeItem[] = [];
+    const bugFiles: StateTreeItem[] = [];
+    let totalScenarios = 0;
+
+    const stateResourceMap = new Map<string, any>();
+    const statePathCandidates = [
+      path.join(rootPath, 'testform.state'),
+      path.join(rootPath, '.testform', 'testform.state')
+    ];
+    for (const sp of statePathCandidates) {
+      if (fs.existsSync(sp)) {
+        try {
+          const raw = fs.readFileSync(sp, 'utf8');
+          const parsed = JSON.parse(raw);
+          const resources = parsed.resources || [];
+          for (const r of resources) {
+            const ident = (r.identity || '').replace(/\\/g, '/');
+            stateResourceMap.set(ident.toLowerCase(), r);
+            const baseIdent = ident.split('/').pop() || ident;
+            stateResourceMap.set(baseIdent.toLowerCase(), r);
+            const tagMatch = ident.match(/@(tc|tr|tp|bg)-[0-9]+/i);
+            if (tagMatch) {
+              stateResourceMap.set(tagMatch[0].toLowerCase(), r);
+            }
+          }
+          break;
+        } catch {}
+      }
+    }
+
+    const extractScenarioFields = (linesArr: string[], startLine: number) => {
+      const fields: Record<string, string> = {};
+      let markStatus: string | undefined;
+      let markTarget: string | undefined;
+      let markTrace: string | undefined;
+      let markEvidence: string | undefined;
+
+      for (let k = startLine + 1; k < linesArr.length; k++) {
+        const stepLine = linesArr[k].trim();
+        if (!stepLine || stepLine.startsWith('#')) continue;
+        if (/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario|Rule|Regla|Feature|Característica):/i.test(stepLine)) {
+          break;
+        }
+        const markMatch = stepLine.match(/^(?:\*\s*)?mark\s+([a-zA-Z0-9_-]+)\s*=\s*(.*)$/i);
+        if (markMatch) {
+          const mKey = markMatch[1].toLowerCase();
+          const mVal = markMatch[2].trim().replace(/^["']|["']$/g, '');
+          if (mKey === 'status') markStatus = mVal;
+          else if (mKey === 'target') markTarget = mVal;
+          else if (mKey === 'trace') markTrace = mVal;
+          else if (mKey === 'evidence') markEvidence = mVal;
+          else fields[mKey] = mVal;
+          continue;
+        }
+        const fieldMatch = stepLine.match(/^(?:\*\s*)?field\s+([a-zA-Z0-9_-]+)\s*=\s*(.*)$/i);
+        if (fieldMatch) {
+          const fKey = fieldMatch[1].trim();
+          const fVal = fieldMatch[2].trim().replace(/^["']|["']$/g, '');
+          fields[fKey] = fVal;
+          continue;
+        }
+      }
+
+      return { fields, markStatus, markTarget, markTrace, markEvidence };
+    };
+
+    const extractPrecedingTags = (linesArr: string[], scenarioLine: number) => {
+      let tag: string | undefined;
+      const tagFields: Record<string, string> = {};
+      const labels: string[] = [];
+
+      for (let j = scenarioLine - 1; j >= 0; j--) {
+        const prev = linesArr[j].trim();
+        if (!prev.startsWith('@')) break;
+        const tokens = prev.split(/\s+/).filter(t => t.startsWith('@'));
+        for (const tok of tokens) {
+          const tagMatch = tok.match(/^@(tc|tr|tp|bg)-\w+/i);
+          if (tagMatch && !tag) {
+            tag = tagMatch[0];
+          } else if (tok.toLowerCase() !== '@testcase' && tok.toLowerCase() !== '@testrun' && tok.toLowerCase() !== '@testplan' && tok.toLowerCase() !== '@bug') {
+            const eqIdx = tok.indexOf('=');
+            if (eqIdx > 1) {
+              const k = tok.slice(1, eqIdx);
+              const v = tok.slice(eqIdx + 1);
+              tagFields[k] = v;
+            } else {
+              labels.push(tok);
+            }
+          }
+        }
+      }
+
+      return { tag, tagFields, labels };
+    };
+
+    for (const uri of uris) {
+      const fsPath = uri.fsPath;
+      const relPath = path.relative(rootPath, fsPath).replace(/\\/g, '/');
+      const lower = relPath.toLowerCase();
+
+      try {
+        const content = fs.readFileSync(fsPath, 'utf8');
+        const lines = content.split(/\r?\n/);
+
+        let scope: 'testcase' | 'testrun' | 'testplan' | 'bug' = 'testcase';
+        if (lower.includes('.run.feature') || lower.includes('/testrun/')) {
+          scope = 'testrun';
+        } else if (lower.includes('.plan.feature') || lower.includes('/testplan/')) {
+          scope = 'testplan';
+        } else if (lower.includes('.bug.feature') || lower.includes('/bugs/') || lower.includes('/defects/')) {
+          scope = 'bug';
+        } else {
+          for (let i = 0; i < Math.min(lines.length, 15); i++) {
+            const line = lines[i].trim().toLowerCase();
+            if (line.includes('@testrun')) {
+              scope = 'testrun';
+              break;
+            }
+            if (line.includes('@testplan')) {
+              scope = 'testplan';
+              break;
+            }
+            if (line.includes('@bug')) {
+              scope = 'bug';
+              break;
+            }
+          }
+        }
+
+        let featureTitle = path.basename(fsPath, '.feature');
+        let featureLine = 0;
+
+        for (let i = 0; i < Math.min(lines.length, 30); i++) {
+          const match = lines[i].match(/^(?:Feature|Característica):\s*(.+)$/i);
+          if (match) {
+            featureTitle = match[1].trim();
+            featureLine = i;
+            break;
+          }
+        }
+
+        if (scope === 'testcase') {
+          const scenarioItems: StateTreeItem[] = [];
+          for (let i = 0; i < lines.length; i++) {
+            const trimmed = lines[i].trim();
+            if (trimmed.startsWith('#')) continue;
+
+            const scMatch = trimmed.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
+            if (scMatch) {
+              const scTitle = scMatch[1].trim();
+              const { tag, tagFields, labels } = extractPrecedingTags(lines, i);
+              const { fields, markStatus, markTarget, markTrace, markEvidence } = extractScenarioFields(lines, i);
+
+              const mergedFields = { ...tagFields, ...fields };
+              const scAddress = tag ? `${relPath}.${tag}` : relPath;
+              const normScAddress = scAddress.toLowerCase();
+              const stateRes = stateResourceMap.get(normScAddress) || (tag ? stateResourceMap.get(tag.toLowerCase()) : undefined);
+
+              if (stateRes?.attributes) {
+                const sf = stateRes.attributes.custom_fields || stateRes.attributes.fields;
+                if (sf && typeof sf === 'object') {
+                  for (const [k, v] of Object.entries(sf)) {
+                    if (mergedFields[k] === undefined && v !== undefined && v !== null) {
+                      mergedFields[k] = String(v);
+                    }
+                  }
+                }
+              }
+
+              const childNodes: StateTreeItem[] = [];
+              childNodes.push(new StateTreeItem(`Identity: ${scAddress}`, vscode.TreeItemCollapsibleState.None, 'attribute', scAddress));
+
+              if (stateRes) {
+                const remoteRef = stateRes.attributes?.remoteId || (stateRes.attributes?.issueNumber ? `#${stateRes.attributes?.issueNumber}` : '');
+                if (remoteRef) {
+                  childNodes.push(new StateTreeItem(`Remote: ${remoteRef}`, vscode.TreeItemCollapsibleState.None, 'attribute', remoteRef));
+                }
+              }
+
+              const targetVal = markTarget || stateRes?.attributes?.target;
+              if (targetVal) {
+                childNodes.push(new StateTreeItem(`Target: ${targetVal}`, vscode.TreeItemCollapsibleState.None, 'attribute', targetVal));
+              }
+
+              const statusVal = markStatus || stateRes?.attributes?.status;
+              if (statusVal) {
+                childNodes.push(new StateTreeItem(`Status: ${statusVal}`, vscode.TreeItemCollapsibleState.None, 'attribute', statusVal));
+              }
+
+              for (const [k, v] of Object.entries(mergedFields)) {
+                childNodes.push(new StateTreeItem(`${k}: ${v}`, vscode.TreeItemCollapsibleState.None, 'attribute', v));
+              }
+
+              const traceVal = markTrace || stateRes?.attributes?.trace;
+              if (traceVal) {
+                childNodes.push(new StateTreeItem(`Trace: ${traceVal}`, vscode.TreeItemCollapsibleState.None, 'attribute', traceVal));
+              }
+
+              const evidenceVal = markEvidence || stateRes?.attributes?.evidence;
+              if (evidenceVal) {
+                childNodes.push(new StateTreeItem(`Evidence: ${evidenceVal}`, vscode.TreeItemCollapsibleState.None, 'attribute', evidenceVal));
+              }
+
+              if (labels.length > 0) {
+                childNodes.push(new StateTreeItem(`Labels: ${labels.join(', ')}`, vscode.TreeItemCollapsibleState.None, 'attribute', labels.join(', ')));
+              }
+
+              const scItem = new StateTreeItem(
+                scTitle,
+                childNodes.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
+                'scenario',
+                scAddress,
+                tag || (statusVal ? `(${statusVal})` : undefined),
+                childNodes,
+                stateRes,
+                false,
+                fsPath,
+                i
+              );
+
+              if (statusVal === 'passed') {
+                scItem.iconPath = new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'));
+              } else if (statusVal === 'failed') {
+                scItem.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed'));
+              } else if (statusVal === 'pending') {
+                scItem.iconPath = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('testing.iconQueued'));
+              } else if (statusVal === 'blocked') {
+                scItem.iconPath = new vscode.ThemeIcon('stop', new vscode.ThemeColor('testing.iconErrored'));
+              } else {
+                scItem.iconPath = new vscode.ThemeIcon('beaker', new vscode.ThemeColor('charts.purple'));
+              }
+
+              scenarioItems.push(scItem);
+              totalScenarios++;
+            }
+          }
+
+          const fileItem = new StateTreeItem(
+            path.basename(fsPath),
+            vscode.TreeItemCollapsibleState.Collapsed,
+            'file',
+            undefined,
+            `${scenarioItems.length} scenario${scenarioItems.length !== 1 ? 's' : ''}`,
+            scenarioItems,
+            undefined,
+            false,
+            fsPath,
+            featureLine
+          );
+          fileItem.tooltip = `${relPath}\n${featureTitle}`;
+          testcaseFiles.push(fileItem);
+        } else if (scope === 'testrun') {
+          const ruleItems: StateTreeItem[] = [];
+          let currentRule: { title: string; line: number; scenarios: StateTreeItem[] } | null = null;
+
+          for (let i = 0; i < lines.length; i++) {
+            const trimmed = lines[i].trim();
+            if (trimmed.startsWith('#')) continue;
+
+            const ruleMatch = trimmed.match(/^(?:Rule|Regla):\s*(.+)$/i);
+            if (ruleMatch) {
+              const ruleScenarios: StateTreeItem[] = [];
+              currentRule = { title: ruleMatch[1].trim(), line: i, scenarios: ruleScenarios };
+              const rItem = new StateTreeItem(
+                currentRule.title,
+                vscode.TreeItemCollapsibleState.Expanded,
+                'rule',
+                undefined,
+                undefined,
+                ruleScenarios,
+                undefined,
+                false,
+                fsPath,
+                i
+              );
+              ruleItems.push(rItem);
+              continue;
+            }
+
+            const scMatch = trimmed.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
+            if (scMatch) {
+              const scTitle = scMatch[1].trim();
+              const scAddress = currentRule ? `${currentRule.title}.${scTitle}` : `${relPath}.${scTitle}`;
+              const { fields, markStatus, markTarget, markTrace, markEvidence } = extractScenarioFields(lines, i);
+
+              const childNodes: StateTreeItem[] = [];
+              childNodes.push(new StateTreeItem(`Identity: ${scAddress}`, vscode.TreeItemCollapsibleState.None, 'attribute', scAddress));
+
+              if (markTarget) {
+                childNodes.push(new StateTreeItem(`Target: ${markTarget}`, vscode.TreeItemCollapsibleState.None, 'attribute', markTarget));
+              }
+              if (markStatus) {
+                childNodes.push(new StateTreeItem(`Status: ${markStatus}`, vscode.TreeItemCollapsibleState.None, 'attribute', markStatus));
+              }
+              for (const [k, v] of Object.entries(fields)) {
+                childNodes.push(new StateTreeItem(`${k}: ${v}`, vscode.TreeItemCollapsibleState.None, 'attribute', v));
+              }
+              if (markTrace) {
+                childNodes.push(new StateTreeItem(`Trace: ${markTrace}`, vscode.TreeItemCollapsibleState.None, 'attribute', markTrace));
+              }
+              if (markEvidence) {
+                childNodes.push(new StateTreeItem(`Evidence: ${markEvidence}`, vscode.TreeItemCollapsibleState.None, 'attribute', markEvidence));
+              }
+
+              const scItem = new StateTreeItem(
+                scTitle,
+                childNodes.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
+                'scenario',
+                scAddress,
+                markStatus ? `(${markStatus})` : undefined,
+                childNodes,
+                undefined,
+                false,
+                fsPath,
+                i
+              );
+
+              if (markStatus === 'passed') {
+                scItem.iconPath = new vscode.ThemeIcon('pass', new vscode.ThemeColor('testing.iconPassed'));
+              } else if (markStatus === 'failed') {
+                scItem.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('testing.iconFailed'));
+              } else {
+                scItem.iconPath = new vscode.ThemeIcon('play-circle', new vscode.ThemeColor('charts.green'));
+              }
+
+              if (currentRule) {
+                currentRule.scenarios.push(scItem);
+              } else {
+                ruleItems.push(scItem);
+              }
+            }
+          }
+
+          const fileItem = new StateTreeItem(
+            path.basename(fsPath),
+            vscode.TreeItemCollapsibleState.Collapsed,
+            'file',
+            undefined,
+            featureTitle,
+            ruleItems,
+            undefined,
+            false,
+            fsPath,
+            featureLine
+          );
+          fileItem.iconPath = new vscode.ThemeIcon('play-circle', new vscode.ThemeColor('charts.green'));
+          testrunFiles.push(fileItem);
+        } else if (scope === 'testplan') {
+          const ruleItems: StateTreeItem[] = [];
+          for (let i = 0; i < lines.length; i++) {
+            const trimmed = lines[i].trim();
+            if (trimmed.startsWith('#')) continue;
+
+            const ruleMatch = trimmed.match(/^(?:Rule|Regla):\s*(.+)$/i);
+            if (ruleMatch) {
+              const rTitle = ruleMatch[1].trim();
+              ruleItems.push(new StateTreeItem(
+                rTitle,
+                vscode.TreeItemCollapsibleState.None,
+                'rule',
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                false,
+                fsPath,
+                i
+              ));
+            }
+          }
+
+          const fileItem = new StateTreeItem(
+            path.basename(fsPath),
+            vscode.TreeItemCollapsibleState.Collapsed,
+            'file',
+            undefined,
+            featureTitle,
+            ruleItems,
+            undefined,
+            false,
+            fsPath,
+            featureLine
+          );
+          fileItem.iconPath = new vscode.ThemeIcon('notebook', new vscode.ThemeColor('charts.blue'));
+          testplanFiles.push(fileItem);
+        } else if (scope === 'bug') {
+          const bugItems: StateTreeItem[] = [];
+          for (let i = 0; i < lines.length; i++) {
+            const trimmed = lines[i].trim();
+            if (trimmed.startsWith('#')) continue;
+
+            const scMatch = trimmed.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
+            if (scMatch) {
+              const scTitle = scMatch[1].trim();
+              const { tag, tagFields, labels } = extractPrecedingTags(lines, i);
+              const { fields, markStatus, markTarget, markTrace, markEvidence } = extractScenarioFields(lines, i);
+              const mergedFields = { ...tagFields, ...fields };
+              const scAddress = tag ? `${relPath}.${tag}` : relPath;
+
+              const childNodes: StateTreeItem[] = [];
+              childNodes.push(new StateTreeItem(`Identity: ${scAddress}`, vscode.TreeItemCollapsibleState.None, 'attribute', scAddress));
+
+              if (markTarget) {
+                childNodes.push(new StateTreeItem(`Target: ${markTarget}`, vscode.TreeItemCollapsibleState.None, 'attribute', markTarget));
+              }
+              if (markStatus) {
+                childNodes.push(new StateTreeItem(`Status: ${markStatus}`, vscode.TreeItemCollapsibleState.None, 'attribute', markStatus));
+              }
+              for (const [k, v] of Object.entries(mergedFields)) {
+                childNodes.push(new StateTreeItem(`${k}: ${v}`, vscode.TreeItemCollapsibleState.None, 'attribute', v));
+              }
+              if (markTrace) {
+                childNodes.push(new StateTreeItem(`Trace: ${markTrace}`, vscode.TreeItemCollapsibleState.None, 'attribute', markTrace));
+              }
+              if (markEvidence) {
+                childNodes.push(new StateTreeItem(`Evidence: ${markEvidence}`, vscode.TreeItemCollapsibleState.None, 'attribute', markEvidence));
+              }
+              if (labels.length > 0) {
+                childNodes.push(new StateTreeItem(`Labels: ${labels.join(', ')}`, vscode.TreeItemCollapsibleState.None, 'attribute', labels.join(', ')));
+              }
+
+              const bugItem = new StateTreeItem(
+                scTitle,
+                childNodes.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
+                'bug',
+                scAddress,
+                tag,
+                childNodes,
+                undefined,
+                false,
+                fsPath,
+                i
+              );
+              bugItems.push(bugItem);
+            }
+          }
+
+          const fileItem = new StateTreeItem(
+            path.basename(fsPath),
+            vscode.TreeItemCollapsibleState.Collapsed,
+            'file',
+            undefined,
+            featureTitle,
+            bugItems,
+            undefined,
+            false,
+            fsPath,
+            featureLine
+          );
+          fileItem.iconPath = new vscode.ThemeIcon('bug', new vscode.ThemeColor('charts.red'));
+          bugFiles.push(fileItem);
+        }
+      } catch {}
+    }
+
+    testcaseFiles.sort((a, b) => a.label.localeCompare(b.label));
+    testrunFiles.sort((a, b) => a.label.localeCompare(b.label));
+    testplanFiles.sort((a, b) => a.label.localeCompare(b.label));
+    bugFiles.sort((a, b) => a.label.localeCompare(b.label));
+
+    const categories: StateTreeItem[] = [];
+
+    if (testcaseFiles.length > 0) {
+      const cat = new StateTreeItem(
+        `Test Cases (${testcaseFiles.length} files, ${totalScenarios} scenarios)`,
+        vscode.TreeItemCollapsibleState.Expanded,
+        'category',
+        undefined,
+        undefined,
+        testcaseFiles
+      );
+      cat.iconPath = new vscode.ThemeIcon('beaker');
+      categories.push(cat);
+    }
+
+    if (testrunFiles.length > 0) {
+      const cat = new StateTreeItem(
+        `Test Runs (${testrunFiles.length})`,
+        vscode.TreeItemCollapsibleState.Expanded,
+        'category',
+        undefined,
+        undefined,
+        testrunFiles
+      );
+      cat.iconPath = new vscode.ThemeIcon('play-circle');
+      categories.push(cat);
+    }
+
+    if (testplanFiles.length > 0) {
+      const cat = new StateTreeItem(
+        `Test Plans (${testplanFiles.length})`,
+        vscode.TreeItemCollapsibleState.Collapsed,
+        'category',
+        undefined,
+        undefined,
+        testplanFiles
+      );
+      cat.iconPath = new vscode.ThemeIcon('notebook');
+      categories.push(cat);
+    }
+
+    if (bugFiles.length > 0) {
+      const cat = new StateTreeItem(
+        `Bugs (${bugFiles.length})`,
+        vscode.TreeItemCollapsibleState.Collapsed,
+        'category',
+        undefined,
+        undefined,
+        bugFiles
+      );
+      cat.iconPath = new vscode.ThemeIcon('bug');
+      categories.push(cat);
+    }
+
+    return categories;
   }
 }

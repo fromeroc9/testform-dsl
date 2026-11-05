@@ -13,44 +13,56 @@ const CORE_REPORTS: ReportMeta[] = [
   {
     slug: 'testcase-summary',
     label: 'Test Case Summary',
-    description: 'Execution statuses, metrics, and pass rate',
+    description: 'Execution overview and pass/fail metrics of testcases',
     icon: 'checklist'
   },
   {
     slug: 'testrun-summary',
     label: 'Test Run Summary',
-    description: 'Overview of execution cycles and active runs',
+    description: 'Test runs and their pass/fail metrics',
     icon: 'play-circle'
   },
   {
     slug: 'testrun-detailed',
     label: 'Detailed Test Runs',
-    description: 'Case-by-case breakdown with priorities',
+    description: 'In-depth view of testcases and priorities per testrun',
     icon: 'list-ordered'
   },
   {
     slug: 'testplan-summary',
     label: 'Test Plan Summary',
-    description: 'Progress and linked test runs across test plans',
+    description: 'Overall Test Plan progress and linked test runs',
     icon: 'notebook'
+  },
+  {
+    slug: 'defects',
+    label: 'Defect Backlog',
+    description: 'List of failed/blocked tests with issue tracking links',
+    icon: 'bug'
+  },
+  {
+    slug: 'traceability',
+    label: 'Traceability Matrix',
+    description: 'Mapping between requirements/tags and test runs',
+    icon: 'table'
   },
   {
     slug: 'coverage',
     label: 'Coverage Matrix',
-    description: 'Traceability across tags, components, and scopes',
+    description: 'Percentage of passed tests grouped by tags',
     icon: 'pie-chart'
   },
   {
-    slug: 'matrix',
-    label: 'Traceability Matrix',
-    description: 'Cross-matrix mapping requirements to test cases',
-    icon: 'table'
+    slug: 'two-dimensional',
+    label: 'Two-Dimensional Matrix',
+    description: 'Tag distribution across execution statuses',
+    icon: 'graph'
   },
   {
-    slug: 'audit',
-    label: 'Quality & Governance Audit',
-    description: 'Policy compliance and QA gate validation',
-    icon: 'shield'
+    slug: 'test-case-activity',
+    label: 'Automation & Activity',
+    description: 'Automation rate and recent testcase modifications',
+    icon: 'history'
   }
 ];
 

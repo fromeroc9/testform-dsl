@@ -83,14 +83,40 @@ connection.onInitialize((params: InitializeParams) => {
   return result;
 });
 
-connection.onInitialized(() => {
+async function updateConfiguration(): Promise<void> {
+  if (hasConfigurationCapability) {
+    try {
+      const config = await connection.workspace.getConfiguration({ section: 'testform' });
+      if (config && workspaceScanner) {
+        if (config.testrun && config.testrun.targetFormat) {
+          workspaceScanner.config.targetFormat = config.testrun.targetFormat;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+}
+
+connection.onInitialized(async () => {
   if (hasConfigurationCapability) {
     connection.client.register(DidChangeConfigurationNotification.type, undefined);
+    await updateConfiguration();
   }
 
   // Initial scan
   if (workspaceScanner) {
     workspaceScanner.scanAll();
+  }
+});
+
+connection.onDidChangeConfiguration(async () => {
+  await updateConfiguration();
+});
+
+connection.onNotification('testform/updateConfig', (params: { targetFormat?: any }) => {
+  if (workspaceScanner && params?.targetFormat) {
+    workspaceScanner.config.targetFormat = params.targetFormat;
   }
 });
 

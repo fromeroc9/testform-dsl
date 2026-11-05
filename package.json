@@ -158,17 +158,17 @@
       "testform-sidebar": [
         {
           "id": "testform.views.state",
-          "name": "State Explorer",
-          "icon": "$(database)"
+          "name": "Explorer",
+          "icon": "$(layers)"
         },
         {
           "id": "testform.views.modules",
-          "name": "Modules & .testform",
+          "name": "Modules",
           "icon": "$(package)"
         },
         {
           "id": "testform.views.reports",
-          "name": "Reports & Analytics",
+          "name": "Reports",
           "icon": "$(graph)"
         }
       ]
@@ -236,9 +236,21 @@
       },
       {
         "command": "testform.state.refresh",
-        "title": "Refresh State Explorer",
+        "title": "Refresh State",
         "category": "Testform",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "testform.explorer.switchToFiles",
+        "title": "Switch to Files (Source Code)",
+        "category": "Testform",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "testform.explorer.switchToState",
+        "title": "Switch to State (testform.state)",
+        "category": "Testform",
+        "icon": "$(database)"
       },
       {
         "command": "testform.modules.update",
@@ -250,6 +262,12 @@
         "command": "testform.format",
         "title": "Format Document",
         "category": "Testform"
+      },
+      {
+        "command": "testform.state.copyAddress",
+        "title": "Copy Canonical Address",
+        "category": "Testform",
+        "icon": "$(copy)"
       },
       {
         "command": "testform.state.inspectResource",
@@ -301,7 +319,7 @@
       },
       {
         "command": "testform.modules.refresh",
-        "title": "Refresh Modules & .testform",
+        "title": "Refresh Modules",
         "category": "Testform",
         "icon": "$(refresh)"
       },
@@ -326,14 +344,24 @@
           "group": "navigation@0"
         },
         {
-          "command": "testform.state.refresh",
-          "when": "view == testform.views.state",
+          "command": "testform.explorer.switchToFiles",
+          "when": "view == testform.views.state && testform.explorerMode != 'files'",
           "group": "navigation@1"
         },
         {
-          "command": "testform.state.forceUnlock",
+          "command": "testform.explorer.switchToState",
+          "when": "view == testform.views.state && testform.explorerMode == 'files'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "testform.state.refresh",
           "when": "view == testform.views.state",
           "group": "navigation@2"
+        },
+        {
+          "command": "testform.state.forceUnlock",
+          "when": "view == testform.views.state && testform.explorerMode != 'files'",
+          "group": "navigation@3"
         },
         {
           "command": "testform.report",
@@ -365,9 +393,19 @@
       ],
       "view/item/context": [
         {
+          "command": "testform.state.copyAddress",
+          "when": "view == testform.views.state && (viewItem == testformResource || viewItem == testformResourceTainted || viewItem == testformExecutedCase || viewItem == testformAssociatedRun || viewItem == testformFeatureScenario || viewItem == testformAttribute)",
+          "group": "inline@0"
+        },
+        {
           "command": "testform.state.inspectResource",
           "when": "view == testform.views.state && (viewItem == testformResource || viewItem == testformResourceTainted)",
-          "group": "inline"
+          "group": "inline@1"
+        },
+        {
+          "command": "testform.state.copyAddress",
+          "when": "view == testform.views.state && (viewItem == testformResource || viewItem == testformResourceTainted || viewItem == testformExecutedCase || viewItem == testformAssociatedRun || viewItem == testformFeatureScenario || viewItem == testformAttribute)",
+          "group": "testformState@0"
         },
         {
           "command": "testform.state.taint",
@@ -478,15 +516,27 @@
         "testform.testrun.targetFormat": {
           "type": "string",
           "enum": [
+            "tag",
+            "tag-bare",
+            "canonical",
+            "file-tag",
+            "slug-tag",
+            "name",
             "short",
             "classic"
           ],
           "enumDescriptions": [
-            "Short identity tag (@tc-01)",
-            "Classic canonical address (e.g. Magento/cart.case.feature.@tc-01)"
+            "Tag de identidad con arroba (@tc-01)",
+            "Tag de identidad sin arroba (tc-01)",
+            "Dirección canónica completa con ruta (tests/features/ParaBank/bill_pay.case.feature.@tc-01)",
+            "Nombre base del archivo de especificación + tag (bill_pay.case.feature.@tc-01)",
+            "Slug sin extensión + tag (bill_pay.@tc-01)",
+            "Nombre o título del escenario (e.g. Validar pago exitoso)",
+            "Alias corto de tag (@tc-01)",
+            "Alias clásico de dirección canónica"
           ],
-          "default": "short",
-          "description": "Target insertion format for scenario targets inside Testrun rules."
+          "default": "tag",
+          "description": "Formato de inserción para los escenarios objetivo dentro de las reglas de un Testrun."
         },
         "testform.trace.server": {
           "type": "string",
@@ -506,7 +556,8 @@
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
     "typecheck": "tsc --noEmit",
-    "package": "vsce package"
+    "package": "vsce package",
+    "update:ide": "powershell -ExecutionPolicy Bypass -File ./update-antigravity.ps1"
   },
   "devDependencies": {
     "@types/node": "^20.17.19",

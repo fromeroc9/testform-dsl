@@ -53,6 +53,7 @@ export function activate(context: vscode.ExtensionContext) {
       { scheme: 'file', pattern: '**/*.feature' }
     ],
     synchronize: {
+      configurationSection: 'testform',
       fileEvents: [
         vscode.workspace.createFileSystemWatcher('**/*.feature'),
         vscode.workspace.createFileSystemWatcher('**/*.yml'),
@@ -69,7 +70,23 @@ export function activate(context: vscode.ExtensionContext) {
     clientOptions
   );
 
-  client.start();
+  client.start().then(() => {
+    // Send initial configuration to server once started
+    const config = vscode.workspace.getConfiguration('testform');
+    const targetFormat = config.get<string>('testrun.targetFormat', 'tag');
+    client.sendNotification('testform/updateConfig', { targetFormat });
+  });
+
+  // Watch for configuration changes and notify the language server
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('testform')) {
+        const config = vscode.workspace.getConfiguration('testform');
+        const targetFormat = config.get<string>('testrun.targetFormat', 'tag');
+        client.sendNotification('testform/updateConfig', { targetFormat });
+      }
+    })
+  );
 
   // 2. Status Bar Item & Project Detection
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -105,14 +122,50 @@ export function activate(context: vscode.ExtensionContext) {
 
   // 3. Tree Views
   const stateProvider = new StateTreeProvider();
-  vscode.window.registerTreeDataProvider('testform.views.state', stateProvider);
+  const explorerView = vscode.window.createTreeView('testform.views.state', {
+    treeDataProvider: stateProvider,
+    showCollapseAll: true
+  });
+  context.subscriptions.push(explorerView);
+
+  const updateExplorerContext = () => {
+    const currentMode = stateProvider.getMode();
+    vscode.commands.executeCommand('setContext', 'testform.explorerMode', currentMode);
+    if (currentMode === 'state') {
+      const meta = stateProvider.getStateMeta();
+      explorerView.description = meta ? `State (serial ${meta.serial})` : 'State';
+    } else {
+      explorerView.description = 'Files';
+    }
+  };
+  updateExplorerContext();
+  stateProvider.onDidChangeTreeData(() => updateExplorerContext());
+
   // Auto-refresh state view on state file updates (native OS file system watcher)
   const stateWatcher = vscode.workspace.createFileSystemWatcher('**/testform.state');
-  stateWatcher.onDidChange(() => stateProvider.refresh());
-  stateWatcher.onDidCreate(() => stateProvider.refresh());
-  stateWatcher.onDidDelete(() => stateProvider.refresh());
+  stateWatcher.onDidChange(() => {
+    if (stateProvider.getMode() === 'state') stateProvider.refresh();
+  });
+  stateWatcher.onDidCreate(() => {
+    if (stateProvider.getMode() === 'state') stateProvider.refresh();
+  });
+  stateWatcher.onDidDelete(() => {
+    if (stateProvider.getMode() === 'state') stateProvider.refresh();
+  });
   context.subscriptions.push(stateWatcher);
 
+  // Auto-refresh when .feature files change (for files mode)
+  const featureWatcher = vscode.workspace.createFileSystemWatcher('**/*.feature');
+  featureWatcher.onDidChange(() => {
+    if (stateProvider.getMode() === 'files') stateProvider.refresh();
+  });
+  featureWatcher.onDidCreate(() => {
+    if (stateProvider.getMode() === 'files') stateProvider.refresh();
+  });
+  featureWatcher.onDidDelete(() => {
+    if (stateProvider.getMode() === 'files') stateProvider.refresh();
+  });
+  context.subscriptions.push(featureWatcher);
 
   const modulesProvider = new ModulesTreeProvider();
   vscode.window.registerTreeDataProvider('testform.views.modules', modulesProvider);
@@ -324,6 +377,34 @@ export function activate(context: vscode.ExtensionContext) {
         runTestformCommand(`state show "${address}"`);
       }
     }),
+    vscode.commands.registerCommand('testform.state.copyAddress', async (item?: any) => {
+      let address = '';
+      if (typeof item === 'string') {
+        address = item;
+      } else if (item?.address) {
+        address = item.address;
+      } else if (item?.rawResource?.identity) {
+        address = item.rawResource.identity;
+      } else if (typeof item?.label === 'string') {
+        if (item.label.startsWith('Identity: ')) {
+          address = item.label.replace('Identity: ', '').trim();
+        } else if (item.label.startsWith('Target: ')) {
+          address = item.label.replace('Target: ', '').trim();
+        } else {
+          address = item.label;
+        }
+      } else if (typeof item?.label?.label === 'string') {
+        address = item.label.label;
+      }
+
+      if (!address) {
+        vscode.window.showErrorMessage('No canonical address available to copy.');
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(address);
+      vscode.window.showInformationMessage(`Copied canonical address: ${address}`);
+    }),
     vscode.commands.registerCommand('testform.state.taint', async (item?: any) => {
       const address = typeof item === 'string'
         ? item
@@ -405,8 +486,23 @@ export function activate(context: vscode.ExtensionContext) {
       runTestformCommand('init');
       modulesProvider.refresh();
     }),
-    vscode.commands.registerCommand('testform.specs.openHub', () => {
-      SpecsHubPanel.createOrShow(context.extensionUri);
+    vscode.commands.registerCommand('testform.specs.openHub', (modeArg?: string) => {
+      const activeMode = (typeof modeArg === 'string' && (modeArg === 'state' || modeArg === 'files'))
+        ? modeArg
+        : stateProvider.getMode();
+      SpecsHubPanel.createOrShow(context.extensionUri, activeMode);
+    }),
+    vscode.commands.registerCommand('testform.explorer.switchToFiles', () => {
+      stateProvider.setMode('files');
+      updateExplorerContext();
+    }),
+    vscode.commands.registerCommand('testform.explorer.switchToState', () => {
+      stateProvider.setMode('state');
+      updateExplorerContext();
+    }),
+    vscode.commands.registerCommand('testform.explorer.toggleMode', () => {
+      stateProvider.toggleMode();
+      updateExplorerContext();
     }),
     vscode.commands.registerCommand('testform.modules.refresh', () => {
       modulesProvider.refresh();
@@ -445,7 +541,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('testform.report.trigger', async (reportSlug: string) => {
       const format = await vscode.window.showQuickPick(
         [
-          { label: 'markdown', description: 'Markdown format (.md)' },
+          { label: 'md', description: 'Markdown format (.md)' },
           { label: 'docx', description: 'Microsoft Word report (.docx)' },
           { label: 'xlsx', description: 'Microsoft Excel spreadsheet (.xlsx)' },
           { label: 'json', description: 'JSON raw report data (.json)' },
@@ -454,9 +550,34 @@ export function activate(context: vscode.ExtensionContext) {
         { placeHolder: `Select export format for report "${reportSlug}"` }
       );
 
-      if (format) {
-        runTestformCommand(`report ${reportSlug} -format=${format.label}`);
+      if (!format) return;
+
+      const fieldsChoice = await vscode.window.showQuickPick(
+        [
+          { label: '$(table) Default Columns', description: 'Standard native report columns', value: 'default' },
+          { label: '$(add) All Custom Fields', description: 'Include all custom fields dynamically (--fields=all)', value: 'all' },
+          { label: '$(edit) Specific Custom Fields...', description: 'Specify comma-separated field names (e.g. severity, priority)', value: 'custom' }
+        ],
+        { placeHolder: `Choose column fields to include in report "${reportSlug}"` }
+      );
+
+      if (!fieldsChoice) return;
+
+      let fieldsArg = '';
+      if (fieldsChoice.value === 'all') {
+        fieldsArg = ' --fields="all"';
+      } else if (fieldsChoice.value === 'custom') {
+        const fieldsInput = await vscode.window.showInputBox({
+          prompt: 'Enter custom fields separated by comma (e.g. "severity, priority, team")',
+          placeHolder: 'severity, priority'
+        });
+        if (fieldsInput === undefined) return;
+        if (fieldsInput.trim()) {
+          fieldsArg = ` --fields="${fieldsInput.trim()}"`;
+        }
       }
+
+      runTestformCommand(`report ${reportSlug} -format=${format.label}${fieldsArg}`);
     }),
     vscode.commands.registerCommand('testform.report', async () => {
       const reportTypes = [
@@ -464,9 +585,11 @@ export function activate(context: vscode.ExtensionContext) {
         { label: 'Test Run Summary', description: 'testrun-summary' },
         { label: 'Detailed Test Runs', description: 'testrun-detailed' },
         { label: 'Test Plan Summary', description: 'testplan-summary' },
+        { label: 'Defect Backlog', description: 'defects' },
+        { label: 'Traceability Matrix', description: 'traceability' },
         { label: 'Coverage Matrix', description: 'coverage' },
-        { label: 'Traceability Matrix', description: 'matrix' },
-        { label: 'Quality & Governance Audit', description: 'audit' }
+        { label: 'Two-Dimensional Matrix', description: 'two-dimensional' },
+        { label: 'Automation & Activity', description: 'test-case-activity' }
       ];
 
       const selected = await vscode.window.showQuickPick(reportTypes, {

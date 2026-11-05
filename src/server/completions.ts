@@ -1,9 +1,11 @@
+import * as path from 'path';
 import {
   CompletionItem,
   CompletionItemKind,
   Position,
   InsertTextFormat,
-  MarkupKind
+  MarkupKind,
+  TextEdit
 } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
@@ -261,13 +263,53 @@ export function provideCompletions(
     return items;
   }
 
+function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner): 'testcase' | 'testrun' | 'testplan' | 'bug' | null {
+  const docText = document.getText();
+  // 1. Explicit tags in document (@testrun, @testplan, etc.)
+  if (/@testrun\b/i.test(docText)) return 'testrun';
+  if (/@testplan\b/i.test(docText)) return 'testplan';
+  if (/@testcase\b/i.test(docText)) return 'testcase';
+  if (/@bug\b/i.test(docText)) return 'bug';
+
+  // 2. Feature identity tags (@tr-, @tp-, @tc-, @bg-)
+  if (/@tr-\d+\b/i.test(docText)) return 'testrun';
+  if (/@tp-\d+\b/i.test(docText)) return 'testplan';
+  if (/@tc-\d+\b/i.test(docText)) return 'testcase';
+  if (/@bg-\d+\b/i.test(docText)) return 'bug';
+
+  // 3. Registered featureFiles in workspace scanner
+  const uriPath = document.uri.replace(/\\/g, '/').toLowerCase();
+  for (const [_, feat] of scanner.featureFiles.entries()) {
+    const featPath = feat.fullPath.replace(/\\/g, '/').toLowerCase();
+    if (uriPath === featPath || uriPath.endsWith(feat.relPath.toLowerCase())) {
+      return feat.scope;
+    }
+  }
+
+  // 4. Configured scope patterns in scanner.config.scopes
+  const scopes = scanner.config.scopes;
+  if (scopes) {
+    if (scopes.testrun && uriPath.endsWith(scopes.testrun.replace(/^\*/, '').toLowerCase())) return 'testrun';
+    if (scopes.testplan && uriPath.endsWith(scopes.testplan.replace(/^\*/, '').toLowerCase())) return 'testplan';
+    if (scopes.bug && uriPath.endsWith(scopes.bug.replace(/^\*/, '').toLowerCase())) return 'bug';
+    if (scopes.testcase && uriPath.endsWith(scopes.testcase.replace(/^\*/, '').toLowerCase())) return 'testcase';
+  }
+
+  // 5. Default filename extensions
+  if (uriPath.endsWith('.run.feature')) return 'testrun';
+  if (uriPath.endsWith('.plan.feature')) return 'testplan';
+  if (uriPath.endsWith('.bug.feature')) return 'bug';
+  if (uriPath.endsWith('.case.feature')) return 'testcase';
+
+  return null;
+}
+
   // 4.5 Rule path completion in testrun and testplan
   const ruleMatch = lineText.match(/^\s*(?:Rule|Regla):\s*([a-zA-Z0-9_./-]*)$/i);
   if (ruleMatch) {
-    const docText = document.getText();
-    const uri = document.uri.toLowerCase();
-    const isTestplan = uri.endsWith('.plan.feature') || /@testplan\b/i.test(docText);
-    const isTestrun = uri.endsWith('.run.feature') || /@testrun\b/i.test(docText);
+    const docScope = detectDocumentScope(document, scanner);
+    const isTestplan = docScope === 'testplan';
+    const isTestrun = docScope === 'testrun';
 
     if (isTestplan) {
       // In a testplan, Rule: must suggest testrun suite files (*.run.feature)
@@ -304,14 +346,14 @@ export function provideCompletions(
     }
   }
 
-  // 4.6 Scenario target completion inside a testrun Rule (Unit test icon, single item per testcase)
-  const scenarioKeywordMatch = lineText.match(/^\s*(?:Scenario|Escenario|Scenario Outline|Esquema del escenario):\s*(.*)$/i);
+  // 4.6 Scenario target completion inside a testrun or testplan Rule (Unit test icon, single item per testcase/testrun)
+  const scenarioKeywordMatch = lineText.match(/^(\s*(?:Scenario|Escenario|Scenario Outline|Esquema del escenario):\s*)(.*)$/i);
   if (scenarioKeywordMatch) {
-    const docText = document.getText();
-    const uri = document.uri.toLowerCase();
-    const isTestrun = uri.endsWith('.run.feature') || /@testrun\b/i.test(docText);
+    const docScope = detectDocumentScope(document, scanner);
+    const isTestrun = docScope === 'testrun';
+    const isTestplan = docScope === 'testplan';
 
-    if (isTestrun) {
+    if (isTestrun || isTestplan) {
       const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
       let enclosingRulePath = '';
       for (let i = linesBefore.length - 1; i >= 0; i--) {
@@ -325,36 +367,149 @@ export function provideCompletions(
       if (enclosingRulePath) {
         const normRule = enclosingRulePath.toLowerCase().replace(/\\/g, '/');
         const normRuleBase = normRule.split('/').pop() || normRule;
-        const typedTarget = scenarioKeywordMatch[1].trim();
-        const hasAt = typedTarget.startsWith('@');
-        const isClassic = (scanner.config as any).targetFormat === 'classic';
+        const ruleSlug = normRuleBase.replace(/(\.(case|run|plan|bug))?\.feature$/i, '');
+        const prefixCol = scenarioKeywordMatch[1].length;
+        const format = (scanner.config.targetFormat || 'tag').toLowerCase();
+        const targetScope = isTestrun ? 'testcase' : 'testrun';
 
         const seenTags = new Set<string>();
 
         for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+          if (info.scope !== targetScope) continue;
           const normSource = info.sourceFile.toLowerCase().replace(/\\/g, '/');
           const normAddr = addr.toLowerCase().replace(/\\/g, '/');
 
-          if (normSource.endsWith(normRule) || normSource.endsWith(normRuleBase) || normAddr.includes(normRuleBase)) {
+          if (
+            normSource.endsWith(normRule) ||
+            normSource.endsWith(normRuleBase) ||
+            normAddr.includes(normRuleBase) ||
+            normSource.includes(ruleSlug) ||
+            normAddr.includes(ruleSlug)
+          ) {
             const cleanTag = info.tag.replace(/^@/, '');
-            const targetVal = isClassic ? addr : (hasAt ? cleanTag : info.tag);
+            const atTag = `@${cleanTag}`;
+            const fileNameOnly = path.basename(info.sourceFile);
+            const fileSlug = fileNameOnly.replace(/(\.(case|run|plan|bug))?\.feature$/i, '');
+            const canonicalAddr = info.address;
+            const fileTag = `${fileNameOnly}.${atTag}`;
+            const slugTag = `${fileSlug}.${atTag}`;
+            const scenarioTitle = info.title;
+
+            let targetVal: string;
+            switch (format) {
+              case 'tag-bare':
+                targetVal = cleanTag;
+                break;
+              case 'canonical':
+              case 'classic':
+                targetVal = canonicalAddr;
+                break;
+              case 'file-tag':
+                targetVal = fileTag;
+                break;
+              case 'slug-tag':
+                targetVal = slugTag;
+                break;
+              case 'name':
+                targetVal = scenarioTitle;
+                break;
+              case 'tag':
+              case 'short':
+              default:
+                targetVal = atTag;
+                break;
+            }
 
             if (!seenTags.has(cleanTag)) {
               seenTags.add(cleanTag);
 
-              // Single clean item with test icon (Unit), displaying clean label and non-redundant documentation
               items.push({
                 label: `${cleanTag}: ${info.title}`,
-                kind: CompletionItemKind.Unit, // Icono oficial de testing / prueba
-                filterText: `${cleanTag} @${cleanTag} ${info.title}`,
+                kind: CompletionItemKind.Unit,
+                detail: `[${format}] ${targetVal}`,
+                filterText: `${cleanTag} @${cleanTag} ${fileTag} ${slugTag} ${canonicalAddr} ${info.title} ${targetVal}`,
                 documentation: {
                   kind: MarkupKind.Markdown,
-                  value: `### 🧪 Test Case Target\n\n**Título:** ${info.title}\n\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRulePath}\`\n- **Target:** \`${targetVal}\``
+                  value: `### 🧪 Test Target\n\n**Título:** ${info.title}\n\n- **Formato activo:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRulePath}\`\n- **Archivo:** \`${fileNameOnly}\``
                 },
+                textEdit: TextEdit.replace(
+                  {
+                    start: { line: position.line, character: prefixCol },
+                    end: position
+                  },
+                  targetVal
+                ),
                 insertText: targetVal
               });
             }
           }
+        }
+        if (items.length > 0) return items;
+      } else {
+        // FORMAT 2: Direct Scenario under Feature (no enclosing Rule)
+        const prefixCol = scenarioKeywordMatch[1].length;
+        const format = (scanner.config.targetFormat || 'tag').toLowerCase();
+        const targetScope = isTestrun ? 'testcase' : 'testrun';
+        const seenKeys = new Set<string>();
+
+        for (const [, info] of scanner.config.scenarioAddresses.entries()) {
+          if (info.scope !== targetScope) continue;
+          const uniqueKey = `${info.sourceFile}::${info.tag}`;
+          if (seenKeys.has(uniqueKey)) continue;
+          seenKeys.add(uniqueKey);
+
+          const cleanTag = info.tag.replace(/^@/, '');
+          const atTag = `@${cleanTag}`;
+          const fileNameOnly = path.basename(info.sourceFile);
+          const fileSlug = fileNameOnly.replace(/(\.(case|run|plan|bug))?\.feature$/i, '');
+          const canonicalAddr = info.address;
+          const fileTag = `${fileNameOnly}.${atTag}`;
+          const slugTag = `${fileSlug}.${atTag}`;
+          const scenarioTitle = info.title;
+
+          let targetVal: string;
+          switch (format) {
+            case 'tag-bare':
+              targetVal = cleanTag;
+              break;
+            case 'canonical':
+            case 'classic':
+              targetVal = canonicalAddr;
+              break;
+            case 'file-tag':
+              targetVal = fileTag;
+              break;
+            case 'slug-tag':
+              targetVal = slugTag;
+              break;
+            case 'name':
+              targetVal = scenarioTitle;
+              break;
+            case 'tag':
+            case 'short':
+            default:
+              targetVal = atTag;
+              break;
+          }
+
+          items.push({
+            label: `${cleanTag}: ${info.title}`,
+            kind: CompletionItemKind.Unit,
+            detail: `[${format}] ${targetVal} (${fileNameOnly})`,
+            filterText: `${cleanTag} @${cleanTag} ${fileTag} ${slugTag} ${canonicalAddr} ${info.title} ${targetVal} ${fileNameOnly}`,
+            documentation: {
+              kind: MarkupKind.Markdown,
+              value: `### 🧪 Test Target (Direct Scenario)\n\n**Título:** ${info.title}\n\n- **Formato activo:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **Archivo:** \`${fileNameOnly}\`\n- **Dirección Canónica:** \`${canonicalAddr}\``
+            },
+            textEdit: TextEdit.replace(
+              {
+                start: { line: position.line, character: prefixCol },
+                end: position
+              },
+              targetVal
+            ),
+            insertText: targetVal
+          });
         }
         if (items.length > 0) return items;
       }
@@ -362,41 +517,69 @@ export function provideCompletions(
   }
 
   // 5. DSL Mark Step completions (* mark ...)
-  if (/^\s*\*\s*(m|ma|mar|mark)?\s*$/i.test(lineText)) {
-    items.push(
-      {
-        label: 'mark status = ...',
-        kind: CompletionItemKind.Snippet,
-        detail: 'Testform DSL: Asignar resultado de ejecución',
-        insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
-      },
-      {
-        label: 'mark target = ...',
-        kind: CompletionItemKind.Snippet,
-        detail: 'Testform DSL: Asignar target canónico de caso de prueba',
-        insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'mark target = ${1:path/to.case.feature.@tc-01}'
-      },
-      {
-        label: 'mark trace = ...',
-        kind: CompletionItemKind.Snippet,
-        detail: 'Testform DSL: Registrar traza o detalle del fallo',
-        insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'mark trace = "${1:trace description or error stack}"'
-      },
-      {
-        label: 'mark evidence = ...',
-        kind: CompletionItemKind.Snippet,
-        detail: 'Testform DSL: Adjuntar evidencia (captura, archivo, URL)',
-        insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'mark evidence = "${1:evidence.png or url}"'
-      }
-    );
-    return items;
+  const stepPrefixMatch = lineText.match(/^(\s*(?:\*|Given|When|Then|And|But)\s*)(.*)$/i);
+  if (stepPrefixMatch && !lineText.includes('=')) {
+    const prefixCol = stepPrefixMatch[1].length;
+    const rest = stepPrefixMatch[2].trim().toLowerCase();
+    const docScope = detectDocumentScope(document, scanner);
+
+    // Trigger if in a testrun, or if user started typing 'm', 'mark', or mark properties
+    if (docScope === 'testrun' || rest.startsWith('m') || ['status', 'target', 'trace', 'evidence'].some(k => rest.startsWith(k))) {
+      items.push(
+        {
+          label: 'mark status = ...',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Testform DSL: Asignar resultado de ejecución',
+          insertTextFormat: InsertTextFormat.Snippet,
+          filterText: 'mark status status',
+          textEdit: TextEdit.replace(
+            { start: { line: position.line, character: prefixCol }, end: position },
+            'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+          ),
+          insertText: 'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+        },
+        {
+          label: 'mark target = ...',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Testform DSL: Asignar target canónico de caso de prueba',
+          insertTextFormat: InsertTextFormat.Snippet,
+          filterText: 'mark target target',
+          textEdit: TextEdit.replace(
+            { start: { line: position.line, character: prefixCol }, end: position },
+            'mark target = ${1:path/to.case.feature.@tc-01}'
+          ),
+          insertText: 'mark target = ${1:path/to.case.feature.@tc-01}'
+        },
+        {
+          label: 'mark trace = ...',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Testform DSL: Registrar traza o detalle del fallo',
+          insertTextFormat: InsertTextFormat.Snippet,
+          filterText: 'mark trace trace',
+          textEdit: TextEdit.replace(
+            { start: { line: position.line, character: prefixCol }, end: position },
+            'mark trace = "${1:trace description or error stack}"'
+          ),
+          insertText: 'mark trace = "${1:trace description or error stack}"'
+        },
+        {
+          label: 'mark evidence = ...',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Testform DSL: Adjuntar evidencia (captura, archivo, URL)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          filterText: 'mark evidence evidence',
+          textEdit: TextEdit.replace(
+            { start: { line: position.line, character: prefixCol }, end: position },
+            'mark evidence = "${1:evidence.png or url}"'
+          ),
+          insertText: 'mark evidence = "${1:evidence.png or url}"'
+        }
+      );
+      return items;
+    }
   }
 
-  if (/mark\s+status\s*=\s*[a-zA-Z]*$/i.test(lineText)) {
+  if (/(?:mark\s+)?status\s*=\s*[a-zA-Z]*$/i.test(lineText)) {
     const statuses = ['passed', 'failed', 'pending', 'skipped', 'blocked', 'unexecuted'];
     return statuses.map(s => ({
       label: s,
@@ -406,7 +589,7 @@ export function provideCompletions(
     }));
   }
 
-  if (/mark\s+target\s*=\s*.*$/i.test(lineText)) {
+  if (/(?:mark\s+)?target\s*=\s*.*$/i.test(lineText)) {
     for (const [address, info] of scanner.config.scenarioAddresses.entries()) {
       items.push({
         label: address,

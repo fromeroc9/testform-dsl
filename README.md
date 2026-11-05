@@ -10,10 +10,12 @@
 </p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=fromeroc9.testform"><img src="https://img.shields.io/visual-studio-marketplace/v/fromeroc9.testform?color=blue&label=VS%20Marketplace" alt="Visual Studio Marketplace Version" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=fromeroc9.testform-dsl"><img src="https://img.shields.io/visual-studio-marketplace/v/fromeroc9.testform-dsl?color=blue&label=VS%20Marketplace" alt="Visual Studio Marketplace Version" /></a>
+  <a href="https://open-vsx.org/extension/fromeroc9/testform-dsl"><img src="https://img.shields.io/badge/Open%20VSX-Registry-9E00FF?style=flat-square&logo=eclipseche&logoColor=white" alt="Open VSX Registry" /></a>
+  <a href="https://www.npmjs.com/package/@fromeroc9/testform"><img src="https://img.shields.io/npm/v/@fromeroc9/testform/beta?style=flat-square&color=4F46E5&label=CLI%20beta" alt="NPM Beta Version" /></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Extension Version v1.0.0" /></a>
   <a href="https://github.com/fromeroc9/testform-vscode/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-green.svg" alt="License: GPL-3.0-or-later" /></a>
-  <a href="https://fromeroc9.github.io/testform-docs/"><img src="https://img.shields.io/badge/docs-testform-blue" alt="Documentation" /></a>
+  <a href="https://fromeroc9.github.io/testform-docs/"><img src="https://img.shields.io/badge/docs-testform-blue?style=flat-square&logo=gitbook&logoColor=white" alt="Documentation Portal" /></a>
 </p>
 
 ---
@@ -23,6 +25,31 @@
 The **Testform** extension transforms Visual Studio Code into a full-featured Integrated Development Environment (IDE) for **Test-as-Code**. 
 
 Whether you are writing declarative test cases, orchestrating test runs, managing enterprise test plans, or executing speculative plans against your test management provider (GitHub, Jira, Zephyr, Xray, or local offline storage), Testform for VS Code delivers real-time language intelligence, instant execution feedback, and deep lifecycle tooling.
+
+---
+
+## 🌐 The Testform Ecosystem
+
+The Testform ecosystem brings declarative Test-as-Code to your entire engineering workflow through three unified solutions:
+
+| Solution | Description | Repositories & Registries |
+| :--- | :--- | :--- |
+| ⚡ **Testform CLI** | Core declarative Test-as-Code state orchestration engine for Git. Planning, reconciliation, and reporting. | [![NPM](https://img.shields.io/badge/npm-package-CB3837?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@fromeroc9/testform@beta) · [GitHub: fromeroc9/testform](https://github.com/fromeroc9/testform) |
+| 📖 **Documentation Portal** | Comprehensive bilingual documentation, guides, architecture deep-dives, CLI reference, and API specs. | 🌐 **[testform-docs Portal](https://fromeroc9.github.io/testform-docs/)** · [GitHub: fromeroc9/testform-docs](https://github.com/fromeroc9/testform-docs) |
+| 🧩 **VS Code Extension** | Official IDE language support: Testform DSL IntelliSense, syntax highlighting, Test Explorer, and state visualizer. | [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=fromeroc9.testform-dsl) [![Open VSX](https://img.shields.io/badge/Open%20VSX-Registry-9E00FF?style=flat-square&logo=eclipseche&logoColor=white)](https://open-vsx.org/extension/fromeroc9/testform-dsl) · [GitHub: fromeroc9/testform-vscode](https://github.com/fromeroc9/testform-vscode) |
+
+---
+
+## 📦 Installation
+
+Install the Testform extension directly from your preferred marketplace or CLI:
+
+- **Visual Studio Marketplace:** [fromeroc9.testform-dsl](https://marketplace.visualstudio.com/items?itemName=fromeroc9.testform-dsl)
+- **Open VSX Registry:** [fromeroc9/testform-dsl](https://open-vsx.org/extension/fromeroc9/testform-dsl) (for VSCodium, Gitpod, Cursor, and Eclipse Theia)
+- **Command Line:**
+  ```bash
+  code --install-extension fromeroc9.testform-dsl
+  ```
 
 ---
 
@@ -77,7 +104,9 @@ Comprehensive guides, API specifications, and interactive language references ar
 ### 6. 📊 Testform Sidebar Views
 Located in the dedicated **Testform Activity Bar** tab:
 
-1. **State Explorer (`testform.views.state`):**
+1. **Explorer (`testform.views.state`):**
+   - **Unified Dual-Mode Explorer:** Seamlessly toggles between **State Mode** (`testform.state`) and **Files Mode** (`.feature` source code) via a 1-click header toolbar switch.
+   - **Contextual HTML Hub:** Integrated full-screen dashboard synchronized to the active mode (State metrics vs. Files specifications).
    - Hierarchical inspection of managed resources (`testcase`, `testrun`, `testplan`, custom data sources, outputs).
    - Visual status badges (e.g., tainted resources, verification checkmarks).
    - **Inspect Resource:** Opens formatted resource state JSON in an editor tab.
@@ -85,15 +114,29 @@ Located in the dedicated **Testform Activity Bar** tab:
    - **State Remove:** Remove an item from the state ledger (`testform state rm`).
    - **Force Unlock:** Release stale state locks with guided lock ID prompts.
 
-2. **Modules & .testform View (`testform.views.modules`):**
-   - **Declared Modules:** Modules specified in `main.yml` with their source URLs and declared outputs.
-   - **Installed Modules:** Inspect frozen copies inside `.testform/modules/`.
-   - **Local Policies:** Custom quality rules located under `.testform/policies/`.
-   - **Cache & Environment:** Quick access to `.testform/environment`, `.testform/cache/backend.json`, and `.testform/cache/lock.json`.
+   - **Files Mode Navigation:** Native specification tree of `.feature` source files (`*.case.feature`, `*.run.feature`, `*.plan.feature`, `*.bug.feature`) with direct jump-to-line navigation.
+   - Native specification tree of `.feature` source files in the repository.
+   - Categorized by scope: Test Cases (`*.case.feature`), Test Runs (`*.run.feature`), Test Plans (`*.plan.feature`), and Bugs (`*.bug.feature`).
+   - One-click navigation: clicking any scenario or rule opens the `.feature` file at the exact line number.
 
-3. **Reports & Analytics (`testform.views.reports`):**
-   - One-click report triggers: Test Case Summary, Test Run Summary, Detailed Runs, Test Plan Summary, Coverage Matrix, Traceability Matrix, and Quality Audit.
-   - Instant export picker for **Markdown**, **Microsoft Word (.docx)**, **Microsoft Excel (.xlsx)**, **JSON**, or **CSV**.
+2. **Modules (`testform.views.modules`):**
+   - **Declared Modules:** Modules specified in `main.yml` with source URLs and declared outputs.
+   - **Installed Modules:** Inspect frozen packages inside `.testform/modules/`.
+   - **Providers:** Active provider configurations (`github`, `local`, etc.).
+   - **Runtime Environment:** Quick access to `.testform/environment`, active workspace, backend config, and `.testform.lock.hcl`.
+   - **Policies & Governance:** Built-in system validation policies with active/disabled statuses alongside custom policy scripts.
+
+3. **Reports (`testform.views.reports`):**
+   - One-click triggers for all core Testform reports (`testcase-summary`, `testrun-summary`, `testrun-detailed`, `testplan-summary`, `defects`, `traceability`, `coverage`, `two-dimensional`, `test-case-activity`).
+   - Instant export picker for **Markdown**, **Word (.docx)**, **Excel (.xlsx)**, **JSON**, or **CSV**.
+
+
+
+
+
+
+
+
 
 ### 7. 📑 Specs & Execution Hub (Webview Dashboard)
 - Open a full-screen, interactive dashboard via `Testform: Open Test Cases, Runs & Plans Hub`.

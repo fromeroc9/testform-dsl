@@ -5,4 +5,5 @@ esbuild.js
 .gitignore
 *.log
 *.vsix
+*.ps1
 node_modules/**

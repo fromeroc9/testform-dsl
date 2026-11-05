@@ -24,6 +24,7 @@ export function formatGherkin(content: string): string {
   let expectedIndent = 0;
   let inDocString = false;
   let docStringIndent = 0;
+  let inRule = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -33,7 +34,7 @@ export function formatGherkin(content: string): string {
     if (trimmed.startsWith('"""') || trimmed.startsWith('```')) {
       if (!inDocString) {
         inDocString = true;
-        docStringIndent = 6;
+        docStringIndent = inRule ? 8 : 6;
         output.push(' '.repeat(docStringIndent) + trimmed);
       } else {
         inDocString = false;
@@ -57,9 +58,14 @@ export function formatGherkin(content: string): string {
     // Determine indentation based on keyword (English and Spanish)
     if (trimmed.startsWith('Feature:') || trimmed.startsWith('Característica:')) {
       expectedIndent = 0;
+      inRule = false;
+    } else if (trimmed.startsWith('Rule:') || trimmed.startsWith('Regla:')) {
+      expectedIndent = 2;
+      inRule = true;
+      if (output.length > 0 && output[output.length - 1] !== '' && !output[output.length - 1].trim().startsWith('@')) {
+        output.push('');
+      }
     } else if (
-      trimmed.startsWith('Rule:') ||
-      trimmed.startsWith('Regla:') ||
       trimmed.startsWith('Background:') ||
       trimmed.startsWith('Antecedentes:') ||
       trimmed.startsWith('Scenario:') ||
@@ -69,7 +75,7 @@ export function formatGherkin(content: string): string {
       trimmed.startsWith('Example:') ||
       trimmed.startsWith('Ejemplo:')
     ) {
-      expectedIndent = 2;
+      expectedIndent = inRule ? 4 : 2;
       if (output.length > 0 && output[output.length - 1] !== '' && !output[output.length - 1].trim().startsWith('@')) {
         output.push('');
       }
@@ -86,32 +92,37 @@ export function formatGherkin(content: string): string {
       trimmed.startsWith('Pero ') ||
       trimmed.startsWith('* ')
     ) {
-      expectedIndent = 4;
+      expectedIndent = inRule ? 6 : 4;
     } else if (trimmed.startsWith('Examples:') || trimmed.startsWith('Ejemplos:')) {
-      expectedIndent = 4;
+      expectedIndent = inRule ? 6 : 4;
       if (output.length > 0 && output[output.length - 1] !== '') {
         output.push('');
       }
     } else if (trimmed.startsWith('|')) {
-      expectedIndent = 6;
+      expectedIndent = inRule ? 8 : 6;
     } else if (trimmed.startsWith('@')) {
-      let nextIndent = 0;
+      let nextIndent = inRule ? 4 : 2;
       for (let j = i + 1; j < lines.length; j++) {
         const nextTrimmed = lines[j].trim();
         if (nextTrimmed === '' || nextTrimmed.startsWith('@')) continue;
-        if (nextTrimmed.startsWith('Feature:') || nextTrimmed.startsWith('Característica:')) nextIndent = 0;
-        else if (
-          nextTrimmed.startsWith('Rule:') ||
-          nextTrimmed.startsWith('Regla:') ||
+        if (nextTrimmed.startsWith('Feature:') || nextTrimmed.startsWith('Característica:')) {
+          nextIndent = 0;
+        } else if (nextTrimmed.startsWith('Rule:') || nextTrimmed.startsWith('Regla:')) {
+          nextIndent = 2;
+        } else if (
           nextTrimmed.startsWith('Background:') ||
           nextTrimmed.startsWith('Antecedentes:') ||
           nextTrimmed.startsWith('Scenario:') ||
           nextTrimmed.startsWith('Escenario:') ||
           nextTrimmed.startsWith('Scenario Outline:') ||
-          nextTrimmed.startsWith('Esquema del escenario:')
-        )
-          nextIndent = 2;
-        else if (nextTrimmed.startsWith('Examples:') || nextTrimmed.startsWith('Ejemplos:')) nextIndent = 4;
+          nextTrimmed.startsWith('Esquema del escenario:') ||
+          nextTrimmed.startsWith('Example:') ||
+          nextTrimmed.startsWith('Ejemplo:')
+        ) {
+          nextIndent = inRule ? 4 : 2;
+        } else if (nextTrimmed.startsWith('Examples:') || nextTrimmed.startsWith('Ejemplos:')) {
+          nextIndent = inRule ? 6 : 4;
+        }
         break;
       }
       expectedIndent = nextIndent;
@@ -122,7 +133,7 @@ export function formatGherkin(content: string): string {
     } else if (trimmed.startsWith('#')) {
       // Comments preserve expected indent
     } else {
-      if (expectedIndent === 0) expectedIndent = 2;
+      if (expectedIndent === 0) expectedIndent = inRule ? 4 : 2;
     }
 
     output.push(' '.repeat(expectedIndent) + trimmed);

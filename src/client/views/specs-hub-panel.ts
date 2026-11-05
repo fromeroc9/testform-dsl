@@ -7,6 +7,7 @@ export interface TestCaseItem {
   title: string;
   line: number;
   tags: string[];
+  fields?: Record<string, string>;
 }
 
 export interface FeatureFileItem {
@@ -46,26 +47,47 @@ export interface TestPlanItem {
   }[];
 }
 
+export interface StateReportData {
+  hasState: boolean;
+  version?: number;
+  serial?: number;
+  lineage?: string;
+  statePath?: string;
+  total: number;
+  passed: number;
+  failed: number;
+  pending: number;
+  blocked: number;
+  skipped: number;
+  runs: any[];
+  cases: any[];
+  plans: any[];
+  bugs: any[];
+  outputs: Record<string, any>;
+}
+
 export class SpecsHubPanel {
   public static currentPanel: SpecsHubPanel | undefined;
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
   private _disposables: vscode.Disposable[] = [];
+  public currentMode: 'state' | 'files' = 'state';
 
-  public static createOrShow(extensionUri: vscode.Uri): SpecsHubPanel {
+  public static createOrShow(extensionUri: vscode.Uri, initialMode: 'state' | 'files' = 'state'): SpecsHubPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn || vscode.ViewColumn.One
       : vscode.ViewColumn.One;
 
     if (SpecsHubPanel.currentPanel) {
       SpecsHubPanel.currentPanel._panel.reveal(column);
+      SpecsHubPanel.currentPanel.currentMode = initialMode;
       SpecsHubPanel.currentPanel.refresh();
       return SpecsHubPanel.currentPanel;
     }
 
     const panel = vscode.window.createWebviewPanel(
       'testformSpecsHub',
-      'Test Cases, Runs & Plans',
+      'Testform Hub (State & Files)',
       column,
       {
         enableScripts: true,
@@ -74,15 +96,15 @@ export class SpecsHubPanel {
       }
     );
 
-    SpecsHubPanel.currentPanel = new SpecsHubPanel(panel, extensionUri);
+    SpecsHubPanel.currentPanel = new SpecsHubPanel(panel, extensionUri, initialMode);
     return SpecsHubPanel.currentPanel;
   }
 
-  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, initialMode: 'state' | 'files' = 'state') {
     this._panel = panel;
     this._extensionUri = extensionUri;
+    this.currentMode = initialMode;
 
-    // Set panel icon
     const iconPath = vscode.Uri.joinPath(this._extensionUri, 'assets', 'icon.svg');
     this._panel.iconPath = iconPath;
 
@@ -105,6 +127,13 @@ export class SpecsHubPanel {
             }
             break;
           }
+          case 'switchMode': {
+            if (message.mode === 'state' || message.mode === 'files') {
+              this.currentMode = message.mode;
+              this.refresh();
+            }
+            break;
+          }
           case 'refresh': {
             this.refresh();
             break;
@@ -123,17 +152,23 @@ export class SpecsHubPanel {
       this._disposables
     );
 
-    // Watch for .feature file changes
     const watcher = vscode.workspace.createFileSystemWatcher('**/*.feature');
-    watcher.onDidCreate(() => this.refresh());
     watcher.onDidChange(() => this.refresh());
+    watcher.onDidCreate(() => this.refresh());
     watcher.onDidDelete(() => this.refresh());
     this._disposables.push(watcher);
+
+    const stateWatcher = vscode.workspace.createFileSystemWatcher('**/testform.state');
+    stateWatcher.onDidChange(() => this.refresh());
+    stateWatcher.onDidCreate(() => this.refresh());
+    stateWatcher.onDidDelete(() => this.refresh());
+    this._disposables.push(stateWatcher);
   }
 
   public async refresh(): Promise<void> {
-    const data = await this.scanSpecs();
-    this._panel.webview.html = this.renderHtml(data);
+    const filesData = await this.scanSpecs();
+    const stateData = await this.scanState();
+    this._panel.webview.html = this.renderHtml(filesData, stateData);
   }
 
   public dispose(): void {
@@ -142,6 +177,86 @@ export class SpecsHubPanel {
     while (this._disposables.length) {
       const x = this._disposables.pop();
       if (x) x.dispose();
+    }
+  }
+
+  private async scanState(): Promise<StateReportData> {
+    const empty: StateReportData = {
+      hasState: false,
+      total: 0,
+      passed: 0,
+      failed: 0,
+      pending: 0,
+      blocked: 0,
+      skipped: 0,
+      runs: [],
+      cases: [],
+      plans: [],
+      bugs: [],
+      outputs: {}
+    };
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) return empty;
+
+    const rootPath = workspaceFolders[0].uri.fsPath;
+    const statePath = path.join(rootPath, 'testform.state');
+    if (!fs.existsSync(statePath)) return empty;
+
+    try {
+      const raw = fs.readFileSync(statePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const resources: any[] = parsed.resources || [];
+      const outputs: Record<string, any> = parsed.outputs || {};
+
+      let passed = 0;
+      let failed = 0;
+      let pending = 0;
+      let blocked = 0;
+      let skipped = 0;
+
+      const runs: any[] = [];
+      const cases: any[] = [];
+      const plans: any[] = [];
+      const bugs: any[] = [];
+
+      for (const r of resources) {
+        const type = (r.type || '').toLowerCase();
+        const attrs = r.attributes || {};
+        const st = String(attrs.status || attrs.execution?.status || 'pending').toLowerCase();
+
+        if (st === 'passed') passed++;
+        else if (st === 'failed') failed++;
+        else if (st === 'blocked') blocked++;
+        else if (st === 'skipped') skipped++;
+        else pending++;
+
+        if (type.includes('testrun')) runs.push(r);
+        else if (type.includes('testplan')) plans.push(r);
+        else if (type.includes('bug')) bugs.push(r);
+        else cases.push(r);
+      }
+
+      return {
+        hasState: true,
+        version: parsed.version || 1,
+        serial: parsed.serial ?? 1,
+        lineage: parsed.lineage,
+        statePath,
+        total: resources.length,
+        passed,
+        failed,
+        pending,
+        blocked,
+        skipped,
+        runs,
+        cases,
+        plans,
+        bugs,
+        outputs
+      };
+    } catch {
+      return empty;
     }
   }
 
@@ -217,11 +332,41 @@ export class SpecsHubPanel {
             if (scenMatch) {
               const scTitle = scenMatch[1].trim();
               const tag = pendingTags.find(t => /^@(tc|bg)-[0-9]+/i.test(t));
+              const scFields: Record<string, string> = {};
+
+              // Extract key=value from tags
+              for (const pt of pendingTags) {
+                const eqIdx = pt.indexOf('=');
+                if (eqIdx !== -1) {
+                  const k = pt.slice(1, eqIdx).trim().toLowerCase();
+                  const v = pt.slice(eqIdx + 1).trim();
+                  if (k && v) scFields[k] = v;
+                }
+              }
+
+              // Extract fields from subsequent steps
+              for (let k = i + 1; k < lines.length; k++) {
+                const sLine = lines[k].trim();
+                if (!sLine || sLine.startsWith('#')) continue;
+                if (/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario|Rule|Regla|Feature|Característica):/i.test(sLine)) {
+                  break;
+                }
+                const fieldMatch = sLine.match(/^(?:\*\s*)?field\s+([a-zA-Z0-9_-]+)\s*=\s*(.*)$/i);
+                if (fieldMatch) {
+                  scFields[fieldMatch[1].toLowerCase()] = fieldMatch[2].trim().replace(/^["']|["']$/g, '');
+                }
+                const markMatch = sLine.match(/^(?:\*\s*)?mark\s+([a-zA-Z0-9_-]+)\s*=\s*(.*)$/i);
+                if (markMatch) {
+                  scFields[markMatch[1].toLowerCase()] = markMatch[2].trim().replace(/^["']|["']$/g, '');
+                }
+              }
+
               scenarios.push({
                 tag,
                 title: scTitle,
                 line: i,
-                tags: [...pendingTags]
+                tags: [...pendingTags],
+                fields: scFields
               });
               pendingTags = [];
             }
@@ -316,24 +461,29 @@ export class SpecsHubPanel {
     return { testcases, testruns, testplans };
   }
 
-  private renderHtml(data: {
-    testcases: FeatureFileItem[];
-    testruns: TestRunSuiteItem[];
-    testplans: TestPlanItem[];
-  }): string {
-    const totalCases = data.testcases.reduce((sum, f) => sum + f.scenarios.length, 0);
-    const totalRuns = data.testruns.length;
-    const totalPlans = data.testplans.length;
+  private renderHtml(
+    filesData: {
+      testcases: FeatureFileItem[];
+      testruns: TestRunSuiteItem[];
+      testplans: TestPlanItem[];
+    },
+    stateData: StateReportData
+  ): string {
+    const totalFilesCases = filesData.testcases.reduce((sum, f) => sum + f.scenarios.length, 0);
+    const totalFilesRuns = filesData.testruns.length;
+    const totalFilesPlans = filesData.testplans.length;
 
     const escape = (s: string) =>
       s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const mode = this.currentMode;
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Test Cases, Runs & Plans</title>
+  <title>Testform Hub</title>
   <style>
     :root {
       --bg: var(--vscode-editor-background);
@@ -345,12 +495,16 @@ export class SpecsHubPanel {
       --badge-bg: var(--vscode-badge-background, #007acc);
       --badge-fg: var(--vscode-badge-foreground, #fff);
       --hover-bg: var(--vscode-list-hoverBackground, rgba(128,128,128,0.1));
+      --pass: #22c55e;
+      --fail: #ef4444;
+      --warn: #eab308;
+      --info: #3b82f6;
     }
     * { box-sizing: border-box; }
     body {
       background-color: var(--bg);
       color: var(--fg);
-      font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif);
+      font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
       margin: 0;
       padding: 24px 32px;
       font-size: 13px;
@@ -362,23 +516,50 @@ export class SpecsHubPanel {
       align-items: center;
       padding-bottom: 20px;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 24px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 16px;
     }
     .header-left {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
     }
     .header h1 {
       margin: 0;
       font-size: 20px;
       font-weight: 600;
-      letter-spacing: -0.3px;
     }
     .subtitle {
       color: var(--vscode-descriptionForeground, #888);
       font-size: 12px;
       margin-top: 2px;
+    }
+    .mode-switch {
+      display: inline-flex;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px;
+      gap: 3px;
+    }
+    .mode-btn {
+      background: transparent;
+      border: none;
+      color: var(--vscode-descriptionForeground, #888);
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .mode-btn.active {
+      background: var(--accent);
+      color: var(--accent-fg);
     }
     .header-actions {
       display: flex;
@@ -396,83 +577,75 @@ export class SpecsHubPanel {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      transition: opacity 0.15s ease;
     }
-    .btn:hover { opacity: 0.9; }
     .btn-secondary {
-      background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.15));
-      color: var(--vscode-button-secondaryForeground, var(--fg));
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg);
+    }
+    .btn-secondary:hover {
+      background: var(--hover-bg);
     }
     .kpi-row {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
     }
     .kpi-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
+      padding: 14px 16px;
       cursor: pointer;
-      transition: transform 0.1s ease, border-color 0.15s ease;
+      transition: all 0.15s ease;
     }
-    .kpi-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-1px);
-    }
-    .kpi-card.active {
+    .kpi-card:hover, .kpi-card.active {
       border-color: var(--accent);
       background: var(--hover-bg);
     }
     .kpi-title {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--vscode-descriptionForeground, #888);
+      font-size: 11px;
       text-transform: uppercase;
+      font-weight: 600;
       letter-spacing: 0.5px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      color: var(--vscode-descriptionForeground, #888);
+      margin-bottom: 6px;
     }
     .kpi-value {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 700;
-      margin: 8px 0 4px 0;
-      color: var(--fg);
+      line-height: 1.1;
+      margin-bottom: 4px;
     }
     .kpi-sub {
       font-size: 11px;
       color: var(--vscode-descriptionForeground, #888);
     }
     .filter-bar {
-      margin-bottom: 20px;
-      position: relative;
+      margin-bottom: 16px;
     }
     .filter-input {
       width: 100%;
-      background: var(--vscode-input-background, rgba(128,128,128,0.1));
-      color: var(--vscode-input-foreground, var(--fg));
-      border: 1px solid var(--vscode-input-border, var(--border));
-      padding: 9px 14px;
-      border-radius: 4px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      padding: 10px 14px;
+      border-radius: 6px;
       font-size: 13px;
       outline: none;
     }
     .filter-input:focus {
-      border-color: var(--vscode-focusBorder, var(--accent));
+      border-color: var(--accent);
     }
     .tab-nav {
       display: flex;
-      gap: 8px;
-      margin-bottom: 20px;
+      gap: 4px;
       border-bottom: 1px solid var(--border);
-      padding-bottom: 1px;
+      margin-bottom: 20px;
     }
     .tab-btn {
-      background: none;
+      background: transparent;
       border: none;
       border-bottom: 2px solid transparent;
       padding: 8px 16px;
@@ -485,35 +658,34 @@ export class SpecsHubPanel {
       color: var(--fg);
       border-bottom-color: var(--accent);
     }
-    .feature-card {
+    .spec-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 6px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       overflow: hidden;
     }
-    .feature-header {
+    .spec-header {
       padding: 12px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       background: rgba(128, 128, 128, 0.04);
       cursor: pointer;
-      user-select: none;
     }
-    .feature-title-area {
+    .spec-title-area {
       display: flex;
       align-items: center;
       gap: 10px;
     }
-    .feature-title {
+    .spec-title {
       font-weight: 600;
       font-size: 14px;
     }
-    .feature-path {
+    .spec-path {
       color: var(--vscode-descriptionForeground, #888);
       font-size: 11px;
-      font-family: var(--vscode-editor-font-family, monospace);
+      font-family: monospace;
     }
     .tag {
       display: inline-block;
@@ -525,14 +697,32 @@ export class SpecsHubPanel {
       color: #818cf8;
       margin-right: 4px;
     }
-    .tag-tc {
-      background: rgba(56, 189, 248, 0.15);
+    .field-pill {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--vscode-editor-font-family, monospace);
+      background: rgba(14, 165, 233, 0.12);
       color: #38bdf8;
+      border: 1px solid rgba(14, 165, 233, 0.25);
+      margin-right: 4px;
+      margin-top: 3px;
     }
-    .tag-smoke {
-      background: rgba(34, 197, 94, 0.15);
-      color: #4ade80;
+    .status-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
+    .status-passed { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .status-failed { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+    .status-pending { background: rgba(234, 179, 8, 0.2); color: #eab308; }
+    .status-blocked { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+    .status-skipped { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
     .scenario-list {
       padding: 0;
       margin: 0;
@@ -544,15 +734,9 @@ export class SpecsHubPanel {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      transition: background 0.1s ease;
     }
     .scenario-item:hover {
       background: var(--hover-bg);
-    }
-    .scenario-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
     }
     .jump-btn {
       background: none;
@@ -562,24 +746,26 @@ export class SpecsHubPanel {
       border-radius: 4px;
       cursor: pointer;
       font-size: 11px;
-      transition: all 0.15s ease;
     }
     .jump-btn:hover {
       border-color: var(--accent);
       color: var(--accent);
     }
-    .rule-title {
-      padding: 8px 16px;
-      font-weight: 600;
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground, #888);
-      background: rgba(128, 128, 128, 0.02);
-      border-top: 1px solid var(--border);
-    }
     .empty-state {
       text-align: center;
       padding: 40px;
       color: var(--vscode-descriptionForeground, #888);
+    }
+    .state-banner {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 6px;
+      padding: 10px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
     }
   </style>
 </head>
@@ -587,8 +773,16 @@ export class SpecsHubPanel {
   <div class="header">
     <div class="header-left">
       <div>
-        <h1>Test Cases, Runs &amp; Plans</h1>
-        <div class="subtitle">Testform Specification &amp; Execution Hub</div>
+        <h1>Testform Hub</h1>
+        <div class="subtitle">${mode === 'state' ? 'State Ledger Explorer (testform.state)' : 'Workspace Source Specifications (*.feature)'}</div>
+      </div>
+      <div class="mode-switch">
+        <button class="mode-btn ${mode === 'state' ? 'active' : ''}" onclick="switchMode('state')">
+          🗄️ State (${stateData.total})
+        </button>
+        <button class="mode-btn ${mode === 'files' ? 'active' : ''}" onclick="switchMode('files')">
+          📁 Files (${totalFilesCases + totalFilesRuns + totalFilesPlans})
+        </button>
       </div>
     </div>
     <div class="header-actions">
@@ -598,49 +792,251 @@ export class SpecsHubPanel {
     </div>
   </div>
 
-  <div class="kpi-row">
-    <div class="kpi-card" id="kpi-testcases" onclick="switchTab('testcases')">
-      <div class="kpi-title">🧪 Test Cases</div>
-      <div class="kpi-value">${totalCases}</div>
-      <div class="kpi-sub">${data.testcases.length} feature files registered</div>
+  ${
+    mode === 'state'
+      ? `
+  <!-- STATE DASHBOARD -->
+  <div class="state-banner">
+    <div>
+      <strong>Ledger:</strong> <code>testform.state</code> (Format v${stateData.version || 1} • Serial ${stateData.serial ?? 1} • Lineage: ${stateData.lineage ? stateData.lineage.slice(0, 8) + '...' : 'default'})
     </div>
-    <div class="kpi-card" id="kpi-testruns" onclick="switchTab('testruns')">
+    <div style="color: #3b82f6; font-weight: 500;">
+      ${stateData.hasState ? '● State Loaded &amp; Synced' : '○ No state file found (run testform apply)'}
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi-card" id="kpi-st-runs" onclick="switchStateTab('runs')">
       <div class="kpi-title">🚀 Test Runs</div>
-      <div class="kpi-value">${totalRuns}</div>
+      <div class="kpi-value">${stateData.runs.length}</div>
+      <div class="kpi-sub">Reconciled execution cycles</div>
+    </div>
+    <div class="kpi-card" id="kpi-st-cases" onclick="switchStateTab('cases')">
+      <div class="kpi-title">🧪 Test Cases</div>
+      <div class="kpi-value">${stateData.cases.length}</div>
+      <div class="kpi-sub">Managed state resources</div>
+    </div>
+    <div class="kpi-card" id="kpi-st-passed" onclick="switchStateTab('cases')">
+      <div class="kpi-title" style="color: #22c55e;">✔ Passed</div>
+      <div class="kpi-value" style="color: #22c55e;">${stateData.passed}</div>
+      <div class="kpi-sub">${stateData.total > 0 ? Math.round((stateData.passed / stateData.total) * 100) : 0}% success rate</div>
+    </div>
+    <div class="kpi-card" id="kpi-st-failed" onclick="switchStateTab('bugs')">
+      <div class="kpi-title" style="color: #ef4444;">✖ Failed / Blocked</div>
+      <div class="kpi-value" style="color: #ef4444;">${stateData.failed + stateData.blocked}</div>
+      <div class="kpi-sub">${stateData.bugs.length} defect items</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="stateSearchInput" class="filter-input" placeholder="Search state resources by title, address, status, or tag..." oninput="filterStateResources()">
+  </div>
+
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tab-btn-st-runs" onclick="switchStateTab('runs')">Test Runs (${stateData.runs.length})</button>
+    <button class="tab-btn" id="tab-btn-st-cases" onclick="switchStateTab('cases')">Test Cases (${stateData.cases.length})</button>
+    <button class="tab-btn" id="tab-btn-st-plans" onclick="switchStateTab('plans')">Test Plans (${stateData.plans.length})</button>
+    <button class="tab-btn" id="tab-btn-st-bugs" onclick="switchStateTab('bugs')">Bugs (${stateData.bugs.length})</button>
+  </div>
+
+  <!-- SECTION: STATE TEST RUNS -->
+  <div id="section-st-runs" class="state-section">
+    ${
+      stateData.runs.length === 0
+        ? `<div class="empty-state">No test runs found in state ledger. Run <code>testform apply</code> to execute and persist runs.</div>`
+        : stateData.runs.map(r => {
+            const attrs = r.attributes || {};
+            const st = String(attrs.status || 'pending').toLowerCase();
+            const cases = attrs.testcases || attrs.testcaseStatuses || [];
+            const casesArr = Array.isArray(cases) ? cases : Object.keys(cases);
+            return `
+      <div class="spec-card state-card" data-search="${escape((attrs.title || r.identity || '').toLowerCase())} ${escape(st)}">
+        <div class="spec-header">
+          <div class="spec-title-area">
+            <span style="font-size:16px;">🚀</span>
+            <div>
+              <div class="spec-title">${escape(attrs.title || r.identity)}</div>
+              <div class="spec-path">${escape(r.identity || '')} ${attrs.remoteId ? `(${escape(attrs.remoteId)})` : ''}</div>
+            </div>
+          </div>
+          <div>
+            <span class="status-pill status-${st}">${st}</span>
+          </div>
+        </div>
+        ${
+          casesArr.length > 0
+            ? `<ul class="scenario-list">
+                ${casesArr.map((c: any) => {
+                  const cAddr = typeof c === 'string' ? c : c.identity || '';
+                  const cSt = String(typeof c === 'object' && c.status ? c.status : 'pending').toLowerCase();
+                  return `
+                <li class="scenario-item">
+                  <div>
+                    <span class="status-pill status-${cSt}">${cSt}</span>
+                    <span style="font-weight: 500; margin-left: 8px;">${escape(cAddr)}</span>
+                  </div>
+                </li>`;
+                }).join('')}
+              </ul>`
+            : ''
+        }
+      </div>`;
+          }).join('')
+    }
+  </div>
+
+  <!-- SECTION: STATE TEST CASES -->
+  <div id="section-st-cases" class="state-section" style="display:none;">
+    ${
+      stateData.cases.length === 0
+        ? `<div class="empty-state">No test cases found in state.</div>`
+        : stateData.cases.map(c => {
+            const attrs = c.attributes || {};
+            const st = String(attrs.status || 'pending').toLowerCase();
+            const customFields = (attrs.custom_fields || attrs.fields || {}) as Record<string, any>;
+            const fieldEntries = Object.entries(customFields);
+            const searchTerms = `${escape((attrs.title || c.identity || '').toLowerCase())} ${escape(st)} ${escape((attrs.labels || []).join(' ')).toLowerCase()} ${fieldEntries.map(([k, v]) => `${k} ${v}`).join(' ').toLowerCase()}`;
+            return `
+      <div class="spec-card state-card" data-search="${searchTerms}">
+        <div class="spec-header">
+          <div class="spec-title-area">
+            <span style="font-size:16px;">🧪</span>
+            <div>
+              <div class="spec-title">${escape(attrs.title || c.identity)}</div>
+              <div class="spec-path">${escape(c.identity || '')}</div>
+              ${
+                fieldEntries.length > 0
+                  ? `<div style="margin-top: 4px;">
+                      ${fieldEntries.map(([k, v]) => `<span class="field-pill"><strong>${escape(k)}:</strong> ${escape(String(v))}</span>`).join('')}
+                     </div>`
+                  : ''
+              }
+            </div>
+          </div>
+          <div>
+            ${(attrs.labels || []).map((l: string) => `<span class="tag">${escape(l)}</span>`).join('')}
+            <span class="status-pill status-${st}">${st}</span>
+          </div>
+        </div>
+      </div>`;
+          }).join('')
+    }
+  </div>
+
+  <!-- SECTION: STATE TEST PLANS -->
+  <div id="section-st-plans" class="state-section" style="display:none;">
+    ${
+      stateData.plans.length === 0
+        ? `<div class="empty-state">No test plans found in state.</div>`
+        : stateData.plans.map(p => {
+            const attrs = p.attributes || {};
+            const linked = attrs.testruns || [];
+            return `
+      <div class="spec-card state-card" data-search="${escape((attrs.title || p.identity || '').toLowerCase())}">
+        <div class="spec-header">
+          <div class="spec-title-area">
+            <span style="font-size:16px;">📋</span>
+            <div>
+              <div class="spec-title">${escape(attrs.title || p.identity)}</div>
+              <div class="spec-path">${escape(p.identity || '')}</div>
+            </div>
+          </div>
+          <div>
+            <span class="tag">${linked.length} runs linked</span>
+          </div>
+        </div>
+      </div>`;
+          }).join('')
+    }
+  </div>
+
+  <!-- SECTION: STATE BUGS -->
+  <div id="section-st-bugs" class="state-section" style="display:none;">
+    ${
+      stateData.bugs.length === 0
+        ? `<div class="empty-state">No defects recorded in state ledger.</div>`
+        : stateData.bugs.map(b => {
+            const attrs = b.attributes || {};
+            const st = String(attrs.status || 'open').toLowerCase();
+            const customFields = (attrs.custom_fields || attrs.fields || {}) as Record<string, any>;
+            const fieldEntries = Object.entries(customFields);
+            if (attrs.severity && !customFields['severity']) fieldEntries.unshift(['severity', attrs.severity]);
+            if (attrs.priority && !customFields['priority']) fieldEntries.unshift(['priority', attrs.priority]);
+            const searchTerms = `${escape((attrs.title || b.identity || '').toLowerCase())} ${fieldEntries.map(([k, v]) => `${k} ${v}`).join(' ').toLowerCase()}`;
+            return `
+      <div class="spec-card state-card" data-search="${searchTerms}">
+        <div class="spec-header">
+          <div class="spec-title-area">
+            <span style="font-size:16px;">🐛</span>
+            <div>
+              <div class="spec-title">${escape(attrs.title || b.identity)}</div>
+              <div class="spec-path">${escape(b.identity || '')}</div>
+              ${
+                fieldEntries.length > 0
+                  ? `<div style="margin-top: 4px;">
+                      ${fieldEntries.map(([k, v]) => `<span class="field-pill"><strong>${escape(k)}:</strong> ${escape(String(v))}</span>`).join('')}
+                     </div>`
+                  : ''
+              }
+            </div>
+          </div>
+          <div>
+            <span class="status-pill status-failed">${st}</span>
+          </div>
+        </div>
+      </div>`;
+          }).join('')
+    }
+  </div>
+      `
+      : `
+  <!-- FILES DASHBOARD -->
+  <div class="kpi-row">
+    <div class="kpi-card active" id="kpi-testcases" onclick="switchFilesTab('testcases')">
+      <div class="kpi-title">🧪 Test Cases</div>
+      <div class="kpi-value">${totalFilesCases}</div>
+      <div class="kpi-sub">${filesData.testcases.length} feature files registered</div>
+    </div>
+    <div class="kpi-card" id="kpi-testruns" onclick="switchFilesTab('testruns')">
+      <div class="kpi-title">🚀 Test Runs</div>
+      <div class="kpi-value">${totalFilesRuns}</div>
       <div class="kpi-sub">Execution suites &amp; target rules</div>
     </div>
-    <div class="kpi-card" id="kpi-testplans" onclick="switchTab('testplans')">
+    <div class="kpi-card" id="kpi-testplans" onclick="switchFilesTab('testplans')">
       <div class="kpi-title">📋 Test Plans</div>
-      <div class="kpi-value">${totalPlans}</div>
+      <div class="kpi-value">${totalFilesPlans}</div>
       <div class="kpi-sub">Release governance plans</div>
     </div>
   </div>
 
   <div class="filter-bar">
-    <input type="text" id="searchInput" class="filter-input" placeholder="Search specs by feature, scenario name, or tag (e.g. @smoke, @tc-1)..." oninput="filterSpecs()">
+    <input type="text" id="searchInput" class="filter-input" placeholder="Search specs by feature, scenario name, or tag (e.g. @smoke, @tc-1)..." oninput="filterFilesSpecs()">
   </div>
 
   <div class="tab-nav">
-    <button class="tab-btn active" id="tab-btn-testcases" onclick="switchTab('testcases')">Test Cases (${totalCases})</button>
-    <button class="tab-btn" id="tab-btn-testruns" onclick="switchTab('testruns')">Test Runs (${totalRuns})</button>
-    <button class="tab-btn" id="tab-btn-testplans" onclick="switchTab('testplans')">Test Plans (${totalPlans})</button>
+    <button class="tab-btn active" id="tab-btn-testcases" onclick="switchFilesTab('testcases')">Test Cases (${totalFilesCases})</button>
+    <button class="tab-btn" id="tab-btn-testruns" onclick="switchFilesTab('testruns')">Test Runs (${totalFilesRuns})</button>
+    <button class="tab-btn" id="tab-btn-testplans" onclick="switchFilesTab('testplans')">Test Plans (${totalFilesPlans})</button>
   </div>
 
   <!-- SECTION 1: TEST CASES -->
   <div id="section-testcases" class="spec-section">
     ${
-      data.testcases.length === 0
+      filesData.testcases.length === 0
         ? `<div class="empty-state">No test case feature files found (*.case.feature or @testcase)</div>`
-        : data.testcases
-            .map(
-              f => `
-      <div class="feature-card spec-card" data-search="${escape(f.title.toLowerCase())} ${escape(f.relPath.toLowerCase())} ${escape(f.scenarios.map(s => s.title + ' ' + (s.tag || '')).join(' ').toLowerCase())}">
-        <div class="feature-header" onclick="openFile('${escape(f.fsPath.replace(/\\/g, '\\\\'))}', ${f.line})">
-          <div class="feature-title-area">
+        : filesData.testcases.map(f => {
+            const allFieldsSearch = f.scenarios
+              .map(s => Object.entries(s.fields || {}).map(([k, v]) => `${k} ${v}`).join(' '))
+              .join(' ')
+              .toLowerCase();
+            return `
+      <div class="spec-card file-card" data-search="${escape(f.title.toLowerCase())} ${escape(f.relPath.toLowerCase())} ${escape(f.scenarios.map(s => s.title + ' ' + (s.tag || '')).join(' ').toLowerCase())} ${escape(allFieldsSearch)}">
+        <div class="spec-header" onclick="openFile('${escape(f.fsPath.replace(/\\/g, '\\\\'))}', ${f.line})">
+          <div class="spec-title-area">
             <span style="font-size:16px;">📄</span>
             <div>
-              <div class="feature-title">${escape(f.title)}</div>
-              <div class="feature-path">${escape(f.relPath)}</div>
+              <div class="spec-title">${escape(f.title)}</div>
+              <div class="spec-path">${escape(f.relPath)}</div>
             </div>
           </div>
           <div>
@@ -649,121 +1045,83 @@ export class SpecsHubPanel {
           </div>
         </div>
         <ul class="scenario-list">
-          ${f.scenarios
-            .map(
-              sc => `
-            <li class="scenario-item spec-scenario" data-search="${escape(sc.title.toLowerCase())} ${escape((sc.tag || '').toLowerCase())}">
-              <div class="scenario-info">
-                ${sc.tag ? `<span class="tag tag-tc">${escape(sc.tag)}</span>` : ''}
+          ${f.scenarios.map(sc => {
+            const fieldEntries = Object.entries(sc.fields || {});
+            return `
+            <li class="scenario-item">
+              <div>
+                ${sc.tag ? `<span class="tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">${escape(sc.tag)}</span>` : ''}
                 <span style="font-weight: 500;">${escape(sc.title)}</span>
+                ${
+                  fieldEntries.length > 0
+                    ? `<div style="margin-top: 4px;">
+                        ${fieldEntries.map(([k, v]) => `<span class="field-pill"><strong>${escape(k)}:</strong> ${escape(v)}</span>`).join('')}
+                       </div>`
+                    : ''
+                }
               </div>
-              <button class="jump-btn" onclick="openFile('${escape(f.fsPath.replace(/\\/g, '\\\\'))}', ${sc.line})">Jump to line ${sc.line + 1}</button>
-            </li>
-          `
-            )
-            .join('')}
+              <button class="jump-btn" onclick="openFile('${escape(f.fsPath.replace(/\\/g, '\\\\'))}', ${sc.line})">Line ${sc.line + 1}</button>
+            </li>`;
+          }).join('')}
         </ul>
-      </div>
-    `
-            )
-            .join('')
+      </div>`;
+          }).join('')
     }
   </div>
 
   <!-- SECTION 2: TEST RUNS -->
-  <div id="section-testruns" class="spec-section" style="display: none;">
+  <div id="section-testruns" class="spec-section" style="display:none;">
     ${
-      data.testruns.length === 0
-        ? `<div class="empty-state">No test run suites found (*.run.feature or @testrun)</div>`
-        : data.testruns
-            .map(
-              r => `
-      <div class="feature-card spec-card" data-search="${escape(r.title.toLowerCase())} ${escape(r.relPath.toLowerCase())}">
-        <div class="feature-header" onclick="openFile('${escape(r.fsPath.replace(/\\/g, '\\\\'))}', ${r.line})">
-          <div class="feature-title-area">
+      filesData.testruns.length === 0
+        ? `<div class="empty-state">No test run feature files found (*.run.feature or @testrun)</div>`
+        : filesData.testruns.map(r => `
+      <div class="spec-card file-card" data-search="${escape(r.title.toLowerCase())} ${escape(r.relPath.toLowerCase())}">
+        <div class="spec-header" onclick="openFile('${escape(r.fsPath.replace(/\\/g, '\\\\'))}', ${r.line})">
+          <div class="spec-title-area">
             <span style="font-size:16px;">🚀</span>
             <div>
-              <div class="feature-title">${escape(r.title)}</div>
-              <div class="feature-path">${escape(r.relPath)}</div>
+              <div class="spec-title">${escape(r.title)}</div>
+              <div class="spec-path">${escape(r.relPath)}</div>
             </div>
           </div>
-          <div>
-            ${r.tags.map(t => `<span class="tag">${escape(t)}</span>`).join('')}
-            <button class="jump-btn" onclick="event.stopPropagation(); openFile('${escape(r.fsPath.replace(/\\/g, '\\\\'))}', ${r.line})">Open Suite</button>
-          </div>
+          <button class="jump-btn" onclick="event.stopPropagation(); openFile('${escape(r.fsPath.replace(/\\/g, '\\\\'))}', ${r.line})">Open File</button>
         </div>
-        ${r.rules
-          .map(
-            rl => `
-          <div class="rule-title">Rule: ${escape(rl.title)}</div>
-          <ul class="scenario-list">
-            ${rl.scenarios
-              .map(
-                sc => `
-              <li class="scenario-item">
-                <div class="scenario-info">
-                  <span style="color: #38bdf8;">•</span>
-                  <span>${escape(sc)}</span>
-                </div>
-                <button class="jump-btn" onclick="openFile('${escape(r.fsPath.replace(/\\/g, '\\\\'))}', ${rl.line})">View Rule</button>
-              </li>
-            `
-              )
-              .join('')}
-          </ul>
-        `
-          )
-          .join('')}
+        <ul class="scenario-list">
+          ${r.rules.map(rl => `
+            <li class="scenario-item">
+              <div style="font-weight: 500;">Rule: ${escape(rl.title)} (${rl.scenarios.length} scenarios)</div>
+              <button class="jump-btn" onclick="openFile('${escape(r.fsPath.replace(/\\/g, '\\\\'))}', ${rl.line})">Line ${rl.line + 1}</button>
+            </li>
+          `).join('')}
+        </ul>
       </div>
-    `
-            )
-            .join('')
+    `).join('')
     }
   </div>
 
   <!-- SECTION 3: TEST PLANS -->
-  <div id="section-testplans" class="spec-section" style="display: none;">
+  <div id="section-testplans" class="spec-section" style="display:none;">
     ${
-      data.testplans.length === 0
-        ? `<div class="empty-state">No test plans found (*.plan.feature or @testplan)</div>`
-        : data.testplans
-            .map(
-              p => `
-      <div class="feature-card spec-card" data-search="${escape(p.title.toLowerCase())} ${escape(p.relPath.toLowerCase())}">
-        <div class="feature-header" onclick="openFile('${escape(p.fsPath.replace(/\\/g, '\\\\'))}', ${p.line})">
-          <div class="feature-title-area">
+      filesData.testplans.length === 0
+        ? `<div class="empty-state">No test plan feature files found (*.plan.feature or @testplan)</div>`
+        : filesData.testplans.map(p => `
+      <div class="spec-card file-card" data-search="${escape(p.title.toLowerCase())} ${escape(p.relPath.toLowerCase())}">
+        <div class="spec-header" onclick="openFile('${escape(p.fsPath.replace(/\\/g, '\\\\'))}', ${p.line})">
+          <div class="spec-title-area">
             <span style="font-size:16px;">📋</span>
             <div>
-              <div class="feature-title">${escape(p.title)}</div>
-              <div class="feature-path">${escape(p.relPath)}</div>
+              <div class="spec-title">${escape(p.title)}</div>
+              <div class="spec-path">${escape(p.relPath)}</div>
             </div>
           </div>
-          <div>
-            ${p.tags.map(t => `<span class="tag">${escape(t)}</span>`).join('')}
-            <button class="jump-btn" onclick="event.stopPropagation(); openFile('${escape(p.fsPath.replace(/\\/g, '\\\\'))}', ${p.line})">Open Plan</button>
-          </div>
+          <button class="jump-btn" onclick="event.stopPropagation(); openFile('${escape(p.fsPath.replace(/\\/g, '\\\\'))}', ${p.line})">Open File</button>
         </div>
-        <ul class="scenario-list">
-          ${p.runs
-            .map(
-              rn => `
-            <li class="scenario-item">
-              <div class="scenario-info">
-                <span style="color: #4ade80;">✔ Target Run:</span>
-                <span style="font-weight: 500;">${escape(rn.title)}</span>
-              </div>
-              <button class="jump-btn" onclick="openFile('${escape(p.fsPath.replace(/\\/g, '\\\\'))}', ${rn.line})">Line ${rn.line + 1}</button>
-            </li>
-          `
-            )
-            .join('')}
-        </ul>
       </div>
-    `
-            )
-            .join('')
+    `).join('')
     }
   </div>
+      `
+  }
 
   <script>
     const vscode = acquireVsCodeApi();
@@ -776,7 +1134,11 @@ export class SpecsHubPanel {
       vscode.postMessage({ command });
     }
 
-    function switchTab(tabName) {
+    function switchMode(mode) {
+      vscode.postMessage({ command: 'switchMode', mode });
+    }
+
+    function switchFilesTab(tabName) {
       document.querySelectorAll('.spec-section').forEach(el => el.style.display = 'none');
       document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.kpi-card').forEach(el => el.classList.remove('active'));
@@ -791,23 +1153,38 @@ export class SpecsHubPanel {
       if (kpi) kpi.classList.add('active');
     }
 
-    function filterSpecs() {
+    function switchStateTab(tabName) {
+      document.querySelectorAll('.state-section').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.kpi-card').forEach(el => el.classList.remove('active'));
+
+      const sec = document.getElementById('section-st-' + tabName);
+      if (sec) sec.style.display = 'block';
+
+      const btn = document.getElementById('tab-btn-st-' + tabName);
+      if (btn) btn.classList.add('active');
+
+      const kpi = document.getElementById('kpi-st-' + tabName);
+      if (kpi) kpi.classList.add('active');
+    }
+
+    function filterFilesSpecs() {
       const q = document.getElementById('searchInput').value.toLowerCase().trim();
-      document.querySelectorAll('.spec-card').forEach(card => {
+      document.querySelectorAll('.file-card').forEach(card => {
         const text = card.getAttribute('data-search') || '';
-        if (!q || text.includes(q)) {
-          card.style.display = 'block';
-        } else {
-          card.style.display = 'none';
-        }
+        card.style.display = (!q || text.includes(q)) ? 'block' : 'none';
       });
     }
 
-    // Default active card
-    document.getElementById('kpi-testcases').classList.add('active');
+    function filterStateResources() {
+      const q = document.getElementById('stateSearchInput').value.toLowerCase().trim();
+      document.querySelectorAll('.state-card').forEach(card => {
+        const text = card.getAttribute('data-search') || '';
+        card.style.display = (!q || text.includes(q)) ? 'block' : 'none';
+      });
+    }
   </script>
 </body>
 </html>`;
   }
 }
-
