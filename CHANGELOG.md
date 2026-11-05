@@ -1,9 +1,59 @@
 # Changelog
 
-All notable changes to the **Testform** Visual Studio Code extension (`fromeroc9.testform`) will be documented in this file.
+All notable changes to the **Testform** Visual Studio Code extension (`fromeroc9.testform-dsl`) will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.2.0] - 2026-11-05
+
+### Added
+
+#### Dynamic Custom Field Detection Engine
+- **Workspace-wide Custom Field Scanner (`field-detector.ts`)**:
+  - Automatically analyzes workspace YAML manifests (`main.yml`, `testform.yml`, `resource.yml`), the active state file (`testform.state` / `.testform/testform.state`), and all workspace `.feature` files.
+  - Dynamically registers custom field names, exact occurrence counts, and provenance origins (`manifest`, `testform.state`, `*.feature`) while safely excluding native attributes (`status`, `target`, `trace`, `evidence`, etc.).
+  - Serves as the central data source for field-aware reporting throughout the extension.
+
+#### Interactive Reports Explorer (`ReportsTreeProvider`)
+- **Granular Custom Field Selection**:
+  - Reports in the Reports view now expand to reveal an interactive checklist of all detected project custom fields using native VS Code tree item checkboxes (`checkboxState`).
+  - Users can toggle individual custom fields, select all (`testform.report.selectAllFields`), or deselect all (`testform.report.deselectAllFields`).
+- **Inline Format Selector (`testform.report.selectFormat`)**:
+  - Direct format picker toolbar and inline action supporting Excel (`xlsx`), Markdown (`md`), Word (`docx`), CSV (`csv`), and JSON (`json`).
+- **Direct Report Execution (`testform.report.runWithSelection`)**:
+  - One-click inline Play button to trigger `testform report <slug> -format=<fmt> --fields="all|none|field1,field2"` in the integrated terminal.
+- **Custom Report Discovery**:
+  - Dynamically scans `.testform/reports/*.ts` and `*.js` for user-defined custom reports and exposes them alongside core reports.
+
+#### Specs Hub Export Drawer (`SpecsHubPanel`)
+- **Slide-out Report Export Panel**:
+  - Added an interactive collapsible Export Drawer inside the full-screen Specs Hub Webview.
+  - Interactive controls including report type dropdown, format selection radio chips (Excel, Markdown, Word, CSV, JSON), and an active custom fields checklist with live count badges.
+  - "Generar y Abrir Reporte" button delegates directly to `testform report` with selected filters and flags.
+
+#### Unified Dual-Mode Explorer (`StateTreeProvider`)
+- **Dual-Mode Switcher**:
+  - Seamlessly toggles between **State Mode** (`testform.state`) and **Files Mode** (workspace `.feature` specification hierarchy) via top navigation bar actions (`testform.explorer.switchToFiles` and `testform.explorer.switchToState`).
+- **Copy Canonical Address**:
+  - Added `testform.state.copyAddress` command across tree nodes (resources, testcases, executed runs, and scenario items) to quickly copy addresses for CLI execution or suite references.
+
+#### Language Server Protocol (LSP) Intelligence
+- **Intelligent Document Scope Detection (`detectDocumentScope`)**:
+  - Accurately classifies documents as `testcase`, `testrun`, `testplan`, or `bug` based on file tags, identity prefixes (`@tc-`, `@tr-`, `@tp-`, `@bg-`), path matching, and manifest `scopes:` configuration.
+- **Context-Aware `Rule:` & `Scenario:` Autocompletions**:
+  - `Rule:` step autocompletes `*.case.feature` within testruns, and `*.run.feature` within testplans.
+  - `Scenario:` completion provides scenario target addresses within enclosing rules, respecting `testform.testrun.targetFormat` (`tag`, `tag-bare`, `canonical`, `file-tag`, `slug-tag`, `name`, `short`, `classic`).
+- **Smart DSL Mark Step Snippets**:
+  - Enhanced snippets and auto-replacements for `* mark status = ...`, `* mark target = ...`, `* mark trace = ...`, and `* mark evidence = ...`.
+
+#### Tooling & Antigravity IDE Integration
+- **1-Click IDE Deployment Script**:
+  - Added `update-antigravity.ps1` PowerShell script and npm shortcut (`npm run update:ide`) to package the `.vsix` extension and install/update it directly into Google Antigravity IDE with `--force`.
+- **Packaging Refinement**:
+  - Excluded `*.ps1` files from VSIX distribution via `.vscodeignore`.
 
 ---
 

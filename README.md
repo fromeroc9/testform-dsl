@@ -13,7 +13,7 @@
   <a href="https://marketplace.visualstudio.com/items?itemName=fromeroc9.testform-dsl"><img src="https://img.shields.io/visual-studio-marketplace/v/fromeroc9.testform-dsl?color=blue&label=VS%20Marketplace" alt="Visual Studio Marketplace Version" /></a>
   <a href="https://open-vsx.org/extension/fromeroc9/testform-dsl"><img src="https://img.shields.io/badge/Open%20VSX-Registry-9E00FF?style=flat-square&logo=eclipseche&logoColor=white" alt="Open VSX Registry" /></a>
   <a href="https://www.npmjs.com/package/@fromeroc9/testform"><img src="https://img.shields.io/npm/v/@fromeroc9/testform/beta?style=flat-square&color=4F46E5&label=CLI%20beta" alt="NPM Beta Version" /></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Extension Version v1.0.0" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.2.0-blue.svg" alt="Extension Version v1.2.0" /></a>
   <a href="https://github.com/fromeroc9/testform-vscode/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-green.svg" alt="License: GPL-3.0-or-later" /></a>
   <a href="https://fromeroc9.github.io/testform-docs/"><img src="https://img.shields.io/badge/docs-testform-blue?style=flat-square&logo=gitbook&logoColor=white" alt="Documentation Portal" /></a>
 </p>

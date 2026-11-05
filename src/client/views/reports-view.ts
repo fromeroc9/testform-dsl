@@ -198,6 +198,30 @@ export class ReportsTreeProvider implements vscode.TreeDataProvider<ReportTreeIt
     this._onDidChangeTreeData.fire();
   }
 
+  public selectAllFields(slug?: string): void {
+    if (slug) {
+      const all = new Set(this.detectedFields.map(f => f.name.toLowerCase()));
+      this.selectedFieldsByReport.set(slug, all);
+    } else {
+      for (const r of CORE_REPORTS) {
+        const all = new Set(this.detectedFields.map(f => f.name.toLowerCase()));
+        this.selectedFieldsByReport.set(r.slug, all);
+      }
+    }
+    this._onDidChangeTreeData.fire();
+  }
+
+  public deselectAllFields(slug?: string): void {
+    if (slug) {
+      this.selectedFieldsByReport.set(slug, new Set<string>());
+    } else {
+      for (const r of CORE_REPORTS) {
+        this.selectedFieldsByReport.set(r.slug, new Set<string>());
+      }
+    }
+    this._onDidChangeTreeData.fire();
+  }
+
   public runReportDirect(reportSlug: string): void {
     const fields = this.getReportFields(reportSlug);
     let fieldsArg = '';
