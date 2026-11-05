@@ -334,6 +334,42 @@
         "title": "Speculative Plan Current Feature",
         "category": "Testform",
         "icon": "$(search)"
+      },
+      {
+        "command": "testform.report.runWithSelection",
+        "title": "Run Report (with selected fields)",
+        "category": "Testform",
+        "icon": "$(play)"
+      },
+      {
+        "command": "testform.report.selectFormat",
+        "title": "Select Output Format",
+        "category": "Testform",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "testform.report.toggleField",
+        "title": "Toggle Field Selection",
+        "category": "Testform",
+        "icon": "$(check)"
+      },
+      {
+        "command": "testform.report.selectAllFields",
+        "title": "Select All Fields",
+        "category": "Testform",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "testform.report.deselectAllFields",
+        "title": "Deselect All Fields",
+        "category": "Testform",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "testform.report.refreshView",
+        "title": "Refresh Reports View",
+        "category": "Testform",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -366,7 +402,17 @@
         {
           "command": "testform.report",
           "when": "view == testform.views.reports",
-          "group": "navigation"
+          "group": "navigation@0"
+        },
+        {
+          "command": "testform.report.selectFormat",
+          "when": "view == testform.views.reports",
+          "group": "navigation@1"
+        },
+        {
+          "command": "testform.report.refreshView",
+          "when": "view == testform.views.reports",
+          "group": "navigation@2"
         },
         {
           "command": "testform.modules.refresh",
@@ -392,6 +438,16 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "testform.report.selectFormat",
+          "when": "view == testform.views.reports && viewItem == testformReport",
+          "group": "inline@0"
+        },
+        {
+          "command": "testform.report.runWithSelection",
+          "when": "view == testform.views.reports && viewItem == testformReport",
+          "group": "inline@1"
+        },
         {
           "command": "testform.state.copyAddress",
           "when": "view == testform.views.state && (viewItem == testformResource || viewItem == testformResourceTainted || viewItem == testformExecutedCase || viewItem == testformAssociatedRun || viewItem == testformFeatureScenario || viewItem == testformAttribute)",

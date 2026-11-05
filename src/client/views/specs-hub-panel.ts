@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { runTestformCommand } from '../terminal';
+import { detectProjectCustomFields, DetectedField } from '../field-detector';
 
 export interface TestCaseItem {
   tag?: string;
@@ -146,6 +148,20 @@ export class SpecsHubPanel {
             vscode.commands.executeCommand('testform.plan');
             break;
           }
+          case 'exportReport': {
+            const slug = message.slug || 'testcase-summary';
+            const fmt = message.format || 'xlsx';
+            let fieldsArg = '';
+            if (message.fields === 'all') {
+              fieldsArg = ' --fields="all"';
+            } else if (message.fields === 'none') {
+              fieldsArg = ' --fields="none"';
+            } else if (Array.isArray(message.fields) && message.fields.length > 0) {
+              fieldsArg = ` --fields="${message.fields.join(',')}"`;
+            }
+            runTestformCommand(`report ${slug} -format=${fmt}${fieldsArg}`);
+            break;
+          }
         }
       },
       null,
@@ -168,7 +184,9 @@ export class SpecsHubPanel {
   public async refresh(): Promise<void> {
     const filesData = await this.scanSpecs();
     const stateData = await this.scanState();
-    this._panel.webview.html = this.renderHtml(filesData, stateData);
+    const rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    const detectedFields = rootPath ? detectProjectCustomFields(rootPath) : [];
+    this._panel.webview.html = this.renderHtml(filesData, stateData, detectedFields);
   }
 
   public dispose(): void {
@@ -467,7 +485,8 @@ export class SpecsHubPanel {
       testruns: TestRunSuiteItem[];
       testplans: TestPlanItem[];
     },
-    stateData: StateReportData
+    stateData: StateReportData,
+    detectedFields: DetectedField[] = []
   ): string {
     const totalFilesCases = filesData.testcases.reduce((sum, f) => sum + f.scenarios.length, 0);
     const totalFilesRuns = filesData.testruns.length;
@@ -767,6 +786,165 @@ export class SpecsHubPanel {
       align-items: center;
       font-size: 12px;
     }
+    /* Export Drawer */
+    .export-drawer {
+      background: var(--card-bg);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .export-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .btn-close {
+      background: none;
+      border: none;
+      color: var(--fg);
+      font-size: 14px;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .btn-close:hover {
+      background: var(--hover-bg);
+    }
+    .export-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 640px) {
+      .export-grid { grid-template-columns: 1fr; }
+    }
+    .export-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .export-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--fg);
+    }
+    .export-select {
+      background: var(--bg);
+      color: var(--fg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 12px;
+      outline: none;
+    }
+    .export-select:focus {
+      border-color: var(--accent);
+    }
+    .format-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .chip-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 5px 9px;
+      font-size: 11px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .chip-label:hover {
+      background: var(--hover-bg);
+      border-color: var(--accent);
+    }
+    .chip-label input[type="radio"] {
+      margin: 0;
+      cursor: pointer;
+    }
+    .export-fields-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .export-fields-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .fields-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .mini-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--fg);
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .mini-btn:hover {
+      background: var(--hover-bg);
+      border-color: var(--accent);
+    }
+    .fields-checklist {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-height: 140px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    .field-check-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.1s ease;
+    }
+    .field-check-item:hover {
+      border-color: var(--accent);
+      background: var(--hover-bg);
+    }
+    .field-check-item input[type="checkbox"] {
+      margin: 0;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+    .field-badge {
+      font-size: 10px;
+      background: var(--hover-bg);
+      padding: 1px 5px;
+      border-radius: 10px;
+      color: var(--vscode-descriptionForeground, #888);
+    }
+    .export-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding-top: 6px;
+    }
   </style>
 </head>
 <body>
@@ -786,9 +964,78 @@ export class SpecsHubPanel {
       </div>
     </div>
     <div class="header-actions">
+      <button class="btn btn-secondary" onclick="toggleExportBar()">📊 Export Report</button>
       <button class="btn btn-secondary" onclick="sendMessage('refresh')">↻ Refresh</button>
       <button class="btn btn-secondary" onclick="sendMessage('runPlan')">🔍 Speculative Plan</button>
       <button class="btn" onclick="sendMessage('runApply')">▶ Run Apply</button>
+    </div>
+  </div>
+
+  <!-- EXPORT REPORT DRAWER -->
+  <div id="exportBar" class="export-drawer" style="display: none;">
+    <div class="export-header">
+      <div style="font-weight: 600; font-size: 13px;">📊 Generador de Reportes de Calidad</div>
+      <button class="btn-close" onclick="toggleExportBar()">✕</button>
+    </div>
+    <div class="export-grid">
+      <div class="export-col">
+        <label class="export-label">Tipo de Reporte:</label>
+        <select id="exportSlug" class="export-select">
+          <option value="testcase-summary" selected>Test Case Summary (testcase-summary)</option>
+          <option value="testrun-summary">Test Run Summary (testrun-summary)</option>
+          <option value="testrun-detailed">Detailed Test Runs (testrun-detailed)</option>
+          <option value="testplan-summary">Test Plan Summary (testplan-summary)</option>
+          <option value="defects">Defect Backlog (defects)</option>
+          <option value="traceability">Traceability Matrix (traceability)</option>
+          <option value="coverage">Coverage Matrix (coverage)</option>
+          <option value="two-dimensional">Two-Dimensional Matrix (two-dimensional)</option>
+          <option value="test-case-activity">Automation & Activity (test-case-activity)</option>
+        </select>
+      </div>
+      <div class="export-col">
+        <label class="export-label">Formato de Salida:</label>
+        <div class="format-chips">
+          <label class="chip-label"><input type="radio" name="exportFormat" value="xlsx" checked> <span>📊 Excel (.xlsx)</span></label>
+          <label class="chip-label"><input type="radio" name="exportFormat" value="md"> <span>📝 Markdown (.md)</span></label>
+          <label class="chip-label"><input type="radio" name="exportFormat" value="docx"> <span>📄 Word (.docx)</span></label>
+          <label class="chip-label"><input type="radio" name="exportFormat" value="csv"> <span>📑 CSV (.csv)</span></label>
+          <label class="chip-label"><input type="radio" name="exportFormat" value="json"> <span>{ } JSON</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="export-fields-box">
+      <div class="export-fields-header">
+        <div class="export-label" style="margin-bottom: 0;">
+          Campos Personalizados (Columnas adicionales):
+        </div>
+        <div class="fields-actions">
+          <button class="mini-btn" type="button" onclick="selectAllFields(true)">✓ Seleccionar Todos</button>
+          <button class="mini-btn" type="button" onclick="selectAllFields(false)">✕ Desmarcar Todos</button>
+        </div>
+      </div>
+      <div class="fields-checklist">
+        ${
+          detectedFields.length === 0
+            ? '<span style="color: var(--vscode-descriptionForeground, #888); font-size: 11px;">No se detectaron custom fields en el proyecto (se incluirán columnas nativas).</span>'
+            : detectedFields.map(f => `
+                <label class="field-check-item">
+                  <input type="checkbox" name="customField" value="${escape(f.name)}" checked>
+                  <strong>${escape(f.name)}</strong>
+                  <span class="field-badge">${f.count} ${f.count === 1 ? 'caso' : 'casos'}</span>
+                </label>
+              `).join('')
+        }
+      </div>
+    </div>
+
+    <div class="export-footer">
+      <div style="font-size: 11px; color: var(--vscode-descriptionForeground, #888);">
+        Los campos seleccionados se incorporarán como columnas en el reporte nativo.
+      </div>
+      <button class="btn" style="padding: 7px 18px;" onclick="doExportReport()">
+        🚀 Generar y Abrir Reporte
+      </button>
     </div>
   </div>
 
@@ -1181,6 +1428,50 @@ export class SpecsHubPanel {
       document.querySelectorAll('.state-card').forEach(card => {
         const text = card.getAttribute('data-search') || '';
         card.style.display = (!q || text.includes(q)) ? 'block' : 'none';
+      });
+    }
+
+    function toggleExportBar() {
+      const el = document.getElementById('exportBar');
+      if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        if (el.style.display === 'block') {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+    }
+
+    function selectAllFields(checked) {
+      document.querySelectorAll('input[name="customField"]').forEach(cb => {
+        cb.checked = checked;
+      });
+    }
+
+    function doExportReport() {
+      const slugSelect = document.getElementById('exportSlug');
+      const slug = slugSelect ? slugSelect.value : 'testcase-summary';
+
+      const formatRadio = document.querySelector('input[name="exportFormat"]:checked');
+      const format = formatRadio ? formatRadio.value : 'xlsx';
+
+      const checkboxes = Array.from(document.querySelectorAll('input[name="customField"]'));
+      let fields = 'all';
+      if (checkboxes.length > 0) {
+        const checked = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
+        if (checked.length === checkboxes.length) {
+          fields = 'all';
+        } else if (checked.length === 0) {
+          fields = 'none';
+        } else {
+          fields = checked;
+        }
+      }
+
+      vscode.postMessage({
+        command: 'exportReport',
+        slug,
+        format,
+        fields
       });
     }
   </script>

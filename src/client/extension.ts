@@ -31,6 +31,7 @@ import { ReportsTreeProvider } from './views/reports-view';
 import { TestformTestController } from './testing/test-controller';
 import { TestformFileDecorationProvider } from './views/decorations';
 import { TestformWorkspaceManager } from './workspace-manager';
+import { detectProjectCustomFields } from './field-detector';
 
 let client: LanguageClient;
 
@@ -172,7 +173,22 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(modulesProvider);
 
   const reportsProvider = new ReportsTreeProvider();
-  vscode.window.registerTreeDataProvider('testform.views.reports', reportsProvider);
+  const reportsTreeView = vscode.window.createTreeView('testform.views.reports', {
+    treeDataProvider: reportsProvider,
+    showCollapseAll: true
+  });
+  reportsTreeView.onDidChangeCheckboxState(e => {
+    for (const [item, state] of e.items) {
+      if (item.slug && item.fieldName) {
+        reportsProvider.setFieldState(item.slug, item.fieldName, state === vscode.TreeItemCheckboxState.Checked);
+      }
+    }
+  });
+  context.subscriptions.push(reportsTreeView);
+  stateWatcher.onDidChange(() => reportsProvider.refresh());
+  stateWatcher.onDidCreate(() => reportsProvider.refresh());
+  manifestWatcher.onDidChange(() => reportsProvider.refresh());
+  manifestWatcher.onDidCreate(() => reportsProvider.refresh());
 
   // 4. Test Controller & File Decorations & Workspace Manager
   const testController = new TestformTestController();
@@ -538,46 +554,60 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('testform.format', () => {
       vscode.commands.executeCommand('editor.action.formatDocument');
     }),
-    vscode.commands.registerCommand('testform.report.trigger', async (reportSlug: string) => {
-      const format = await vscode.window.showQuickPick(
+    vscode.commands.registerCommand('testform.report.runWithSelection', (itemOrSlug?: any) => {
+      const slug = typeof itemOrSlug === 'string'
+        ? itemOrSlug
+        : (itemOrSlug?.slug || 'testcase-summary');
+      reportsProvider.runReportDirect(slug);
+    }),
+    vscode.commands.registerCommand('testform.report.toggleField', (slugOrItem?: any, fieldName?: string) => {
+      let slug = 'testcase-summary';
+      let fName = '';
+      if (typeof slugOrItem === 'string' && typeof fieldName === 'string') {
+        slug = slugOrItem;
+        fName = fieldName;
+      } else if (slugOrItem && typeof slugOrItem === 'object') {
+        slug = slugOrItem.slug || 'testcase-summary';
+        fName = slugOrItem.fieldName || slugOrItem.label;
+      }
+      if (fName) {
+        reportsProvider.toggleField(slug, fName);
+      }
+    }),
+    vscode.commands.registerCommand('testform.report.selectFormat', async (slugOrItem?: any) => {
+      const slug = typeof slugOrItem === 'string' ? slugOrItem : slugOrItem?.slug;
+      const current = reportsProvider.getFormat(slug);
+      const selected = await vscode.window.showQuickPick(
         [
-          { label: 'md', description: 'Markdown format (.md)' },
-          { label: 'docx', description: 'Microsoft Word report (.docx)' },
-          { label: 'xlsx', description: 'Microsoft Excel spreadsheet (.xlsx)' },
-          { label: 'json', description: 'JSON raw report data (.json)' },
-          { label: 'csv', description: 'CSV data export (.csv)' }
+          { label: 'xlsx', description: 'Microsoft Excel spreadsheet (.xlsx)', picked: current === 'xlsx' },
+          { label: 'md', description: 'Markdown document (.md)', picked: current === 'md' },
+          { label: 'docx', description: 'Microsoft Word report (.docx)', picked: current === 'docx' },
+          { label: 'csv', description: 'CSV data export (.csv)', picked: current === 'csv' },
+          { label: 'json', description: 'JSON raw report data (.json)', picked: current === 'json' }
         ],
-        { placeHolder: `Select export format for report "${reportSlug}"` }
+        { placeHolder: `Selecciona el formato de salida para el reporte (actual: ${current})` }
       );
-
-      if (!format) return;
-
-      const fieldsChoice = await vscode.window.showQuickPick(
-        [
-          { label: '$(table) Default Columns', description: 'Standard native report columns', value: 'default' },
-          { label: '$(add) All Custom Fields', description: 'Include all custom fields dynamically (--fields=all)', value: 'all' },
-          { label: '$(edit) Specific Custom Fields...', description: 'Specify comma-separated field names (e.g. severity, priority)', value: 'custom' }
-        ],
-        { placeHolder: `Choose column fields to include in report "${reportSlug}"` }
-      );
-
-      if (!fieldsChoice) return;
-
-      let fieldsArg = '';
-      if (fieldsChoice.value === 'all') {
-        fieldsArg = ' --fields="all"';
-      } else if (fieldsChoice.value === 'custom') {
-        const fieldsInput = await vscode.window.showInputBox({
-          prompt: 'Enter custom fields separated by comma (e.g. "severity, priority, team")',
-          placeHolder: 'severity, priority'
-        });
-        if (fieldsInput === undefined) return;
-        if (fieldsInput.trim()) {
-          fieldsArg = ` --fields="${fieldsInput.trim()}"`;
+      if (selected) {
+        if (slug) {
+          reportsProvider.setFormat(slug, selected.label);
+        } else {
+          reportsProvider.setFormat(selected.label);
         }
       }
-
-      runTestformCommand(`report ${reportSlug} -format=${format.label}${fieldsArg}`);
+    }),
+    vscode.commands.registerCommand('testform.report.selectAllFields', () => {
+      reportsProvider.selectAllFields();
+    }),
+    vscode.commands.registerCommand('testform.report.deselectAllFields', () => {
+      reportsProvider.deselectAllFields();
+    }),
+    vscode.commands.registerCommand('testform.report.refreshView', () => {
+      reportsProvider.refresh();
+      vscode.window.showInformationMessage('Vistas de reportes y campos actualizadas.');
+    }),
+    vscode.commands.registerCommand('testform.report.trigger', async (reportSlug: string) => {
+      // Si se invoca trigger directamente, ejecuta con las selecciones del listado
+      reportsProvider.runReportDirect(reportSlug);
     }),
     vscode.commands.registerCommand('testform.report', async () => {
       const reportTypes = [
