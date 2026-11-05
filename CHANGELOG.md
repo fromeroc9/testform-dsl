@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.2.0] - 2026-11-05
+## [1.0.1] - 2026-11-05
 
 ### Added
 
@@ -48,18 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Scenario:` completion provides scenario target addresses within enclosing rules, respecting `testform.testrun.targetFormat` (`tag`, `tag-bare`, `canonical`, `file-tag`, `slug-tag`, `name`, `short`, `classic`).
 - **Smart DSL Mark Step Snippets**:
   - Enhanced snippets and auto-replacements for `* mark status = ...`, `* mark target = ...`, `* mark trace = ...`, and `* mark evidence = ...`.
-
-#### Tooling & Antigravity IDE Integration
-- **1-Click IDE Deployment Script**:
-  - Added `update-antigravity.ps1` PowerShell script and npm shortcut (`npm run update:ide`) to package the `.vsix` extension and install/update it directly into Google Antigravity IDE with `--force`.
-- **Packaging Refinement**:
-  - Excluded `*.ps1` files from VSIX distribution via `.vscodeignore`.
-
----
-
-## [1.1.0] - 2026-10-30
-
-### Added
 
 #### TestRun Architecture & Direct Canonical Addresses
 - **Dual Support (Direct Addresses & Rule-based Suites)**:
