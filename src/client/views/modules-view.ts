@@ -444,7 +444,7 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
   }
 
   private countPolicies(rootPath: string): number {
-    return 7 + this.getCustomPolicies(rootPath).length;
+    return 8 + this.getCustomPolicies(rootPath).length;
   }
 
   private getCustomPolicies(rootPath: string): ModuleTreeItem[] {
@@ -478,13 +478,14 @@ export class ModulesTreeProvider implements vscode.TreeDataProvider<ModuleTreeIt
     const disabledSet = this.getDisabledPolicies(rootPath);
 
     const systemPoliciesDef = [
-      { id: 'required-fields', desc: 'Ensures required fields defined in configuration are present', scopes: 'testcase, testrun, testplan' },
+      { id: 'required-fields', desc: 'Ensures required fields defined in configuration are present', scopes: 'testcase, testrun, testplan, bug' },
       { id: 'required-gherkin', desc: 'Validates required Gherkin structure and keywords Given/When/Then', scopes: 'testcase' },
-      { id: 'no-feature-tags', desc: 'Restricts non-standard tags at the Feature level', scopes: 'testcase, testrun, testplan' },
-      { id: 'identity-required', desc: 'Enforces identity tags (@tc-X, @tr-X, @tp-X)', scopes: 'testcase, testrun, testplan' },
-      { id: 'identity-unique', desc: 'Verifies identity tag uniqueness within scope', scopes: 'testcase, testrun, testplan' },
+      { id: 'no-feature-tags', desc: 'Restricts non-standard tags at the Feature level', scopes: 'testcase, testrun, testplan, bug' },
+      { id: 'identity-required', desc: 'Enforces identity tags (@tc-X, @tr-X, @tp-X, @bg-X)', scopes: 'testcase, testrun, testplan, bug' },
+      { id: 'identity-unique', desc: 'Verifies identity tag uniqueness within scope', scopes: 'testcase, testrun, testplan, bug' },
       { id: 'duplicate-testruns-in-testplan', desc: 'Prevents duplicate testruns inside the same or across testplans', scopes: 'testplan' },
-      { id: 'undeclared-fields', desc: 'Warns about scenario fields not declared in configuration', scopes: 'testcase' }
+      { id: 'undeclared-fields', desc: 'Warns about scenario fields not declared in configuration', scopes: 'testcase, bug' },
+      { id: 'bug-target-integrity', desc: 'Ensures bug scenarios declare target scenario, run, or failure trace', scopes: 'bug' }
     ];
 
     const systemItems: ModuleTreeItem[] = systemPoliciesDef.map(p => {
