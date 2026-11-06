@@ -579,8 +579,8 @@ export function activate(context: vscode.ExtensionContext) {
       const current = reportsProvider.getFormat(slug);
       const selected = await vscode.window.showQuickPick(
         [
-          { label: 'xlsx', description: 'Microsoft Excel spreadsheet (.xlsx)', picked: current === 'xlsx' },
           { label: 'md', description: 'Markdown document (.md)', picked: current === 'md' },
+          { label: 'xlsx', description: 'Microsoft Excel spreadsheet (.xlsx)', picked: current === 'xlsx' },
           { label: 'docx', description: 'Microsoft Word report (.docx)', picked: current === 'docx' },
           { label: 'csv', description: 'CSV data export (.csv)', picked: current === 'csv' },
           { label: 'json', description: 'JSON raw report data (.json)', picked: current === 'json' }

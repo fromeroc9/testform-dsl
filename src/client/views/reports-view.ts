@@ -127,7 +127,7 @@ export class ReportsTreeProvider implements vscode.TreeDataProvider<ReportTreeIt
 
   private selectedFieldsByReport: Map<string, Set<string>> = new Map<string, Set<string>>();
   private reportFormats: Map<string, string> = new Map<string, string>();
-  private defaultFormat: string = 'xlsx';
+  private defaultFormat: string = 'md';
   private detectedFields: DetectedField[] = [];
 
   constructor() {
