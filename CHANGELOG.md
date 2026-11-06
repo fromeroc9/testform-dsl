@@ -7,15 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.1.2] - 2026-11-06
-
-### Changed
-- **Full English Localization:**
-  - Translated all user-facing diagnostics, completions, hover documentations, Control Center quickpick descriptions, and report drawer interfaces to professional English across the VS Code extension and Language Server.
-
----
-
-## [1.1.1] - 2026-11-06
+## [1.0.1] - 2026-11-06
 
 ### Added
 
