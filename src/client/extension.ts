@@ -213,79 +213,79 @@ export function activate(context: vscode.ExtensionContext) {
         {
           label: '$(layout-sidebar-right-off) Specs Hub (Test Cases, Runs & Plans)',
           description: 'Open full-screen specification & execution hub in editor tab',
-          detail: 'Abre la pestaña completa en el editor con la vista de Test Cases, Test Runs y Test Plans.',
+          detail: 'Open full-screen editor tab with Test Cases, Test Runs, and Test Plans view.',
           cmd: 'testform.specs.openHub'
         },
         {
           label: '$(check) Validate',
           description: 'testform validate',
-          detail: 'Verifica la sintaxis de los manifiestos YAML, definiciones de scopes y variables sin ejecutar pruebas.',
+          detail: 'Validate syntax of YAML manifests, scope definitions, and variables without executing tests.',
           cmd: 'testform.validate'
         },
         {
           label: '$(git-compare) Plan',
           description: 'testform plan',
-          detail: 'Genera una vista previa especulativa mostrando el diff de cambios contra el ledger sin modificar testform.state.',
+          detail: 'Generate speculative preview showing diff against state ledger without modifying testform.state.',
           cmd: 'testform.plan'
         },
         {
           label: '$(play) Apply',
           description: 'testform apply',
-          detail: 'Ejecuta las pruebas o reconcilia el estado actualizando testform.state.',
+          detail: 'Execute tests or reconcile state ledger by updating testform.state.',
           cmd: 'testform.apply'
         },
         {
           label: '$(diff) Diff / Test Drift',
           description: 'testform diff',
-          detail: 'Compara y detecta diferencias (drift) entre los archivos feature en disco y el estado registrado.',
+          detail: 'Compare and detect drift between local feature files and registered state.',
           cmd: 'testform.diff'
         },
         {
           label: '$(layers) Workspaces',
           description: 'testform workspace',
-          detail: 'Alternar entre ambientes y workspaces aislados (default, staging, prod).',
+          detail: 'Switch between isolated environments and workspaces (default, staging, prod).',
           cmd: 'testform.workspace.select'
         },
         {
           label: '$(unlock) Force Unlock',
           description: 'testform force-unlock',
-          detail: 'Libera un bloqueo atascado en el archivo de estado de Testform.',
+          detail: 'Release stuck lock on Testform state file.',
           cmd: 'testform.state.forceUnlock'
         },
         {
           label: '$(eye) Show',
           description: 'testform show',
-          detail: 'Inspecciona en formato legible los recursos y atributos guardados en el archivo de estado o plan.',
+          detail: 'Inspect managed resources and attributes stored in state file or plan.',
           cmd: 'testform.show'
         },
         {
           label: '$(file-text) Report',
           description: 'testform report',
-          detail: 'Genera reportes interactivos de calidad (Markdown, Word .docx, Excel .xlsx, etc.).',
+          detail: 'Generate quality and traceability reports (Markdown, Word .docx, Excel .xlsx, etc.).',
           cmd: 'testform.report'
         },
         {
           label: '$(list-tree) Providers',
           description: 'testform providers',
-          detail: 'Muestra el árbol jerárquico de providers configurados y sus requerimientos.',
+          detail: 'Display provider tree, schemas, and resource definitions.',
           cmd: 'testform.providers'
         },
         {
           label: '$(package) Modules',
           description: 'testform modules',
-          detail: 'Lista los módulos de features declarados en el workspace y sus orígenes.',
+          detail: 'List feature modules declared in workspace and their sources.',
           cmd: 'testform.modules.list'
         },
         {
           label: '$(refresh) Refresh State',
           description: 'testform.state',
-          detail: 'Recarga el ledger de estado en el explorador de la barra lateral.',
+          detail: 'Reload state ledger in sidebar explorer.',
           cmd: 'testform.state.refresh'
         }
       ];
 
       const selected = await vscode.window.showQuickPick(options, {
-        placeHolder: 'Testform Control Center - Selecciona un comando'
+        placeHolder: 'Testform Control Center - Select a command'
       });
 
       if (selected) {
@@ -585,7 +585,7 @@ export function activate(context: vscode.ExtensionContext) {
           { label: 'csv', description: 'CSV data export (.csv)', picked: current === 'csv' },
           { label: 'json', description: 'JSON raw report data (.json)', picked: current === 'json' }
         ],
-        { placeHolder: `Selecciona el formato de salida para el reporte (actual: ${current})` }
+        { placeHolder: `Select output format for report (current: ${current})` }
       );
       if (selected) {
         if (slug) {
@@ -603,10 +603,10 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('testform.report.refreshView', () => {
       reportsProvider.refresh();
-      vscode.window.showInformationMessage('Vistas de reportes y campos actualizadas.');
+      vscode.window.showInformationMessage('Reports and custom fields refreshed.');
     }),
     vscode.commands.registerCommand('testform.report.trigger', async (reportSlug: string) => {
-      // Si se invoca trigger directamente, ejecuta con las selecciones del listado
+      // If invoked directly, execute report with current field selections
       reportsProvider.runReportDirect(reportSlug);
     }),
     vscode.commands.registerCommand('testform.report', async () => {

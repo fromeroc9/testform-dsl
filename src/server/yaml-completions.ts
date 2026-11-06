@@ -193,64 +193,64 @@ export function provideYamlCompletions(
       {
         label: 'version: "1.0"',
         kind: CompletionItemKind.Property,
-        detail: 'Versión del manifiesto Testform',
+        detail: 'Testform manifest version',
         insertText: 'version: "1.0"'
       },
       {
         label: 'provider:',
         kind: CompletionItemKind.Property,
-        detail: 'Configuración de proveedor (local, github, gitlab, custom)',
+        detail: 'Provider configuration (local, github, gitlab, custom)',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'provider: ${1|local,github,gitlab,custom|}'
       },
       {
         label: 'backend:',
         kind: CompletionItemKind.Property,
-        detail: 'Configuración del backend de estado ledger (local, s3, gcs, azurerm, http)',
+        detail: 'State backend ledger configuration (local, s3, gcs, azurerm, http)',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'backend: ${1|local,s3,gcs,azurerm,http|}'
       },
       {
         label: 'variable:',
         kind: CompletionItemKind.Property,
-        detail: 'Bloque de declaración de variables de entrada',
+        detail: 'Input variables declaration block',
         insertText: 'variable:\n  '
       },
       {
         label: 'locals:',
         kind: CompletionItemKind.Property,
-        detail: 'Bloque de expresiones computadas locales (estilo Terraform)',
+        detail: 'Computed local expressions block (Terraform-style)',
         insertText: 'locals:\n  '
       },
       {
         label: 'resource:',
         kind: CompletionItemKind.Property,
-        detail: 'Configuración de scopes de recursos y scaffolding',
+        detail: 'Resource scopes and scaffolding configuration',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'resource:\n  testcase:\n    match: "${1:*.case.feature}"\n    scaffold:\n      directory: "testcase"\n      filename: "{slug}.case.feature"\n    fields: {}\n  testrun:\n    match: "${2:*.run.feature}"\n    scaffold:\n      directory: "testrun"\n      filename: "{slug}.run.feature"\n    fields: {}\n  testplan:\n    match: "${3:*.plan.feature}"\n    scaffold:\n      directory: "testplan"\n      filename: "{slug}.plan.feature"\n    fields: {}'
       },
       {
         label: 'data:',
         kind: CompletionItemKind.Property,
-        detail: 'Bloque de orígenes de datos (fixtures, http, state)',
+        detail: 'Data sources block (fixtures, http, state)',
         insertText: 'data:\n  '
       },
       {
         label: 'module:',
         kind: CompletionItemKind.Property,
-        detail: 'Bloque de módulos de features reutilizables',
+        detail: 'Reusable feature modules block',
         insertText: 'module:\n  '
       },
       {
         label: 'output:',
         kind: CompletionItemKind.Property,
-        detail: 'Bloque de valores de salida exportados',
+        detail: 'Exported output values block',
         insertText: 'output:\n  '
       },
       {
         label: 'policy:',
         kind: CompletionItemKind.Property,
-        detail: 'Políticas de gobernanza y control de calidad',
+        detail: 'Governance and quality control policies',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'policy:\n  disabled:\n    - "${1:policy-id}"'
       }
@@ -263,30 +263,30 @@ export function provideYamlCompletions(
     if (ancestry.length === 1) {
       return [
         {
-          label: 'var_name (Completo)',
+          label: 'var_name (Full)',
           kind: CompletionItemKind.Property,
-          detail: 'Declarar variable completa con tipo, default, description, sensitive, enum y validation',
+          detail: 'Declare complete variable with type, default, description, sensitive, enum, and validation',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '${1:var_name}:\n  type: ${2|string,number,boolean,list,map|}\n  description: "${3:Descripción de la variable}"\n  default: "${4:valor}"\n  sensitive: ${5|false,true|}\n  enum:\n    - "${6:opcion1}"\n    - "${7:opcion2}"\n  validation:\n    condition: "${8:condition}"\n    error_message: "${9:Mensaje de error}"'
+          insertText: '${1:var_name}:\n  type: ${2|string,number,boolean,list,map|}\n  description: "${3:Variable description}"\n  default: "${4:value}"\n  sensitive: ${5|false,true|}\n  enum:\n    - "${6:option1}"\n    - "${7:option2}"\n  validation:\n    condition: "${8:condition}"\n    error_message: "${9:Error message}"'
         },
         {
-          label: 'var_name (Estándar)',
+          label: 'var_name (Standard)',
           kind: CompletionItemKind.Property,
-          detail: 'Declarar variable con esquema estándar (type, description, default)',
+          detail: 'Declare variable with standard schema (type, description, default)',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '${1:var_name}:\n  type: ${2|string,number,boolean,list,map|}\n  description: "${3:Descripción de la variable}"\n  default: "${4:valor}"'
+          insertText: '${1:var_name}:\n  type: ${2|string,number,boolean,list,map|}\n  description: "${3:Variable description}"\n  default: "${4:value}"'
         }
       ];
     }
     // Indent 4: Inside a specific variable definition
     if (ancestry.length >= 2) {
       return [
-        { label: 'type:', kind: CompletionItemKind.Property, detail: 'Tipo de dato (string, number, boolean, list, map)', insertText: 'type: ' },
-        { label: 'description:', kind: CompletionItemKind.Property, detail: 'Texto descriptivo y documentación', insertTextFormat: InsertTextFormat.Snippet, insertText: 'description: "${1:Descripción}"' },
-        { label: 'default:', kind: CompletionItemKind.Property, detail: 'Valor por defecto', insertTextFormat: InsertTextFormat.Snippet, insertText: 'default: "${1:valor}"' },
-        { label: 'sensitive:', kind: CompletionItemKind.Property, detail: 'Ocultar variable de logs y consola', insertText: 'sensitive: true' },
-        { label: 'enum:', kind: CompletionItemKind.Property, detail: 'Lista de valores permitidos', insertTextFormat: InsertTextFormat.Snippet, insertText: 'enum:\n  - "${1:opcion1}"\n  - "${2:opcion2}"' },
-        { label: 'validation:', kind: CompletionItemKind.Property, detail: 'Regla de validación con condición y mensaje de error', insertTextFormat: InsertTextFormat.Snippet, insertText: 'validation:\n  condition: "${1:condicion}"\n  error_message: "${2:Mensaje de error}"' }
+        { label: 'type:', kind: CompletionItemKind.Property, detail: 'Data type (string, number, boolean, list, map)', insertText: 'type: ' },
+        { label: 'description:', kind: CompletionItemKind.Property, detail: 'Descriptive documentation string', insertTextFormat: InsertTextFormat.Snippet, insertText: 'description: "${1:Description}"' },
+        { label: 'default:', kind: CompletionItemKind.Property, detail: 'Default value', insertTextFormat: InsertTextFormat.Snippet, insertText: 'default: "${1:value}"' },
+        { label: 'sensitive:', kind: CompletionItemKind.Property, detail: 'Hide variable value from logs and console', insertText: 'sensitive: true' },
+        { label: 'enum:', kind: CompletionItemKind.Property, detail: 'List of allowed values', insertTextFormat: InsertTextFormat.Snippet, insertText: 'enum:\n  - "${1:option1}"\n  - "${2:option2}"' },
+        { label: 'validation:', kind: CompletionItemKind.Property, detail: 'Validation rule with condition and error message', insertTextFormat: InsertTextFormat.Snippet, insertText: 'validation:\n  condition: "${1:condition}"\n  error_message: "${2:Error message}"' }
       ];
     }
   }
@@ -297,16 +297,16 @@ export function provideYamlCompletions(
       {
         label: 'local_name: "${var.variable}"',
         kind: CompletionItemKind.Property,
-        detail: 'Definir expresión local computada',
+        detail: 'Define computed local expression',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: '${1:local_name}: "\${${2:var.variable}}"'
       },
       {
-        label: 'local_name: "valor"',
+        label: 'local_name: "value"',
         kind: CompletionItemKind.Property,
-        detail: 'Definir valor local literal',
+        detail: 'Define literal local value',
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: '${1:local_name}: "${2:valor}"'
+        insertText: '${1:local_name}: "${2:value}"'
       }
     ];
   }
@@ -319,28 +319,28 @@ export function provideYamlCompletions(
         {
           label: 'testcase:',
           kind: CompletionItemKind.Property,
-          detail: 'Mapeo de Scope Testcase y scaffolding',
+          detail: 'TestCase scope mapping and scaffolding',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: 'testcase:\n  match: "${1:*.case.feature}"\n  scaffold:\n    directory: "testcase"\n    filename: "{slug}.case.feature"\n  fields: {}'
         },
         {
           label: 'testrun:',
           kind: CompletionItemKind.Property,
-          detail: 'Mapeo de Scope Testrun y scaffolding',
+          detail: 'TestRun scope mapping and scaffolding',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: 'testrun:\n  match: "${1:*.run.feature}"\n  scaffold:\n    directory: "testrun"\n    filename: "{slug}.run.feature"\n  fields: {}'
         },
         {
           label: 'testplan:',
           kind: CompletionItemKind.Property,
-          detail: 'Mapeo de Scope Testplan y scaffolding',
+          detail: 'TestPlan scope mapping and scaffolding',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: 'testplan:\n  match: "${1:*.plan.feature}"\n  scaffold:\n    directory: "testplan"\n    filename: "{slug}.plan.feature"\n  fields: {}'
         },
         {
           label: 'global:',
           kind: CompletionItemKind.Property,
-          detail: 'Definición de campos globales a través de todos los scopes',
+          detail: 'Global fields definition across all scopes',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: 'global:\n  fields: {}'
         }
@@ -351,9 +351,9 @@ export function provideYamlCompletions(
     const parentScope = ancestry[1]?.toLowerCase();
     if (ancestry.length === 2) {
       return [
-        { label: 'match:', kind: CompletionItemKind.Property, detail: 'Patrón glob para archivos feature', insertTextFormat: InsertTextFormat.Snippet, insertText: 'match: "${1:*.case.feature}"' },
-        { label: 'scaffold:', kind: CompletionItemKind.Property, detail: 'Directorio y formato de nombres de archivo de scaffolding', insertTextFormat: InsertTextFormat.Snippet, insertText: 'scaffold:\n  directory: "${1:testcase}"\n  filename: "${2:{slug}.case.feature}"' },
-        { label: 'fields:', kind: CompletionItemKind.Property, detail: 'Definición de campos de metadatos personalizados', insertText: 'fields:\n  ' }
+        { label: 'match:', kind: CompletionItemKind.Property, detail: 'Glob pattern for feature files', insertTextFormat: InsertTextFormat.Snippet, insertText: 'match: "${1:*.case.feature}"' },
+        { label: 'scaffold:', kind: CompletionItemKind.Property, detail: 'Scaffolding directory and filename pattern', insertTextFormat: InsertTextFormat.Snippet, insertText: 'scaffold:\n  directory: "${1:testcase}"\n  filename: "${2:{slug}.case.feature}"' },
+        { label: 'fields:', kind: CompletionItemKind.Property, detail: 'Custom metadata fields definition', insertText: 'fields:\n  ' }
       ];
     }
 
@@ -366,7 +366,7 @@ export function provideYamlCompletions(
           {
             label: 'field_name:',
             kind: CompletionItemKind.Property,
-            detail: 'Definir campo de metadatos extraído de step o tag',
+            detail: 'Define metadata field extracted from step or tag',
             insertTextFormat: InsertTextFormat.Snippet,
             insertText: '${1:field_name}:\n  source: ${2|step,tag|}\n  required: ${3|false,true|}'
           }
@@ -374,10 +374,10 @@ export function provideYamlCompletions(
       } else {
         // Properties of the field: source, required, default, enum
         return [
-          { label: 'source:', kind: CompletionItemKind.Property, detail: 'Tipo de origen: step o tag', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: ${1|step,tag|}' },
-          { label: 'required:', kind: CompletionItemKind.Property, detail: 'Indica si este campo es obligatorio', insertTextFormat: InsertTextFormat.Snippet, insertText: 'required: ${1|false,true|}' },
-          { label: 'default:', kind: CompletionItemKind.Property, detail: 'Valor por defecto del campo', insertTextFormat: InsertTextFormat.Snippet, insertText: 'default: "${1:default_value}"' },
-          { label: 'enum:', kind: CompletionItemKind.Property, detail: 'Lista de valores permitidos', insertTextFormat: InsertTextFormat.Snippet, insertText: 'enum:\n  - "${1:@low}"\n  - "${2:@high}"' }
+          { label: 'source:', kind: CompletionItemKind.Property, detail: 'Source type: step or tag', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: ${1|step,tag|}' },
+          { label: 'required:', kind: CompletionItemKind.Property, detail: 'Whether this field is mandatory', insertTextFormat: InsertTextFormat.Snippet, insertText: 'required: ${1|false,true|}' },
+          { label: 'default:', kind: CompletionItemKind.Property, detail: 'Default value for the field', insertTextFormat: InsertTextFormat.Snippet, insertText: 'default: "${1:default_value}"' },
+          { label: 'enum:', kind: CompletionItemKind.Property, detail: 'Allowed values list', insertTextFormat: InsertTextFormat.Snippet, insertText: 'enum:\n  - "${1:@low}"\n  - "${2:@high}"' }
         ];
       }
     }
@@ -390,30 +390,30 @@ export function provideYamlCompletions(
         {
           label: 'fixture_data: "fixtures/users.json"',
           kind: CompletionItemKind.Property,
-          detail: 'Origen de fixture JSON/YAML local compacto',
+          detail: 'Compact local JSON/YAML fixture source',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '${1:usuarios}: "fixtures/${2:users.json}"'
+          insertText: '${1:users}: "fixtures/${2:users.json}"'
         },
         {
           label: 'api_data: "https://api..."',
           kind: CompletionItemKind.Property,
-          detail: 'Origen de datos HTTP REST compacto',
+          detail: 'Compact HTTP REST data source',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: '${1:api_data}: "https://${2:api.example.com/users}"'
         },
         {
           label: 'state_alias: "auth/login.case.feature.@tc-1"',
           kind: CompletionItemKind.Property,
-          detail: 'Alias de referencia a dirección de estado Testform',
+          detail: 'Testform state address reference alias',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: '${1:login_core}: "${2:auth/login.case.feature.@tc-1}"'
         },
         {
-          label: 'http_api (Objeto REST con headers y body)',
+          label: 'http_api (Configured REST endpoint)',
           kind: CompletionItemKind.Property,
-          detail: 'Origen de datos HTTP REST configurado',
+          detail: 'Configured HTTP REST data source with headers and body',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '${1:mi_api}:\n  url: "https://${2:api.example.com}"\n  method: "${3|GET,POST|}\n  headers:\n    Authorization: "Bearer \${var.token}"\n  timeout: 5000'
+          insertText: '${1:my_api}:\n  url: "https://${2:api.example.com}"\n  method: "${3|GET,POST|}\n  headers:\n    Authorization: "Bearer \${var.token}"\n  timeout: 5000'
         }
       ];
     }
@@ -426,16 +426,16 @@ export function provideYamlCompletions(
         {
           label: 'module_name:',
           kind: CompletionItemKind.Property,
-          detail: 'Módulo reutilizable (paridad nativa con Terraform: variables planas directas)',
+          detail: 'Reusable module (native Terraform parity: direct plain variables)',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '${1:auth_module}:\n  source: "${2:auth/login.case.feature}"\n  ${3:param}: "${4:valor}"\n  output:\n    ${5:output_name}:\n      value: "${6:valor}"'
+          insertText: '${1:auth_module}:\n  source: "${2:auth/login.case.feature}"\n  ${3:param}: "${4:value}"\n  output:\n    ${5:output_name}:\n      value: "${6:value}"'
         }
       ];
     }
     if (ancestry.length === 2) {
       return [
-        { label: 'source:', kind: CompletionItemKind.Property, detail: 'Ruta al archivo feature, directorio o repositorio git', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: "${1:auth/login.case.feature}"' },
-        { label: 'output:', kind: CompletionItemKind.Property, detail: 'Bloque de salidas exportadas por el módulo', insertText: 'output:\n  ' }
+        { label: 'source:', kind: CompletionItemKind.Property, detail: 'Path to feature file, directory, or git repository', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: "${1:auth/login.case.feature}"' },
+        { label: 'output:', kind: CompletionItemKind.Property, detail: 'Block of outputs exported by the module', insertText: 'output:\n  ' }
       ];
     }
     const lastKey = ancestry[ancestry.length - 1];
@@ -444,9 +444,9 @@ export function provideYamlCompletions(
         {
           label: 'output_name:',
           kind: CompletionItemKind.Property,
-          detail: 'Salida exportada por el módulo',
+          detail: 'Output exported by module',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '${1:output_name}:\n  value: "${2:valor}"'
+          insertText: '${1:output_name}:\n  value: "${2:value}"'
         }
       ];
     }
@@ -459,17 +459,17 @@ export function provideYamlCompletions(
         {
           label: 'output_name:',
           kind: CompletionItemKind.Property,
-          detail: 'Declarar output raíz exportado',
+          detail: 'Declare exported root output',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '${1:output_name}:\n  description: "${2:Descripción}"\n  value: "${3:valor}"'
+          insertText: '${1:output_name}:\n  description: "${2:Description}"\n  value: "${3:value}"'
         }
       ];
     }
     if (ancestry.length >= 2) {
       return [
-        { label: 'value:', kind: CompletionItemKind.Property, detail: 'Expresión o valor exportado', insertTextFormat: InsertTextFormat.Snippet, insertText: 'value: "${1:valor}"' },
-        { label: 'description:', kind: CompletionItemKind.Property, detail: 'Descripción de la salida', insertTextFormat: InsertTextFormat.Snippet, insertText: 'description: "${1:Descripción}"' },
-        { label: 'sensitive:', kind: CompletionItemKind.Property, detail: 'Ocultar salida de los logs y consola', insertText: 'sensitive: true' }
+        { label: 'value:', kind: CompletionItemKind.Property, detail: 'Exported expression or value', insertTextFormat: InsertTextFormat.Snippet, insertText: 'value: "${1:value}"' },
+        { label: 'description:', kind: CompletionItemKind.Property, detail: 'Output description', insertTextFormat: InsertTextFormat.Snippet, insertText: 'description: "${1:Description}"' },
+        { label: 'sensitive:', kind: CompletionItemKind.Property, detail: 'Hide output from console and logs', insertText: 'sensitive: true' }
       ];
     }
   }

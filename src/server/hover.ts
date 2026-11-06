@@ -38,7 +38,7 @@ export function provideHover(
                 `**Default:** \`${JSON.stringify(info.defaultValue ?? null)}\``,
                 info.description ? `**Description:** ${info.description}` : '',
                 `---`,
-                `*Declarado en:* \`${fileName}\` (${info.sourceFile})`
+                `*Declared in:* \`${fileName}\` (${info.sourceFile})`
               ].filter(Boolean).join('\n\n')
             }
           };
@@ -46,7 +46,7 @@ export function provideHover(
           return {
             contents: {
               kind: MarkupKind.Markdown,
-              value: `⚠️ **Variable no declarada:** \`${varName}\`\n\nEsta variable está referenciada pero no ha sido declarada en ningún bloque \`variable:\` del workspace.`
+              value: `⚠️ **Undeclared variable:** \`${varName}\`\n\nThis variable is referenced but has not been declared in any \`variable:\` block in the workspace.`
             }
           };
         }
@@ -67,7 +67,7 @@ export function provideHover(
                 `### Testform Local: \`${localName}\``,
                 `**Expression:** \`${info.expression}\``,
                 `---`,
-                `*Declarado en:* \`${fileName}\` (${info.sourceFile})`
+                `*Declared in:* \`${fileName}\` (${info.sourceFile})`
               ].join('\n\n')
             }
           };
@@ -75,7 +75,7 @@ export function provideHover(
           return {
             contents: {
               kind: MarkupKind.Markdown,
-              value: `⚠️ **Local no definido:** \`${localName}\`\n\nEste valor local está referenciado pero no ha sido definido en ningún bloque \`locals:\` del workspace.`
+              value: `⚠️ **Undefined local:** \`${localName}\`\n\nThis local value is referenced but has not been defined in any \`locals:\` block in the workspace.`
             }
           };
         }
@@ -116,7 +116,7 @@ export function provideHover(
                 `**Type:** \`${info.type}\``,
                 `**Instance:** \`${info.name}\``,
                 `---`,
-                `*Declarado en:* \`${fileName}\` (${info.sourceFile})`
+                `*Declared in:* \`${fileName}\` (${info.sourceFile})`
               ].join('\n\n')
             }
           };
@@ -156,11 +156,11 @@ export function provideHover(
               contents: {
                 kind: MarkupKind.Markdown,
                 value: [
-                  `### 🔗 Dependencia Interna: \`${address}\``,
-                  `**Escenario:** ${title}`,
-                  `**Tipo:** Referencia interna en este mismo archivo feature`,
+                  `### 🔗 Internal Dependency: \`${address}\``,
+                  `**Scenario:** ${title}`,
+                  `**Type:** Internal reference within this feature file`,
                   `---`,
-                  `*Ubicación:* Línea ${i + 1}`
+                  `*Location:* Line ${i + 1}`
                 ].join('\n\n')
               }
             };
@@ -174,12 +174,12 @@ export function provideHover(
             contents: {
               kind: MarkupKind.Markdown,
               value: [
-                `### 🔗 Dependencia Externa: \`${targetScenario.tag}\``,
-                `**Escenario:** ${targetScenario.title}`,
+                `### 🔗 External Dependency: \`${targetScenario.tag}\``,
+                `**Scenario:** ${targetScenario.title}`,
                 `**Resource Scope:** \`${targetScenario.scope}\``,
-                `**Dirección en Ledger:** \`${targetScenario.address}\``,
+                `**Ledger Address:** \`${targetScenario.address}\``,
                 `---`,
-                `*Definido en:* \`${fileName}\` (línea ${targetScenario.line + 1})`
+                `*Defined in:* \`${fileName}\` (line ${targetScenario.line + 1})`
               ].join('\n\n')
             }
           };
@@ -209,9 +209,9 @@ export function provideHover(
             kind: MarkupKind.Markdown,
             value: [
               `### 🌐 Wildcard Target (\`*\`)`,
-              `**Alcance:** Aplica a **todos** los escenarios de la Rule \`${ruleFileName}\`.`,
+              `**Scope:** Applies to **all** scenarios in Rule \`${ruleFileName}\`.`,
               `---`,
-              `*Archivo Rule:* \`${ruleFileName}\``
+              `*Rule File:* \`${ruleFileName}\``
             ].join('\n\n')
           }
         };
@@ -244,11 +244,11 @@ export function provideHover(
               kind: MarkupKind.Markdown,
               value: [
                 `### 🧪 Test Case Target: \`${info.tag}\``,
-                `**Título:** ${info.title}`,
+                `**Title:** ${info.title}`,
                 `**Resource Scope:** \`${info.scope}\``,
-                `**Dirección de Estado:** \`${info.address}\``,
+                `**State Address:** \`${info.address}\``,
                 `---`,
-                `*Archivo Rule:* \`${ruleFileName}\` -> \`${fileName}\` (línea ${info.line + 1})`
+                `*Rule File:* \`${ruleFileName}\` -> \`${fileName}\` (line ${info.line + 1})`
               ].join('\n\n')
             }
           };
@@ -263,12 +263,12 @@ export function provideHover(
           contents: {
             kind: MarkupKind.Markdown,
             value: [
-              `### 🧪 Target Referenciado: \`${targetScenario.tag}\``,
-              `**Título:** ${targetScenario.title}`,
+              `### 🧪 Referenced Target: \`${targetScenario.tag}\``,
+              `**Title:** ${targetScenario.title}`,
               `**Resource Scope:** \`${targetScenario.scope}\``,
-              `**Dirección en Ledger:** \`${targetScenario.address}\``,
+              `**Ledger Address:** \`${targetScenario.address}\``,
               `---`,
-              `*Archivo:* \`${fileName}\` (línea ${targetScenario.line + 1})`
+              `*File:* \`${fileName}\` (line ${targetScenario.line + 1})`
             ].join('\n\n')
           }
         };
@@ -287,12 +287,12 @@ export function provideHover(
         contents: {
           kind: MarkupKind.Markdown,
           value: [
-            `### 🎯 Target Canónico: \`${targetScenario.tag}\``,
-            `**Título:** ${targetScenario.title}`,
+            `### 🎯 Canonical Target: \`${targetScenario.tag}\``,
+            `**Title:** ${targetScenario.title}`,
             `**Resource Scope:** \`${targetScenario.scope}\``,
-            `**Dirección en Ledger:** \`${targetScenario.address}\``,
+            `**Ledger Address:** \`${targetScenario.address}\``,
             `---`,
-            `*Archivo:* \`${fileName}\` (línea ${targetScenario.line + 1})`
+            `*File:* \`${fileName}\` (line ${targetScenario.line + 1})`
           ].join('\n\n')
         }
       };
@@ -337,17 +337,17 @@ export function provideHover(
       const fileName = scenario.sourceFile.split(/[/\\]/).pop();
       const headerTitle = ruleFileName
         ? `### 🧪 Test Case Target: \`${scenario.tag}\``
-        : `### 🏷️ Identificador de Escenario: \`${scenario.tag}\``;
+        : `### 🏷️ Scenario Identifier: \`${scenario.tag}\``;
       return {
         contents: {
           kind: MarkupKind.Markdown,
           value: [
             headerTitle,
-            `**Título:** ${scenario.title}`,
+            `**Title:** ${scenario.title}`,
             `**Resource Scope:** \`${scenario.scope}\``,
-            `**Dirección de Estado:** \`${scenario.address}\``,
+            `**State Address:** \`${scenario.address}\``,
             `---`,
-            `*Archivo:* \`${fileName}\` (línea ${scenario.line + 1})`
+            `*File:* \`${fileName}\` (line ${scenario.line + 1})`
           ].join('\n\n')
         }
       };
@@ -361,51 +361,51 @@ export function provideHover(
     const STATUS_INFO: Record<string, { badge: string; desc: string; ledger: string }> = {
       passed: {
         badge: '✅ PASSED',
-        desc: 'El escenario se ejecutó con éxito y todas las aserciones fueron satisfechas.',
-        ledger: 'Reconcilia el recurso en testform.state marcándolo como exitoso.'
+        desc: 'The scenario executed successfully and all assertions were satisfied.',
+        ledger: 'Reconciles the resource in testform.state marking it as passed.'
       },
       failed: {
         badge: '❌ FAILED',
-        desc: 'Fallo de aserción o error de ejecución detectado en el caso de prueba.',
-        ledger: 'Registra el error en el ledger y detiene la cadena de dependencias subsiguiente.'
+        desc: 'Assertion failure or execution error detected in testcase.',
+        ledger: 'Records the failure in the ledger and blocks downstream dependencies.'
       },
       pending: {
         badge: '⏳ PENDING',
-        desc: 'Escenario planificado pero pendiente de ejecución o en desarrollo.',
-        ledger: 'Mantiene el recurso en estado pendiente sin romper quality gates de desarrollo.'
+        desc: 'Scenario planned but pending execution or under development.',
+        ledger: 'Maintains the resource in pending state without breaking development quality gates.'
       },
       skipped: {
         badge: '⏭️ SKIPPED',
-        desc: 'Ejecución omitida deliberadamente (por filtros de tags o condiciones previas).',
-        ledger: 'Se preserva el registro sin alterar el resultado consolidado del suite.'
+        desc: 'Execution deliberately skipped (via tag filters or preconditions).',
+        ledger: 'Preserves the entry without altering the consolidated suite outcome.'
       },
       blocked: {
         badge: '🚫 BLOCKED',
-        desc: 'Ejecución bloqueada debido al fallo de una dependencia declarada en @depends_on.',
-        ledger: 'Impide la ejecución de este caso hasta que el prerrequisito sea subsanado.'
+        desc: 'Execution blocked due to failure of a declared dependency in @depends_on.',
+        ledger: 'Prevents execution of this case until prerequisite is resolved.'
       },
       unexecuted: {
         badge: '⚪ UNEXECUTED',
-        desc: 'Estado inicial previo a la reconciliación o ejecución del testrun.',
-        ledger: 'Estado por defecto en planes especulativos sin ejecución.'
+        desc: 'Initial state prior to testrun reconciliation or execution.',
+        ledger: 'Default state in speculative plans without execution.'
       }
     };
 
     const info = STATUS_INFO[status] || {
       badge: `🏷️ ${status.toUpperCase()}`,
-      desc: `Estado de ejecución asignado a este escenario.`,
-      ledger: `Actualiza el ledger de estado en testform.state.`
+      desc: `Execution status assigned to this scenario.`,
+      ledger: `Updates the state ledger in testform.state.`
     };
 
     return {
       contents: {
         kind: MarkupKind.Markdown,
         value: [
-          `### ${info.badge} — Reconciliación de Estado Testform`,
-          `**Significado:** ${info.desc}`,
-          `**Efecto en el Ledger (\`testform.state\`):** ${info.ledger}`,
+          `### ${info.badge} — Testform State Reconciliation`,
+          `**Meaning:** ${info.desc}`,
+          `**Effect on Ledger (\`testform.state\`):** ${info.ledger}`,
           `---`,
-          `*Sintaxis DSL:* \`* mark status = ${status}\``
+          `*DSL Syntax:* \`* mark status = ${status}\``
         ].join('\n\n')
       }
     };
@@ -419,10 +419,10 @@ export function provideHover(
       contents: {
         kind: MarkupKind.Markdown,
         value: [
-          `### 📝 Diagnostic Trace — Campo Canónico`,
-          `**Detalle:** \`${traceVal}\``,
+          `### 📝 Diagnostic Trace — Canonical Field`,
+          `**Detail:** \`${traceVal}\``,
           `---`,
-          `*Efecto:* Registra la traza del error o mensaje de diagnóstico en \`execution.trace\` dentro de \`testform.state\`.*`
+          `*Effect:* Records error trace or diagnostic message into \`execution.trace\` in \`testform.state\`.*`
         ].join('\n\n')
       }
     };
@@ -436,10 +436,10 @@ export function provideHover(
       contents: {
         kind: MarkupKind.Markdown,
         value: [
-          `### 📎 Execution Evidence — Campo Canónico`,
-          `**Referencia:** \`${evidenceVal}\``,
+          `### 📎 Execution Evidence — Canonical Field`,
+          `**Reference:** \`${evidenceVal}\``,
           `---`,
-          `*Efecto:* Adjunta la captura de pantalla, archivo de log o enlace externo a la ejecución del escenario en \`testform.state\`.*`
+          `*Effect:* Attaches screenshot, log file, or external link to scenario execution in \`testform.state\`.*`
         ].join('\n\n')
       }
     };
@@ -479,7 +479,7 @@ export function provideHover(
             `**Scope:** \`${feat.scope}\``,
             `**Target Path:** \`${feat.relPath}\``,
             `---`,
-            `*Presiona \`F12\` o \`Ctrl+Click\` para navegar a este archivo.*`
+            `*Press \`F12\` or \`Ctrl+Click\` to navigate to this file.*`
           ].join('\n\n')
         }
       };
@@ -494,18 +494,18 @@ export function provideHover(
     const customDef = scanner.customFields.get(fieldName.toLowerCase());
 
     const fieldDescriptions: Record<string, string> = {
-      priority: 'Nivel de prioridad de ejecución para la suite y orden de triaje.',
-      severity: 'Impacto del defecto si este caso de prueba llega a fallar.',
-      component: 'Componente o dominio arquitectónico asociado al caso.',
-      assignee: 'Responsable o equipo asignado al mantenimiento de este escenario.'
+      priority: 'Execution priority level for suite and triage ordering.',
+      severity: 'Impact of the defect if this test case fails.',
+      component: 'Component or architectural domain associated with the case.',
+      assignee: 'Owner or team assigned to maintain this scenario.'
     };
 
     const desc = customDef?.source
-      ? `Definido en \`${customDef.source}\`${customDef.required ? ' *(Requerido)*' : ''}`
-      : (fieldDescriptions[fieldName.toLowerCase()] || 'Metadato estructurado personalizado para el recurso en el ledger.');
+      ? `Defined in \`${customDef.source}\`${customDef.required ? ' *(Required)*' : ''}`
+      : (fieldDescriptions[fieldName.toLowerCase()] || 'Custom structured metadata for the resource in the ledger.');
 
     const enumInfo = customDef?.enum && customDef.enum.length > 0
-      ? `**Valores permitidos:** ${customDef.enum.map(e => `\`${e}\``).join(', ')}`
+      ? `**Allowed values:** ${customDef.enum.map(e => `\`${e}\``).join(', ')}`
       : '';
 
     return {
@@ -513,11 +513,11 @@ export function provideHover(
         kind: MarkupKind.Markdown,
         value: [
           `### 🏷️ Testform Field: \`${fieldName}\``,
-          `**Valor asignado:** \`${fieldValue}\``,
-          `**Descripción:** ${desc}`,
+          `**Assigned value:** \`${fieldValue}\``,
+          `**Description:** ${desc}`,
           enumInfo,
           `---`,
-          `*Efecto:* Se almacena en \`custom_fields.${fieldName}\` dentro de \`testform.state\` al ejecutar \`testform apply\`.*`
+          `*Effect:* Stored in \`custom_fields.${fieldName}\` in \`testform.state\` upon running \`testform apply\`.*`
         ].filter(Boolean).join('\n\n')
       }
     };

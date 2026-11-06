@@ -974,12 +974,12 @@ export class SpecsHubPanel {
   <!-- EXPORT REPORT DRAWER -->
   <div id="exportBar" class="export-drawer" style="display: none;">
     <div class="export-header">
-      <div style="font-weight: 600; font-size: 13px;">📊 Generador de Reportes de Calidad</div>
+      <div style="font-weight: 600; font-size: 13px;">📊 Quality Reports Generator</div>
       <button class="btn-close" onclick="toggleExportBar()">✕</button>
     </div>
     <div class="export-grid">
       <div class="export-col">
-        <label class="export-label">Tipo de Reporte:</label>
+        <label class="export-label">Report Type:</label>
         <select id="exportSlug" class="export-select">
           <option value="testcase-summary" selected>Test Case Summary (testcase-summary)</option>
           <option value="testrun-summary">Test Run Summary (testrun-summary)</option>
@@ -993,10 +993,10 @@ export class SpecsHubPanel {
         </select>
       </div>
       <div class="export-col">
-        <label class="export-label">Formato de Salida:</label>
+        <label class="export-label">Output Format:</label>
         <div class="format-chips">
-          <label class="chip-label"><input type="radio" name="exportFormat" value="xlsx" checked> <span>📊 Excel (.xlsx)</span></label>
-          <label class="chip-label"><input type="radio" name="exportFormat" value="md"> <span>📝 Markdown (.md)</span></label>
+          <label class="chip-label"><input type="radio" name="exportFormat" value="md" checked> <span>📝 Markdown (.md)</span></label>
+          <label class="chip-label"><input type="radio" name="exportFormat" value="xlsx"> <span>📊 Excel (.xlsx)</span></label>
           <label class="chip-label"><input type="radio" name="exportFormat" value="docx"> <span>📄 Word (.docx)</span></label>
           <label class="chip-label"><input type="radio" name="exportFormat" value="csv"> <span>📑 CSV (.csv)</span></label>
           <label class="chip-label"><input type="radio" name="exportFormat" value="json"> <span>{ } JSON</span></label>
@@ -1007,22 +1007,22 @@ export class SpecsHubPanel {
     <div class="export-fields-box">
       <div class="export-fields-header">
         <div class="export-label" style="margin-bottom: 0;">
-          Campos Personalizados (Columnas adicionales):
+          Custom Fields (Additional columns):
         </div>
         <div class="fields-actions">
-          <button class="mini-btn" type="button" onclick="selectAllFields(true)">✓ Seleccionar Todos</button>
-          <button class="mini-btn" type="button" onclick="selectAllFields(false)">✕ Desmarcar Todos</button>
+          <button class="mini-btn" type="button" onclick="selectAllFields(true)">✓ Select All</button>
+          <button class="mini-btn" type="button" onclick="selectAllFields(false)">✕ Deselect All</button>
         </div>
       </div>
       <div class="fields-checklist">
         ${
           detectedFields.length === 0
-            ? '<span style="color: var(--vscode-descriptionForeground, #888); font-size: 11px;">No se detectaron custom fields en el proyecto (se incluirán columnas nativas).</span>'
+            ? '<span style="color: var(--vscode-descriptionForeground, #888); font-size: 11px;">No custom fields detected in project (native columns will be used).</span>'
             : detectedFields.map(f => `
                 <label class="field-check-item">
                   <input type="checkbox" name="customField" value="${escape(f.name)}" checked>
                   <strong>${escape(f.name)}</strong>
-                  <span class="field-badge">${f.count} ${f.count === 1 ? 'caso' : 'casos'}</span>
+                  <span class="field-badge">${f.count} ${f.count === 1 ? 'case' : 'cases'}</span>
                 </label>
               `).join('')
         }
@@ -1031,10 +1031,10 @@ export class SpecsHubPanel {
 
     <div class="export-footer">
       <div style="font-size: 11px; color: var(--vscode-descriptionForeground, #888);">
-        Los campos seleccionados se incorporarán como columnas en el reporte nativo.
+        Selected custom fields will be included as extra columns in the report.
       </div>
       <button class="btn" style="padding: 7px 18px;" onclick="doExportReport()">
-        🚀 Generar y Abrir Reporte
+        🚀 Generate and Open Report
       </button>
     </div>
   </div>

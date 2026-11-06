@@ -22,7 +22,7 @@ export function validateTextDocument(
       diagnostics.push({
         severity: DiagnosticSeverity.Warning,
         range: { start: startPos, end: endPos },
-        message: `Variable no declarada: 'var.${varName}'. Declárala en variable.yml o un manifiesto YAML del workspace.`,
+        message: `Undeclared variable: 'var.${varName}'. Declare it in variable.yml or a workspace YAML manifest.`,
         source: 'Testform'
       });
     }
@@ -39,7 +39,7 @@ export function validateTextDocument(
       diagnostics.push({
         severity: DiagnosticSeverity.Warning,
         range: { start: startPos, end: endPos },
-        message: `Local no definido: 'local.${localName}'. Defínelo en un bloque 'locals:' en el workspace.`,
+        message: `Undefined local value: 'local.${localName}'. Define it in a 'locals:' block in the workspace.`,
         source: 'Testform'
       });
     }
@@ -59,7 +59,7 @@ export function validateTextDocument(
           start: textDocument.positionAt(matchOffset),
           end: textDocument.positionAt(matchOffset + match[0].length)
         },
-        message: `Error en directiva: @depends_on no puede tener un destino vacío. Especifica una referencia como '@tc-1' o 'modulo/login.case.feature.@tc-1'.`,
+        message: `Directive error: @depends_on cannot have an empty target. Specify a reference like '@tc-1' or 'module/login.case.feature.@tc-1'.`,
         source: 'Testform'
       });
       continue;
@@ -77,7 +77,7 @@ export function validateTextDocument(
             start: textDocument.positionAt(startOffset),
             end: textDocument.positionAt(startOffset + tm[0].length)
           },
-          message: `Error en directiva: la referencia de dependencia no puede estar vacía.`,
+          message: `Directive error: dependency reference cannot be empty.`,
           source: 'Testform'
         });
         continue;
@@ -94,7 +94,7 @@ export function validateTextDocument(
               start: textDocument.positionAt(startOffset),
               end: textDocument.positionAt(startOffset + tm[0].length)
             },
-            message: `Referencia interna no encontrada: el tag '${targetAddress}' no existe en este archivo feature.`,
+            message: `Internal reference not found: tag '${targetAddress}' does not exist in this feature file.`,
             source: 'Testform'
           });
         }
@@ -109,7 +109,7 @@ export function validateTextDocument(
               start: textDocument.positionAt(startOffset),
               end: textDocument.positionAt(startOffset + tm[0].length)
             },
-            message: `Referencia de dependencia no encontrada: '${targetAddress}' no existe en el workspace.`,
+            message: `Dependency reference not found: '${targetAddress}' does not exist in the workspace.`,
             source: 'Testform'
           });
         }
@@ -148,7 +148,7 @@ export function validateTextDocument(
           start: { line: i, character: atCol },
           end: { line: i, character: atCol + 1 }
         },
-        message: "Etiqueta incompleta o huérfana: '@' no tiene identificador de tag.",
+        message: "Incomplete or orphan tag: '@' has no tag identifier.",
         source: 'Testform'
       });
     }
@@ -159,14 +159,14 @@ export function validateTextDocument(
       if (seenTagsInScope.has(tag)) {
         const firstLine = seenTagsInScope.get(tag)!;
         const tagCol = line.indexOf(idMatch[0]);
-        const scopeDesc = currentRuleName ? `en la Rule '${currentRuleName}'` : `en este archivo`;
+        const scopeDesc = currentRuleName ? `in Rule '${currentRuleName}'` : `in this file`;
         diagnostics.push({
           severity: DiagnosticSeverity.Error,
           range: {
             start: { line: i, character: tagCol },
             end: { line: i, character: tagCol + idMatch[0].length }
           },
-          message: `ID de escenario duplicado ${scopeDesc}: '${idMatch[0]}' ya fue declarado en la línea ${firstLine + 1}.`,
+          message: `Duplicate scenario ID ${scopeDesc}: '${idMatch[0]}' was already declared on line ${firstLine + 1}.`,
           source: 'Testform'
         });
       } else {
@@ -192,7 +192,7 @@ export function validateTextDocument(
       diagnostics.push({
         severity: DiagnosticSeverity.Information,
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: lines[0]?.length || 1 } },
-        message: `Aviso de Resource: El archivo coincide con '${tcPattern}' pero no incluye la etiqueta de recurso '@testcase'.`,
+        message: `Resource Notice: File matches '${tcPattern}' but is missing resource tag '@testcase'.`,
         source: 'Testform'
       });
     }
@@ -201,7 +201,7 @@ export function validateTextDocument(
       diagnostics.push({
         severity: DiagnosticSeverity.Information,
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: lines[0]?.length || 1 } },
-        message: `Aviso de Resource: El archivo coincide con '${trPattern}' pero no incluye la etiqueta de recurso '@testrun'.`,
+        message: `Resource Notice: File matches '${trPattern}' but is missing resource tag '@testrun'.`,
         source: 'Testform'
       });
     }
@@ -210,7 +210,7 @@ export function validateTextDocument(
       diagnostics.push({
         severity: DiagnosticSeverity.Information,
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: lines[0]?.length || 1 } },
-        message: `Aviso de Resource: El archivo coincide con '${tpPattern}' pero no incluye la etiqueta de recurso '@testplan'.`,
+        message: `Resource Notice: File matches '${tpPattern}' but is missing resource tag '@testplan'.`,
         source: 'Testform'
       });
     }
@@ -219,7 +219,7 @@ export function validateTextDocument(
       diagnostics.push({
         severity: DiagnosticSeverity.Information,
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: lines[0]?.length || 1 } },
-        message: `Aviso de Resource: El archivo coincide con '${bgPattern}' pero no incluye la etiqueta de recurso '@bug'.`,
+        message: `Resource Notice: File matches '${bgPattern}' but is missing resource tag '@bug'.`,
         source: 'Testform'
       });
     }
@@ -292,7 +292,7 @@ export function validateTextDocument(
               start: { line: targetLine, character: 0 },
               end: { line: targetLine, character: lines[targetLine]?.length || 10 }
             },
-            message: `Campo requerido ausente: tag de '${rf.name}' (${sample}) es obligatorio según la configuración del workspace.`,
+            message: `Missing required field: tag for '${rf.name}' (${sample}) is required by workspace configuration.`,
             source: 'Testform'
           });
         }
@@ -326,7 +326,7 @@ export function validateTextDocument(
           start: { line, character: 0 },
           end: { line, character: lines[line]?.length || 10 }
         },
-        message: `Aviso de Integridad (bug-target-integrity): El escenario de bug carece de trazabilidad de origen. Agrega un paso '* mark target = <testcase.identity>' o un tag '@tc-*'.`,
+        message: `Integrity Warning (bug-target-integrity): Bug scenario lacks origin traceability. Add a step '* mark target = <testcase.identity>' or a tag '@tc-*'.`,
         source: 'Testform'
       });
     }

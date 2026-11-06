@@ -262,9 +262,9 @@ export class ReportsTreeProvider implements vscode.TreeDataProvider<ReportTreeIt
 
         const fields = this.getReportFields(r.slug);
         const summary = fields.size > 0
-          ? `${fields.size} campos seleccionados`
-          : 'columnas nativas';
-        item.tooltip = `${r.label} (${fmt})\n${r.description}\n\nCampos a incluir: ${summary}\n\n▶ Haz clic en Play para generar este reporte directamente.`;
+          ? `${fields.size} fields selected`
+          : 'native columns';
+        item.tooltip = `${r.label} (${fmt})\n${r.description}\n\nFields to include: ${summary}\n\n▶ Click Play to generate this report directly.`;
         return item;
       });
     }
@@ -291,7 +291,7 @@ export class ReportsTreeProvider implements vscode.TreeDataProvider<ReportTreeIt
           ? vscode.TreeItemCheckboxState.Checked
           : vscode.TreeItemCheckboxState.Unchecked;
 
-        fieldItem.tooltip = `Campo: ${f.name}\nOrigen: ${f.origin}\nApariciones: ${f.count}\nEstado: ${isChecked ? 'Marcado (se incluirá)' : 'Desmarcado (no se incluirá)'}\n\nHaz clic para marcar/desmarcar`;
+        fieldItem.tooltip = `Field: ${f.name}\nOrigin: ${f.origin}\nOccurrences: ${f.count}\nStatus: ${isChecked ? 'Checked (included)' : 'Unchecked'}\n\nClick to toggle`;
 
         fieldItem.command = {
           command: 'testform.report.toggleField',
@@ -325,7 +325,7 @@ export class ReportsTreeProvider implements vscode.TreeDataProvider<ReportTreeIt
                 items.push({
                   slug,
                   label: `Custom: ${slug}`,
-                  description: `Reporte en .testform/reports/${e.name}`,
+                  description: `Custom report in .testform/reports/${e.name}`,
                   icon: 'extensions'
                 });
               }

@@ -430,7 +430,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
                 filterText: `${cleanTag} @${cleanTag} ${fileTag} ${slugTag} ${canonicalAddr} ${info.title} ${targetVal}`,
                 documentation: {
                   kind: MarkupKind.Markdown,
-                  value: `### 🧪 Test Target\n\n**Título:** ${info.title}\n\n- **Formato activo:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRulePath}\`\n- **Archivo:** \`${fileNameOnly}\``
+                  value: `### 🧪 Test Target\n\n**Title:** ${info.title}\n\n- **Active format:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRulePath}\`\n- **File:** \`${fileNameOnly}\``
                 },
                 textEdit: TextEdit.replace(
                   {
@@ -499,7 +499,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
             filterText: `${cleanTag} @${cleanTag} ${fileTag} ${slugTag} ${canonicalAddr} ${info.title} ${targetVal} ${fileNameOnly}`,
             documentation: {
               kind: MarkupKind.Markdown,
-              value: `### 🧪 Test Target (Direct Scenario)\n\n**Título:** ${info.title}\n\n- **Formato activo:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **Archivo:** \`${fileNameOnly}\`\n- **Dirección Canónica:** \`${canonicalAddr}\``
+              value: `### 🧪 Test Target (Direct Scenario)\n\n**Title:** ${info.title}\n\n- **Active format:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **File:** \`${fileNameOnly}\`\n- **Canonical Address:** \`${canonicalAddr}\``
             },
             textEdit: TextEdit.replace(
               {
@@ -529,7 +529,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
         {
           label: 'mark status = ...',
           kind: CompletionItemKind.Snippet,
-          detail: 'Testform DSL: Asignar resultado de ejecución',
+          detail: 'Testform DSL: Set execution status',
           insertTextFormat: InsertTextFormat.Snippet,
           filterText: 'mark status status',
           textEdit: TextEdit.replace(
@@ -541,7 +541,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
         {
           label: 'mark target = ...',
           kind: CompletionItemKind.Snippet,
-          detail: 'Testform DSL: Asignar target canónico de caso de prueba',
+          detail: 'Testform DSL: Set test case canonical target',
           insertTextFormat: InsertTextFormat.Snippet,
           filterText: 'mark target target',
           textEdit: TextEdit.replace(
@@ -553,7 +553,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
         {
           label: 'mark trace = ...',
           kind: CompletionItemKind.Snippet,
-          detail: 'Testform DSL: Registrar traza o detalle del fallo',
+          detail: 'Testform DSL: Record failure trace or error detail',
           insertTextFormat: InsertTextFormat.Snippet,
           filterText: 'mark trace trace',
           textEdit: TextEdit.replace(
@@ -565,7 +565,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
         {
           label: 'mark evidence = ...',
           kind: CompletionItemKind.Snippet,
-          detail: 'Testform DSL: Adjuntar evidencia (captura, archivo, URL)',
+          detail: 'Testform DSL: Attach execution evidence (screenshot, file, URL)',
           insertTextFormat: InsertTextFormat.Snippet,
           filterText: 'mark evidence evidence',
           textEdit: TextEdit.replace(
@@ -702,7 +702,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
     items.push({
       label: 'field <name> = ...',
       kind: CompletionItemKind.Keyword,
-      detail: 'Testform DSL: Asignar metadato personalizado de campo',
+      detail: 'Testform DSL: Set custom metadata field',
       insertTextFormat: InsertTextFormat.Snippet,
       insertText: 'field ${1:name} = ${2:value}'
     });
@@ -789,10 +789,10 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
       items.push({
         label: `<${header}>`,
         kind: CompletionItemKind.Variable,
-        detail: `Columna de Examples: ${header}`,
+        detail: `Examples column: ${header}`,
         documentation: {
           kind: MarkupKind.Markdown,
-          value: `**Parámetro de tabla:** \`<${header}>\`\n\nDefinido en la tabla \`Examples:\` de este Scenario Outline.`
+          value: `**Table parameter:** \`<${header}>\`\n\nDefined in the \`Examples:\` table of this Scenario Outline.`
         },
         insertText: `${header}>`
       });
@@ -811,7 +811,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
       items.push({
         label: tag,
         kind: CompletionItemKind.Reference,
-        detail: `Referencia interna en este feature (${tag})`,
+        detail: `Internal reference in this feature (${tag})`,
         insertText: tag
       });
     }
@@ -843,7 +843,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
     items.push({
       label: nextTag,
       kind: CompletionItemKind.Value,
-      detail: `Siguiente ID sugerido para este archivo (@${nextTag})`,
+      detail: `Suggested next ID for this file (@${nextTag})`,
       insertText: nextTag
     });
 
@@ -894,7 +894,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
               kind: CompletionItemKind.Unit,
               documentation: {
                 kind: MarkupKind.Markdown,
-                value: `### 🧪 Test Case Target\n\n**Título:** ${info.title}\n\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRule}\``
+                value: `### 🧪 Test Case Target\n\n**Title:** ${info.title}\n\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRule}\``
               },
               insertText: cleanTag
             });
@@ -931,7 +931,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
       },
       {
         label: 'depends_on',
-        kind: CompletionItemKind.Property, // 🔧 Llave francesa / inglesa
+        kind: CompletionItemKind.Property,
         detail: 'directive',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'depends_on("${1:target}")'
@@ -950,7 +950,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
               filterText: `${fieldInfo.name} ${cleanTag} @${cleanTag}`,
               kind: CompletionItemKind.EnumMember,
               detail: 'field',
-              documentation: `Valor permitido para el campo de tag '${fieldInfo.name}'.\nOpciones: ${fieldInfo.enum.join(', ')}`,
+              documentation: `Allowed value for tag field '${fieldInfo.name}'.\nOptions: ${fieldInfo.enum.join(', ')}`,
               insertText: cleanTag
             });
           }
@@ -960,7 +960,7 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
             filterText: `${fieldInfo.name} @${fieldInfo.name}`,
             kind: CompletionItemKind.EnumMember,
             detail: 'field',
-            documentation: `Campo de tag configurado en main.yml: '${fieldInfo.name}'`,
+            documentation: `Tag field configured in workspace: '${fieldInfo.name}'`,
             insertText: fieldInfo.name
           });
         }

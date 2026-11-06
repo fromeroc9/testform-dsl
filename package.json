@@ -2,7 +2,7 @@
   "name": "testform-dsl",
   "displayName": "Testform DSL",
   "description": "Declarative Test-as-Code orchestration for Git: Gherkin IntelliSense, variables autoload, native Test Explorer, state management, and quality gates.",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "publisher": "fromeroc9",
   "license": "GPL-3.0-or-later",
   "author": "Flavio Romero <flavio.arc9@gmail.com>",
@@ -27,7 +27,6 @@
     "gherkin",
     "bdd",
     "testing",
-    "terraform",
     "qa",
     "test-management"
   ],
@@ -582,17 +581,17 @@
             "classic"
           ],
           "enumDescriptions": [
-            "Tag de identidad con arroba (@tc-01)",
-            "Tag de identidad sin arroba (tc-01)",
-            "Dirección canónica completa con ruta (tests/features/ParaBank/bill_pay.case.feature.@tc-01)",
-            "Nombre base del archivo de especificación + tag (bill_pay.case.feature.@tc-01)",
-            "Slug sin extensión + tag (bill_pay.@tc-01)",
-            "Nombre o título del escenario (e.g. Validar pago exitoso)",
-            "Alias corto de tag (@tc-01)",
-            "Alias clásico de dirección canónica"
+            "Identity tag with at-sign (@tc-01)",
+            "Bare identity tag without at-sign (tc-01)",
+            "Full canonical path address (tests/features/ParaBank/bill_pay.case.feature.@tc-01)",
+            "Specification base filename + tag (bill_pay.case.feature.@tc-01)",
+            "Filename slug without extension + tag (bill_pay.@tc-01)",
+            "Scenario name or title (e.g. Valid payment flow)",
+            "Short tag alias (@tc-01)",
+            "Classic canonical address alias"
           ],
           "default": "tag",
-          "description": "Formato de inserción para los escenarios objetivo dentro de las reglas de un Testrun."
+          "description": "Insertion format for target scenarios inside the rules of a TestRun."
         },
         "testform.trace.server": {
           "type": "string",
