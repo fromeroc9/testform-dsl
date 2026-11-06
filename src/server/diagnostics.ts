@@ -313,6 +313,25 @@ export function validateTextDocument(
     }
   };
 
+  let currentScenarioHasTarget = false;
+  let currentScenarioHasTrace = false;
+
+  const checkBugIntegrity = (line: number, hasTarget: boolean, hasTrace: boolean, tags: Set<string>) => {
+    if (resourceType !== 'bug') return;
+    const hasTargetTag = Array.from(tags).some(t => t.startsWith('@tc-') || t.startsWith('@tr-'));
+    if (!hasTarget && !hasTrace && !hasTargetTag) {
+      diagnostics.push({
+        severity: DiagnosticSeverity.Warning,
+        range: {
+          start: { line, character: 0 },
+          end: { line, character: lines[line]?.length || 10 }
+        },
+        message: `Aviso de Integridad (bug-target-integrity): El escenario de bug carece de trazabilidad de origen. Agrega un paso '* mark target = <testcase.identity>' o un tag '@tc-*'.`,
+        source: 'Testform'
+      });
+    }
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
     const trimmed = rawLine.trim();
@@ -333,8 +352,11 @@ export function validateTextDocument(
       hasScenarios = true;
       if (currentScenarioLine >= 0) {
         checkRequiredFieldsForTarget(currentScenarioLine, currentScenarioFields, currentScenarioTags);
+        checkBugIntegrity(currentScenarioLine, currentScenarioHasTarget, currentScenarioHasTrace, currentScenarioTags);
       }
       currentScenarioLine = i;
+      currentScenarioHasTarget = false;
+      currentScenarioHasTrace = false;
       // Inherit all fields declared in Background / file-level!
       currentScenarioFields = new Map(backgroundFields);
       // Inherit Feature tags + local scenario tags
@@ -345,6 +367,11 @@ export function validateTextDocument(
 
     if (/^(?:Rule|Regla):/i.test(trimmed)) {
       pendingTagsForScenario.clear();
+    }
+
+    if (currentScenarioLine >= 0) {
+      if (/\btarget\s*=/i.test(trimmed)) currentScenarioHasTarget = true;
+      if (/\btrace\s*=/i.test(trimmed)) currentScenarioHasTrace = true;
     }
 
     const fieldMatch = trimmed.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
@@ -398,10 +425,12 @@ export function validateTextDocument(
   // Check the last scenario in the file
   if (currentScenarioLine >= 0) {
     checkRequiredFieldsForTarget(currentScenarioLine, currentScenarioFields, currentScenarioTags);
+    checkBugIntegrity(currentScenarioLine, currentScenarioHasTarget, currentScenarioHasTrace, currentScenarioTags);
   } else if (!hasScenarios && (resourceType === 'testplan' || resourceType === 'testrun' || resourceType === 'testcase' || resourceType === 'bug')) {
     // If resource file has no explicit Scenario headers (e.g. Testplans with Rules), validate at file/feature level
     const targetLine = featureLineIndex >= 0 ? featureLineIndex : 0;
     checkRequiredFieldsForTarget(targetLine, backgroundFields, featureTags);
+    checkBugIntegrity(targetLine, currentScenarioHasTarget, currentScenarioHasTrace, featureTags);
   }
 
   return diagnostics;
