@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.3] - 2026-11-09
+## [1.0.2] - 2026-11-09
 
 ### Added
 
@@ -36,12 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Custom virtual URI scheme (`testform-state-revision://`) streaming historical states on-demand via `git show <commit>:testform.state`.
   - Seamless native VS Code Diff (`vscode.diff`) comparing any historical state revision against the current working state with zero disk clutter.
   - One-click **Restore State from Commit** action with modal confirmation dialog to safely roll back or revert `testform.state`.
-
----
-
-## [1.0.2] - 2026-11-09
-
-### Added
 
 #### ⚡ Real-Time LSP Incremental Indexing
 - **Live Content Change Processing (`server.ts`, `workspace-scanner.ts`):**
