@@ -32,6 +32,13 @@ const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let workspaceScanner: WorkspaceScanner | null = null;
+let codeLensSettings: CodeLensSettings = {
+  enable: true,
+  testcase: true,
+  testrun: true,
+  testplan: true,
+  bug: true
+};
 
 connection.onInitialize((params: InitializeParams) => {
   const capabilities = params.capabilities;
@@ -192,6 +199,25 @@ connection.onDocumentFormatting(
     return formatGherkinDocument(document);
   }
 );
+
+
+// Code Actions (Quick Fixes)
+connection.onCodeAction((params: CodeActionParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document || !workspaceScanner) return [];
+  const uri = document.uri.toLowerCase();
+  if (!uri.endsWith('.feature') && document.languageId !== 'gherkin') return [];
+  return provideCodeActions(params, document, workspaceScanner);
+});
+
+// CodeLens
+connection.onCodeLens((params: CodeLensParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document || !workspaceScanner) return [];
+  const uri = document.uri.toLowerCase();
+  if (!uri.endsWith('.feature') && document.languageId !== 'gherkin') return [];
+  return provideCodeLenses(document, workspaceScanner, codeLensSettings);
+});
 
 // Make the text document manager listen on the connection
 documents.listen(connection);

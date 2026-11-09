@@ -41,6 +41,12 @@ export class WorkspaceScanner {
         testplan: '*.plan.feature',
         bug: '*.bug.feature'
       },
+      scaffoldDirectories: {
+        testcase: 'testcase',
+        testrun: 'testruns',
+        testplan: 'testplans',
+        bug: 'bugs'
+      },
       targetFormat: 'tag'
     };
   }
@@ -95,6 +101,10 @@ export class WorkspaceScanner {
               if (resBlock.testrun?.match) this.config.scopes.testrun = resBlock.testrun.match;
               if (resBlock.testplan?.match) this.config.scopes.testplan = resBlock.testplan.match;
               if (resBlock.bug?.match) this.config.scopes.bug = resBlock.bug.match;
+              if (resBlock.testcase?.scaffold?.directory) this.config.scaffoldDirectories!.testcase = String(resBlock.testcase.scaffold.directory).trim();
+              if (resBlock.testrun?.scaffold?.directory) this.config.scaffoldDirectories!.testrun = String(resBlock.testrun.scaffold.directory).trim();
+              if (resBlock.testplan?.scaffold?.directory) this.config.scaffoldDirectories!.testplan = String(resBlock.testplan.scaffold.directory).trim();
+              if (resBlock.bug?.scaffold?.directory) this.config.scaffoldDirectories!.bug = String(resBlock.bug.scaffold.directory).trim();
 
               const extractFields = (fObj: any, scope: 'global' | 'testcase' | 'testrun' | 'testplan' | 'bug' = 'global') => {
                 if (!fObj) return;
@@ -237,6 +247,10 @@ export class WorkspaceScanner {
                 if (targetRes.testrun?.match) this.config.scopes.testrun = targetRes.testrun.match;
                 if (targetRes.testplan?.match) this.config.scopes.testplan = targetRes.testplan.match;
                 if (targetRes.bug?.match) this.config.scopes.bug = targetRes.bug.match;
+                if (targetRes.testcase?.scaffold?.directory) this.config.scaffoldDirectories!.testcase = String(targetRes.testcase.scaffold.directory).trim();
+                if (targetRes.testrun?.scaffold?.directory) this.config.scaffoldDirectories!.testrun = String(targetRes.testrun.scaffold.directory).trim();
+                if (targetRes.testplan?.scaffold?.directory) this.config.scaffoldDirectories!.testplan = String(targetRes.testplan.scaffold.directory).trim();
+                if (targetRes.bug?.scaffold?.directory) this.config.scaffoldDirectories!.bug = String(targetRes.bug.scaffold.directory).trim();
               }
 
               // 4. Data block (data: or naked object in data.yml)
@@ -405,10 +419,10 @@ export class WorkspaceScanner {
 
                   // Check duplicates across different files (only primary definitions are tracked)
                   const isPrimaryDeclaration =
-                    (prefix === 'tc' && relPath.includes('.case.')) ||
-                    (prefix === 'tr' && relPath.includes('.run.')) ||
-                    (prefix === 'tp' && relPath.includes('.plan.')) ||
-                    (prefix === 'bg' && relPath.includes('.bug.'));
+                    (prefix === 'tc' && (fileScope === 'testcase' || relPath.includes('.case.'))) ||
+                    (prefix === 'tr' && (fileScope === 'testrun' || relPath.includes('.run.'))) ||
+                    (prefix === 'tp' && (fileScope === 'testplan' || relPath.includes('.plan.'))) ||
+                    (prefix === 'bg' && (fileScope === 'bug' || relPath.includes('.bug.')));
 
                   if (isPrimaryDeclaration) {
                     const existing = this.config.scenarios.get(tag);
@@ -421,14 +435,14 @@ export class WorkspaceScanner {
                     } else {
                       this.config.scenarios.set(tag, info);
                     }
+
+                    // Address mapping (full relative: auth/login.case.feature.@tc-1)
+                    this.config.scenarioAddresses.set(info.address, info);
+
+                    // Shorthand address mapping (filename only: login.case.feature.@tc-1)
+                    const fileNameOnly = path.basename(fullPath);
+                    this.config.scenarioAddresses.set(`${fileNameOnly}.${tag}`, info);
                   }
-
-                  // Address mapping (full relative: auth/login.case.feature.@tc-1)
-                  this.config.scenarioAddresses.set(info.address, info);
-
-                  // Shorthand address mapping (filename only: login.case.feature.@tc-1)
-                  const fileNameOnly = path.basename(fullPath);
-                  this.config.scenarioAddresses.set(`${fileNameOnly}.${tag}`, info);
                 }
               }
             } catch {}

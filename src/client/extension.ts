@@ -292,6 +292,36 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand(selected.cmd);
       }
     }),
+    vscode.commands.registerCommand('testform.implementRequiredFields', async (args?: { uri?: string; line?: number; target?: 'background' | 'scenario' }) => {
+      const editor = vscode.window.activeTextEditor;
+      const targetUri = args?.uri ? vscode.Uri.parse(args.uri) : editor?.document.uri;
+      if (!targetUri) return;
+
+      const targetLine = args?.line !== undefined ? args.line : (editor?.selection.active.line || 0);
+      const range = new vscode.Range(targetLine, 0, targetLine, 10);
+
+      const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+        'vscode.executeCodeActionProvider',
+        targetUri,
+        range
+      );
+
+      if (actions && actions.length > 0) {
+        let selected = actions[0];
+        if (args?.target === 'scenario') {
+          const scAction = actions.find(a => a.title.includes('this scenario'));
+          if (scAction) selected = scAction;
+        } else if (args?.target === 'background') {
+          const bgAction = actions.find(a => a.title.includes('Background:'));
+          if (bgAction) selected = bgAction;
+        }
+
+        if (selected.edit) {
+          await vscode.workspace.applyEdit(selected.edit);
+          vscode.window.showInformationMessage('Testform: Required contract fields implemented.');
+        }
+      }
+    }),
     vscode.commands.registerCommand('testform.init', () => {
       runTestformCommand('init');
     }),

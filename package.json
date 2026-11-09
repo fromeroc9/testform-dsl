@@ -593,6 +593,11 @@
           "default": "tag",
           "description": "Insertion format for target scenarios inside the rules of a TestRun."
         },
+        "testform.decorations.moduleFolders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a blue cube badge (📦) in the file explorer for module subfolders containing test case features."
+        },
         "testform.trace.server": {
           "type": "string",
           "enum": [

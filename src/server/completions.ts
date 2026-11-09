@@ -303,6 +303,66 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
 
   return null;
 }
+function getGherkinContext(document: TextDocument, position: Position): {
+  section: 'header' | 'background' | 'rule' | 'scenario';
+  enclosingRule: string | null;
+  enclosingScenario: string | null;
+} {
+  const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
+  let section: 'header' | 'background' | 'rule' | 'scenario' = 'header';
+  let enclosingRule: string | null = null;
+  let enclosingScenario: string | null = null;
+
+  for (let i = 0; i < linesBefore.length; i++) {
+    const line = linesBefore[i].trim();
+    if (line.startsWith('#')) continue;
+
+    const rm = line.match(/^(?:Rule|Regla):\s*(.*)$/i);
+    if (rm) {
+      section = 'rule';
+      enclosingRule = rm[1].trim();
+      enclosingScenario = null;
+      continue;
+    }
+
+    const bg = line.match(/^(?:Background|Antecedentes):/i);
+    if (bg) {
+      section = 'background';
+      enclosingScenario = null;
+      continue;
+    }
+
+    const sc = line.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.*)$/i);
+    if (sc) {
+      section = 'scenario';
+      enclosingScenario = sc[1].trim();
+      continue;
+    }
+  }
+
+  return { section, enclosingRule, enclosingScenario };
+}
+function inferContextValues(docUri: string): { project: string; module: string } {
+  const normUri = docUri.replace(/\\/g, '/');
+  const parts = normUri.split('/');
+  const fileName = parts.pop() || '';
+  const folderName = parts.pop() || '';
+
+  let project = 'ProjectName';
+  let module = 'ModuleName';
+
+  if (folderName && !['testcase', 'testruns', 'testplans', 'testcycle', 'tests', 'features'].includes(folderName.toLowerCase())) {
+    project = folderName;
+  }
+  const cleanBase = fileName.replace(/(\.(case|run|plan|bug))?\.feature$/i, '');
+  if (cleanBase && cleanBase !== 'test') {
+    module = cleanBase.charAt(0).toUpperCase() + cleanBase.slice(1).replace(/_/g, ' ');
+  }
+
+  return { project, module };
+}
+
+
 
   // 4.5 Rule path completion in testrun and testplan
   const ruleMatch = lineText.match(/^\s*(?:Rule|Regla):\s*([a-zA-Z0-9_./-]*)$/i);
@@ -329,16 +389,26 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
       return items;
     } else if (isTestrun) {
       // In a testrun, Rule: must suggest testcase feature files (*.case.feature)
+      // Stripping scaffold directory (e.g. 'testcase/') so paths are short (e.g. Magento/cart.case.feature)
+      const tcScaffold = (scanner.config.scaffoldDirectories?.testcase || 'testcase').replace(/^[/\\]+|[/\\]+$/g, '');
       for (const [relPath, feat] of scanner.featureFiles.entries()) {
         if (feat.scope === 'testcase') {
+          let shortPath = relPath;
+          const lowerRel = relPath.toLowerCase().replace(/\x5c/g, '/');
+          const lowerPrefix = tcScaffold.toLowerCase() + '/';
+          if (lowerRel.startsWith(lowerPrefix)) {
+            shortPath = relPath.substring(tcScaffold.length + 1);
+          }
           items.push({
-            label: relPath,
+            label: shortPath,
             kind: CompletionItemKind.File,
+            detail: `Test Case Target (${feat.title})`,
+            filterText: `${shortPath} ${relPath} ${feat.title}`,
             documentation: {
               kind: MarkupKind.Markdown,
-              value: `### 🧪 Test Case Feature Target\n\n**Title:** ${feat.title}\n\n**Path:** \`${relPath}\``
+              value: `### 🧪 Test Case Feature Target\n\n**Title:** ${feat.title}\n\n- **Target:** \`${shortPath}\`\n- **Full Path:** \`${relPath}\``
             },
-            insertText: relPath
+            insertText: shortPath
           });
         }
       }
@@ -516,66 +586,362 @@ function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner):
     }
   }
 
-  // 5. DSL Mark Step completions (* mark ...)
+  // 5. DSL Mark / Field Step completions (* ...)
   const stepPrefixMatch = lineText.match(/^(\s*(?:\*|Given|When|Then|And|But)\s*)(.*)$/i);
   if (stepPrefixMatch && !lineText.includes('=')) {
     const prefixCol = stepPrefixMatch[1].length;
     const rest = stepPrefixMatch[2].trim().toLowerCase();
     const docScope = detectDocumentScope(document, scanner);
+    const gContext = getGherkinContext(document, position);
 
-    // Trigger if in a testrun, or if user started typing 'm', 'mark', or mark properties
-    if (docScope === 'testrun' || rest.startsWith('m') || ['status', 'target', 'trace', 'evidence'].some(k => rest.startsWith(k))) {
-      items.push(
-        {
-          label: 'mark status = ...',
+    // If cursor is in Background:
+    // MARKS DO NOT BELONG IN BACKGROUND! Only metadata fields belong in Background:
+    if (gContext.section === 'background') {
+      const inferred = inferContextValues(document.uri);
+
+      // Collect contract fields applicable for this scope
+      const applicableFields = [...scanner.customFields.values()].filter(f => {
+        if (!f.scopes || f.scopes.length === 0 || f.scopes.includes('global')) return true;
+        if (docScope && f.scopes.includes(docScope)) return true;
+        return false;
+      });
+
+      const requiredFields = applicableFields.filter(f => f.required);
+
+      // 1. "⚡ Implement all required fields" (Contract validation like Java implements interface)
+      if (requiredFields.length > 0) {
+        let tabIdx = 1;
+        const reqLines = requiredFields.map((f, idx) => {
+          const pfx = idx === 0 ? '' : '    * ';
+          let valStr = '';
+          if (f.enum && f.enum.length > 0) {
+            valStr = `\${indexVar|${f.enum.map(e => e.replace(/[,|\\/]/g, '')).join(',')}|}`.replace('indexVar', String(tabIdx++));
+          } else if (f.default !== undefined) {
+            valStr = `\${indexVar:${f.default}}`.replace('indexVar', String(tabIdx++));
+          } else if (f.name.toLowerCase() === 'project') {
+            valStr = `\${indexVar:${inferred.project}}`.replace('indexVar', String(tabIdx++));
+          } else if (f.name.toLowerCase() === 'module') {
+            valStr = `\${indexVar:${inferred.module}}`.replace('indexVar', String(tabIdx++));
+          } else {
+            valStr = `\${indexVar:value}`.replace('indexVar', String(tabIdx++));
+          }
+          return `${pfx}field ${f.name} = ${valStr}`;
+        }).join('\n');
+
+        items.push({
+          label: '⚡ Implement all required fields',
           kind: CompletionItemKind.Snippet,
-          detail: 'Testform DSL: Set execution status',
+          detail: `Testform Contract: Implement required fields (${requiredFields.map(f => f.name).join(', ')})`,
+          sortText: '00_implement_required',
           insertTextFormat: InsertTextFormat.Snippet,
-          filterText: 'mark status status',
+          filterText: 'implement required fields contract * field',
           textEdit: TextEdit.replace(
             { start: { line: position.line, character: prefixCol }, end: position },
-            'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+            reqLines
           ),
-          insertText: 'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
-        },
-        {
-          label: 'mark target = ...',
+          insertText: reqLines
+        });
+      }
+
+      // 2. "⚡ Implement all fields (with defaults)"
+      if (applicableFields.length > 0) {
+        let allTabIdx = 1;
+        const allLines = applicableFields.map((f, idx) => {
+          const pfx = idx === 0 ? '' : '    * ';
+          let valStr = '';
+          if (f.default !== undefined) {
+            valStr = `\${indexVar:${f.default}}`.replace('indexVar', String(allTabIdx++));
+          } else if (f.enum && f.enum.length > 0) {
+            valStr = `\${indexVar|${f.enum.map(e => e.replace(/[,|\\/]/g, '')).join(',')}|}`.replace('indexVar', String(allTabIdx++));
+          } else if (f.name.toLowerCase() === 'project') {
+            valStr = `\${indexVar:${inferred.project}}`.replace('indexVar', String(allTabIdx++));
+          } else if (f.name.toLowerCase() === 'module') {
+            valStr = `\${indexVar:${inferred.module}}`.replace('indexVar', String(allTabIdx++));
+          } else {
+            valStr = `\${indexVar:value}`.replace('indexVar', String(allTabIdx++));
+          }
+          return `${pfx}field ${f.name} = ${valStr}`;
+        }).join('\n');
+
+        items.push({
+          label: '⚡ Implement all fields (with defaults)',
           kind: CompletionItemKind.Snippet,
-          detail: 'Testform DSL: Set test case canonical target',
+          detail: 'Testform Contract: Implement all contract fields with default values',
+          sortText: '01_implement_all',
           insertTextFormat: InsertTextFormat.Snippet,
-          filterText: 'mark target target',
+          filterText: 'implement all fields contract * field',
           textEdit: TextEdit.replace(
             { start: { line: position.line, character: prefixCol }, end: position },
-            'mark target = ${1:path/to.case.feature.@tc-01}'
+            allLines
           ),
-          insertText: 'mark target = ${1:path/to.case.feature.@tc-01}'
-        },
-        {
-          label: 'mark trace = ...',
-          kind: CompletionItemKind.Snippet,
-          detail: 'Testform DSL: Record failure trace or error detail',
-          insertTextFormat: InsertTextFormat.Snippet,
-          filterText: 'mark trace trace',
-          textEdit: TextEdit.replace(
-            { start: { line: position.line, character: prefixCol }, end: position },
-            'mark trace = "${1:trace description or error stack}"'
-          ),
-          insertText: 'mark trace = "${1:trace description or error stack}"'
-        },
-        {
-          label: 'mark evidence = ...',
-          kind: CompletionItemKind.Snippet,
-          detail: 'Testform DSL: Attach execution evidence (screenshot, file, URL)',
-          insertTextFormat: InsertTextFormat.Snippet,
-          filterText: 'mark evidence evidence',
-          textEdit: TextEdit.replace(
-            { start: { line: position.line, character: prefixCol }, end: position },
-            'mark evidence = "${1:evidence.png or url}"'
-          ),
-          insertText: 'mark evidence = "${1:evidence.png or url}"'
+          insertText: allLines
+        });
+      }
+
+      // 3. Generic field snippet
+      items.push({
+        label: 'field <name> = ...',
+        kind: CompletionItemKind.Keyword,
+        detail: 'Testform DSL: Define custom metadata field',
+        sortText: '02_field_generic',
+        insertTextFormat: InsertTextFormat.Snippet,
+        filterText: 'field',
+        textEdit: TextEdit.replace(
+          { start: { line: position.line, character: prefixCol }, end: position },
+          'field ${1:name} = ${2:value}'
+        ),
+        insertText: 'field ${1:name} = ${2:value}'
+      });
+
+      // 4. Individual fields with priority sorting and (Required) badge
+      for (const info of applicableFields) {
+        const requiredText = info.required ? ' (Required)' : '';
+        const sortPrefix = info.required ? '10_' : '20_';
+
+        if (info.enum && info.enum.length > 0) {
+          const cleanChoices = info.enum.map(e => e.replace(/[,|\\/]/g, ''));
+          items.push({
+            label: `field ${info.name}`,
+            kind: CompletionItemKind.Field,
+            detail: `Field: ${info.name}${requiredText}`,
+            sortText: `${sortPrefix}${info.name}`,
+            filterText: `field ${info.name} ${info.name}`,
+            insertTextFormat: InsertTextFormat.Snippet,
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              `field ${info.name} = \${1|${cleanChoices.join(',')}|}`
+            ),
+            insertText: `field ${info.name} = \${1|${cleanChoices.join(',')}|}`
+          });
+        } else if (info.default !== undefined) {
+          items.push({
+            label: `field ${info.name}`,
+            kind: CompletionItemKind.Field,
+            detail: `Field: ${info.name}${requiredText} (default: ${info.default})`,
+            sortText: `${sortPrefix}${info.name}`,
+            filterText: `field ${info.name} ${info.name}`,
+            insertTextFormat: InsertTextFormat.Snippet,
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              `field ${info.name} = \${1:${info.default}}`
+            ),
+            insertText: `field ${info.name} = \${1:${info.default}}`
+          });
+        } else {
+          const sampleVal = info.name.toLowerCase() === 'project' ? inferred.project : (info.name.toLowerCase() === 'module' ? inferred.module : 'value');
+          items.push({
+            label: `field ${info.name}`,
+            kind: CompletionItemKind.Field,
+            detail: `Field: ${info.name}${requiredText}`,
+            sortText: `${sortPrefix}${info.name}`,
+            filterText: `field ${info.name} ${info.name}`,
+            insertTextFormat: InsertTextFormat.Snippet,
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              `field ${info.name} = \${1:${sampleVal}}`
+            ),
+            insertText: `field ${info.name} = \${1:${sampleVal}}`
+          });
         }
-      );
+      }
       return items;
+    }
+
+    // If cursor is in Scenario of @testcase:
+    if (gContext.section === 'scenario' && docScope === 'testcase') {
+      const inferred = inferContextValues(document.uri);
+      const applicableFields = [...scanner.customFields.values()].filter(f => {
+        if (!f.scopes || f.scopes.length === 0 || f.scopes.includes('global')) return true;
+        if (f.scopes.includes('testcase')) return true;
+        return false;
+      });
+
+      const requiredFields = applicableFields.filter(f => f.required);
+
+      // Offer "⚡ Implement all required fields for this scenario"
+      let tabIdx = 1;
+      const reqLines = requiredFields.map((f, idx) => {
+        const pfx = idx === 0 ? '' : '    * ';
+        let valStr = '';
+        if (f.enum && f.enum.length > 0) {
+          valStr = `\${indexVar|${f.enum.map(e => e.replace(/[,|\\/]/g, '')).join(',')}|}`.replace('indexVar', String(tabIdx++));
+        } else if (f.default !== undefined) {
+          valStr = `\${indexVar:${f.default}}`.replace('indexVar', String(tabIdx++));
+        } else if (f.name.toLowerCase() === 'project') {
+          valStr = `\${indexVar:${inferred.project}}`.replace('indexVar', String(tabIdx++));
+        } else if (f.name.toLowerCase() === 'module') {
+          valStr = `\${indexVar:${inferred.module}}`.replace('indexVar', String(tabIdx++));
+        } else {
+          valStr = `\${indexVar:value}`.replace('indexVar', String(tabIdx++));
+        }
+        return `${pfx}field ${f.name} = ${valStr}`;
+      }).join('\n');
+
+      items.push({
+        label: '⚡ Implement all required fields for this scenario',
+        kind: CompletionItemKind.Snippet,
+        detail: `Testform Contract: Implement scenario required fields (${requiredFields.map(f => f.name).join(', ')})`,
+        sortText: '00_scenario_required',
+        insertTextFormat: InsertTextFormat.Snippet,
+        filterText: 'implement required fields scenario * field',
+        textEdit: TextEdit.replace(
+          { start: { line: position.line, character: prefixCol }, end: position },
+          reqLines
+        ),
+        insertText: reqLines
+      });
+
+      // Individual fields with priority sorting
+      for (const info of applicableFields) {
+        const requiredText = info.required ? ' (Required)' : '';
+        const sortPrefix = info.required ? '10_' : '20_';
+        if (info.enum && info.enum.length > 0) {
+          const cleanChoices = info.enum.map(e => e.replace(/[,|\\/]/g, ''));
+          items.push({
+            label: `field ${info.name}`,
+            kind: CompletionItemKind.Field,
+            detail: `Field: ${info.name}${requiredText}`,
+            sortText: `${sortPrefix}${info.name}`,
+            filterText: `field ${info.name} ${info.name}`,
+            insertTextFormat: InsertTextFormat.Snippet,
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              `field ${info.name} = \${1|${cleanChoices.join(',')}|}`
+            ),
+            insertText: `field ${info.name} = \${1|${cleanChoices.join(',')}|}`
+          });
+        } else if (info.default !== undefined) {
+          items.push({
+            label: `field ${info.name}`,
+            kind: CompletionItemKind.Field,
+            detail: `Field: ${info.name}${requiredText} (default: ${info.default})`,
+            sortText: `${sortPrefix}${info.name}`,
+            filterText: `field ${info.name} ${info.name}`,
+            insertTextFormat: InsertTextFormat.Snippet,
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              `field ${info.name} = \${1:${info.default}}`
+            ),
+            insertText: `field ${info.name} = \${1:${info.default}}`
+          });
+        } else {
+          const sampleVal = info.name.toLowerCase() === 'project' ? inferred.project : (info.name.toLowerCase() === 'module' ? inferred.module : 'value');
+          items.push({
+            label: `field ${info.name}`,
+            kind: CompletionItemKind.Field,
+            detail: `Field: ${info.name}${requiredText}`,
+            sortText: `${sortPrefix}${info.name}`,
+            filterText: `field ${info.name} ${info.name}`,
+            insertTextFormat: InsertTextFormat.Snippet,
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              `field ${info.name} = \${1:${sampleVal}}`
+            ),
+            insertText: `field ${info.name} = \${1:${sampleVal}}`
+          });
+        }
+      }
+    }
+
+    // Inside Scenario:
+    // Suggest marks according to resource scope:
+    // - In testrun: mark status, mark trace, mark evidence (NO mark target, target is scenario)
+    // - In bug: mark target, mark status, mark trace, mark evidence
+    const isMarkTrigger = rest.startsWith('m') || ['status', 'target', 'trace', 'evidence'].some(k => rest.startsWith(k));
+    if (docScope === 'testrun' || (docScope === 'bug' && isMarkTrigger) || isMarkTrigger) {
+      if (docScope === 'testrun') {
+        items.push(
+          {
+            label: 'mark status = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Set execution status',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'mark status status',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+            ),
+            insertText: 'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+          },
+          {
+            label: 'mark trace = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Record failure trace or error detail',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'mark trace trace',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'mark trace = "${1:trace description or error stack}"'
+            ),
+            insertText: 'mark trace = "${1:trace description or error stack}"'
+          },
+          {
+            label: 'mark evidence = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Attach execution evidence (screenshot, file, URL)',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'mark evidence evidence',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'mark evidence = "${1:evidence.png or url}"'
+            ),
+            insertText: 'mark evidence = "${1:evidence.png or url}"'
+          }
+        );
+        return items;
+      } else if (docScope === 'bug') {
+        items.push(
+          {
+            label: 'mark target = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Set failing test case canonical target',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'mark target target',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'mark target = ${1:testcase/path.case.feature.@tc-01}'
+            ),
+            insertText: 'mark target = ${1:testcase/path.case.feature.@tc-01}'
+          },
+          {
+            label: 'mark status = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Set defect status',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'mark status status',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'mark status = ${1|failed,passed,pending|}'
+            ),
+            insertText: 'mark status = ${1|failed,passed,pending|}'
+          },
+          {
+            label: 'mark trace = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Record failure trace or error detail',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'mark trace trace',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'mark trace = "${1:trace description or error stack}"'
+            ),
+            insertText: 'mark trace = "${1:trace description or error stack}"'
+          },
+          {
+            label: 'mark evidence = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Attach execution evidence (screenshot, file, URL)',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'mark evidence evidence',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'mark evidence = "${1:evidence.png or url}"'
+            ),
+            insertText: 'mark evidence = "${1:evidence.png or url}"'
+          }
+        );
+        return items;
+      }
     }
   }
 

@@ -248,6 +248,7 @@ export function validateTextDocument(
   const featureTags = new Set<string>();
   const backgroundFields = new Map<string, string>();
   let featureLineIndex = -1;
+  let backgroundLineIndex = -1;
 
   // Extract feature-level tags (all tags before the Feature: / Característica: header)
   for (let i = 0; i < lines.length; i++) {
@@ -344,6 +345,7 @@ export function validateTextDocument(
     }
 
     if (/^(?:Background|Antecedentes):/i.test(trimmed)) {
+      backgroundLineIndex = i;
       pendingTagsForScenario.clear();
       continue;
     }
@@ -351,7 +353,9 @@ export function validateTextDocument(
     if (isScenarioHeader(trimmed)) {
       hasScenarios = true;
       if (currentScenarioLine >= 0) {
-        checkRequiredFieldsForTarget(currentScenarioLine, currentScenarioFields, currentScenarioTags);
+        if (resourceType === 'testcase' || resourceType === 'bug') {
+          checkRequiredFieldsForTarget(currentScenarioLine, currentScenarioFields, currentScenarioTags);
+        }
         checkBugIntegrity(currentScenarioLine, currentScenarioHasTarget, currentScenarioHasTrace, currentScenarioTags);
       }
       currentScenarioLine = i;
@@ -424,12 +428,18 @@ export function validateTextDocument(
 
   // Check the last scenario in the file
   if (currentScenarioLine >= 0) {
-    checkRequiredFieldsForTarget(currentScenarioLine, currentScenarioFields, currentScenarioTags);
+    if (resourceType === 'testcase' || resourceType === 'bug') {
+      checkRequiredFieldsForTarget(currentScenarioLine, currentScenarioFields, currentScenarioTags);
+    }
     checkBugIntegrity(currentScenarioLine, currentScenarioHasTarget, currentScenarioHasTrace, currentScenarioTags);
-  } else if (!hasScenarios && (resourceType === 'testplan' || resourceType === 'testrun' || resourceType === 'testcase' || resourceType === 'bug')) {
-    // If resource file has no explicit Scenario headers (e.g. Testplans with Rules), validate at file/feature level
-    const targetLine = featureLineIndex >= 0 ? featureLineIndex : 0;
+  }
+
+  // In testrun, testplan, or testcases with no scenarios, validate required fields at Background / Feature level
+  if (resourceType === 'testrun' || resourceType === 'testplan' || (!hasScenarios && resourceType === 'testcase')) {
+    const targetLine = backgroundLineIndex >= 0 ? backgroundLineIndex : (featureLineIndex >= 0 ? featureLineIndex : 0);
     checkRequiredFieldsForTarget(targetLine, backgroundFields, featureTags);
+  } else if (!hasScenarios && resourceType === 'bug') {
+    const targetLine = featureLineIndex >= 0 ? featureLineIndex : 0;
     checkBugIntegrity(targetLine, currentScenarioHasTarget, currentScenarioHasTrace, featureTags);
   }
 

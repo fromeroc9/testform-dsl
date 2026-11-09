@@ -50,6 +50,12 @@ export interface TestformWorkspaceConfig {
     testplan: string;
     bug: string;
   };
+  scaffoldDirectories?: {
+    testcase?: string;
+    testrun?: string;
+    testplan?: string;
+    bug?: string;
+  };
   targetFormat?: 'tag' | 'tag-bare' | 'canonical' | 'file-tag' | 'slug-tag' | 'name' | 'short' | 'classic';
 }
 
