@@ -11,7 +11,11 @@ import {
   DocumentFormattingParams,
   TextEdit,
   Hover,
-  Definition
+  Definition,
+  CodeAction,
+  CodeActionParams,
+  CodeLens,
+  CodeLensParams
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { fileURLToPath } from 'url';
@@ -22,6 +26,8 @@ import { provideHover } from './hover';
 import { provideDefinition } from './definition';
 import { validateTextDocument } from './diagnostics';
 import { formatGherkinDocument } from './formatter';
+import { provideCodeActions } from './codeactions';
+import { provideCodeLenses, CodeLensSettings } from './codelens';
 
 // Create a connection for the server, using Node's IPC as a transport.
 const connection = createConnection(ProposedFeatures.all);

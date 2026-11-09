@@ -369,6 +369,12 @@
         "title": "Refresh Reports View",
         "category": "Testform",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "testform.implementRequiredFields",
+        "title": "Implement Missing Required Fields",
+        "category": "Testform",
+        "icon": "$(lightbulb)"
       }
     ],
     "menus": {
@@ -607,6 +613,31 @@
           ],
           "default": "off",
           "description": "Traces the communication between VS Code and the Testform Language Server."
+        },
+        "testform.codeLens.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Master toggle for Testform CodeLens indicators in Gherkin feature files."
+        },
+        "testform.codeLens.testcase": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable CodeLens indicators on testcase feature files."
+        },
+        "testform.codeLens.testrun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable CodeLens indicators on testrun feature files."
+        },
+        "testform.codeLens.testplan": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable CodeLens indicators on testplan feature files."
+        },
+        "testform.codeLens.bug": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable CodeLens indicators on bug feature files."
         }
       }
     }

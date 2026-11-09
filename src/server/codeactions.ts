@@ -14,7 +14,7 @@ import { WorkspaceScanner } from './workspace-scanner';
 interface FieldContractInfo {
   name: string;
   source?: string;
-  required: boolean;
+  required?: boolean;
   default?: any;
   enum?: string[];
   scopes?: string[];
