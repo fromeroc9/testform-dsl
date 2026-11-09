@@ -373,7 +373,7 @@ export class SpecsHubPanel {
                 if (fieldMatch) {
                   scFields[fieldMatch[1].toLowerCase()] = fieldMatch[2].trim().replace(/^["']|["']$/g, '');
                 }
-                const markMatch = sLine.match(/^(?:\*\s*)?mark\s+([a-zA-Z0-9_-]+)\s*=\s*(.*)$/i);
+                const markMatch = sLine.match(/^(?:\*\s*)?set\s+([a-zA-Z0-9_-]+)\s*=\s*(.*)$/i);
                 if (markMatch) {
                   scFields[markMatch[1].toLowerCase()] = markMatch[2].trim().replace(/^["']|["']$/g, '');
                 }

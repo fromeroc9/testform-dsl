@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as YAML from 'yaml';
 
 export class TestformFileDecorationProvider implements vscode.FileDecorationProvider {
   private _onDidChangeFileDecorations: vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined> =
@@ -10,7 +9,6 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
     this._onDidChangeFileDecorations.event;
 
   private isTestformProject: boolean = false;
-  private testcaseScaffoldDir: string = 'testcase';
   private knownTestformFiles: Set<string> = new Set();
 
   constructor() {
@@ -23,11 +21,11 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
     const featWatcher = vscode.workspace.createFileSystemWatcher('**/*.feature');
     featWatcher.onDidCreate(() => this.refresh());
     featWatcher.onDidDelete(() => this.refresh());
+    featWatcher.onDidChange(() => this.refresh());
 
-    vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration('testform')) {
-        this.refresh();
-      }
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      this.checkWorkspace();
+      this.refresh();
     });
   }
 
@@ -41,20 +39,11 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
     const root = folders[0].uri.fsPath;
     const candidates = ['main.yml', 'main.yaml', 'testform.yml', 'testform.yaml'];
     this.isTestformProject = false;
-    this.testcaseScaffoldDir = 'testcase';
 
     for (const f of candidates) {
       const fullPath = path.join(root, f);
       if (fs.existsSync(fullPath)) {
         this.isTestformProject = true;
-        try {
-          const content = fs.readFileSync(fullPath, 'utf8');
-          const parsed = YAML.parse(content);
-          const res = parsed?.resource || parsed?.scopes;
-          if (res?.testcase?.scaffold?.directory) {
-            this.testcaseScaffoldDir = String(res.testcase.scaffold.directory).trim();
-          }
-        } catch {}
         break;
       }
     }
@@ -71,7 +60,6 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
 
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) return undefined;
-    const root = folders[0].uri.fsPath;
 
     let isDirectory = false;
     try {

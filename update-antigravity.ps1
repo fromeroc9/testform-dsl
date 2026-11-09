@@ -1,5 +1,8 @@
+$pkg = Get-Content "package.json" -Raw | ConvertFrom-Json
+$version = $pkg.version
+
 $extDir = "$env:USERPROFILE\.antigravity-ide\extensions"
-$targetDir = "$extDir\fromeroc9.testform-dsl-1.0.1"
+$targetDir = "$extDir\fromeroc9.testform-dsl-$version"
 
 # Create directory if it does not exist
 if (!(Test-Path $targetDir)) {
@@ -36,13 +39,13 @@ if (Test-Path $extJsonPath) {
             identifier = [PSCustomObject]@{
                 id = "fromeroc9.testform-dsl"
             }
-            version = "1.0.1"
+            version = $version
             location = [PSCustomObject]@{
                 '$mid' = 1
-                path = "/c:/Users/flavi/.antigravity-ide/extensions/fromeroc9.testform-dsl-1.0.1"
+                path = "/c:/Users/flavi/.antigravity-ide/extensions/fromeroc9.testform-dsl-$version"
                 scheme = "file"
             }
-            relativeLocation = "fromeroc9.testform-dsl-1.0.1"
+            relativeLocation = "fromeroc9.testform-dsl-$version"
             metadata = [PSCustomObject]@{
                 installedTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
                 pinned = $false
@@ -61,8 +64,8 @@ $obsoletePath = "$extDir\.obsolete"
 if (Test-Path $obsoletePath) {
     try {
         $obs = Get-Content $obsoletePath -Raw | ConvertFrom-Json
-        if ($obs."fromeroc9.testform-dsl-1.0.1") {
-            $obs.PSObject.Properties.Remove("fromeroc9.testform-dsl-1.0.1")
+        if ($obs."fromeroc9.testform-dsl-$version") {
+            $obs.PSObject.Properties.Remove("fromeroc9.testform-dsl-$version")
             $obs | ConvertTo-Json | Set-Content $obsoletePath -Encoding utf8
         }
     } catch {}

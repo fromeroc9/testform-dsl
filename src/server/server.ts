@@ -12,9 +12,9 @@ import {
   TextEdit,
   Hover,
   Definition,
-  CodeAction,
+  Location,
+  ReferenceParams,
   CodeActionParams,
-  CodeLens,
   CodeLensParams
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -24,6 +24,7 @@ import { provideCompletions } from './completions';
 import { provideYamlCompletions } from './yaml-completions';
 import { provideHover } from './hover';
 import { provideDefinition } from './definition';
+import { provideReferences } from './references';
 import { validateTextDocument } from './diagnostics';
 import { formatGherkinDocument } from './formatter';
 import { provideCodeActions } from './codeactions';
@@ -81,6 +82,7 @@ connection.onInitialize((params: InitializeParams) => {
       },
       hoverProvider: true,
       definitionProvider: true,
+      referencesProvider: true,
       documentFormattingProvider: true
     }
   };
@@ -143,6 +145,12 @@ connection.onDidChangeWatchedFiles(_change => {
 });
 
 documents.onDidChangeContent(change => {
+  if (workspaceScanner) {
+    const uri = change.document.uri.toLowerCase();
+    if (uri.endsWith('.feature') || change.document.languageId === 'gherkin') {
+      workspaceScanner.scanSingleDocument(change.document.uri, change.document.getText());
+    }
+  }
   validateDoc(change.document);
 });
 
@@ -187,6 +195,15 @@ connection.onDefinition(
     const document = documents.get(textDocumentPosition.textDocument.uri);
     if (!document || !workspaceScanner) return null;
     return provideDefinition(document, textDocumentPosition.position, workspaceScanner);
+  }
+);
+
+// Find All References (Shift + F12)
+connection.onReferences(
+  (params: ReferenceParams): Location[] | null => {
+    const document = documents.get(params.textDocument.uri);
+    if (!document || !workspaceScanner) return null;
+    return provideReferences(params, document, workspaceScanner);
   }
 );
 

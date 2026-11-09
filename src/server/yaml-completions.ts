@@ -9,12 +9,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
 import { BUILTIN_FUNCTIONS } from './completions';
 
-interface YamlLineInfo {
-  indent: number;
-  key: string;
-  hasColon: boolean;
-  rawText: string;
-}
+
 
 export function provideYamlCompletions(
   document: TextDocument,
@@ -348,7 +343,6 @@ export function provideYamlCompletions(
     }
 
     // Indent 4: Inside resource.testcase, testrun, etc.
-    const parentScope = ancestry[1]?.toLowerCase();
     if (ancestry.length === 2) {
       return [
         { label: 'match:', kind: CompletionItemKind.Property, detail: 'Glob pattern for feature files', insertTextFormat: InsertTextFormat.Snippet, insertText: 'match: "${1:*.case.feature}"' },

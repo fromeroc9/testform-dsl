@@ -2,7 +2,7 @@
   "name": "testform-dsl",
   "displayName": "Testform DSL",
   "description": "Declarative Test-as-Code orchestration for Git: Gherkin IntelliSense, variables autoload, native Test Explorer, state management, and quality gates.",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "publisher": "fromeroc9",
   "license": "GPL-3.0-or-later",
   "author": "Flavio Romero <flavio.arc9@gmail.com>",
@@ -195,6 +195,11 @@
           "id": "testform.views.reports",
           "name": "Reports",
           "icon": "$(graph)"
+        },
+        {
+          "id": "testform.views.history",
+          "name": "State Time Machine",
+          "icon": "$(history)"
         }
       ]
     },
@@ -401,13 +406,105 @@
         "title": "Implement Missing Required Fields",
         "category": "Testform",
         "icon": "$(lightbulb)"
+      },
+      {
+        "command": "testform.markPassed",
+        "title": "Mark Scenario as Passed (QA Fast Pass)",
+        "category": "Testform",
+        "icon": "$(pass)"
+      },
+      {
+        "command": "testform.markFailed",
+        "title": "Mark Scenario as Failed (QA Fast Pass)",
+        "category": "Testform",
+        "icon": "$(error)"
+      },
+      {
+        "command": "testform.markBlocked",
+        "title": "Mark Scenario as Blocked (QA Fast Pass)",
+        "category": "Testform",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "testform.markSkipped",
+        "title": "Mark Scenario as Skipped (QA Fast Pass)",
+        "category": "Testform",
+        "icon": "$(debug-step-over)"
+      },
+      {
+        "command": "testform.markPending",
+        "title": "Mark Scenario as Pending (QA Fast Pass)",
+        "category": "Testform",
+        "icon": "$(clock)"
+      },
+      {
+        "command": "testform.markCustom",
+        "title": "Mark Scenario with Status... (QA Fast Pass)",
+        "category": "Testform",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "testform.filterState",
+        "title": "Filter Resources...",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "testform.clearStateFilter",
+        "title": "Clear Filter",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "testform.showPlanDiff",
+        "title": "Show Visual Plan Diff",
+        "category": "Testform",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "testform.state.timeMachine",
+        "title": "Open State Time Machine",
+        "category": "Testform",
+        "icon": "$(history)"
+      },
+      {
+        "command": "testform.state.refreshHistory",
+        "title": "Refresh State History",
+        "category": "Testform",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "testform.state.compareCommit",
+        "title": "Compare with Current State",
+        "category": "Testform",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "testform.state.viewCommitState",
+        "title": "View State Snapshot",
+        "category": "Testform",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "testform.state.restoreCommitState",
+        "title": "Restore State from this Commit",
+        "category": "Testform",
+        "icon": "$(discard)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "testform.showPlanDiff",
+          "when": "view == testform.views.state",
+          "group": "navigation@0"
+        },
+        {
           "command": "testform.specs.openHub",
           "when": "view == testform.views.state || view == testform.views.modules || view == testform.views.reports",
+          "group": "navigation@0.2"
+        },
+        {
+          "command": "testform.state.refreshHistory",
+          "when": "view == testform.views.history",
           "group": "navigation@0"
         },
         {
@@ -454,9 +551,24 @@
           "command": "testform.modules.update",
           "when": "view == testform.views.modules",
           "group": "navigation@2"
+        },
+        {
+          "command": "testform.filterState",
+          "when": "view == testform.views.state",
+          "group": "navigation@1.5"
+        },
+        {
+          "command": "testform.clearStateFilter",
+          "when": "view == testform.views.state && testform.hasStateFilter",
+          "group": "navigation@1.6"
         }
       ],
       "editor/title": [
+        {
+          "command": "testform.showPlanDiff",
+          "when": "resourceExtname == .feature",
+          "group": "navigation@0.5"
+        },
         {
           "command": "testform.planCurrent",
           "when": "resourceExtname == .feature",
@@ -469,6 +581,21 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "testform.state.compareCommit",
+          "when": "view == testform.views.history && viewItem == testformHistoryCommit",
+          "group": "inline@0"
+        },
+        {
+          "command": "testform.state.restoreCommitState",
+          "when": "view == testform.views.history && viewItem == testformHistoryCommit",
+          "group": "inline@1"
+        },
+        {
+          "command": "testform.state.viewCommitState",
+          "when": "view == testform.views.history && viewItem == testformHistoryCommit",
+          "group": "navigation@0"
+        },
         {
           "command": "testform.report.selectFormat",
           "when": "view == testform.views.reports && viewItem == testformReport",
@@ -604,8 +731,10 @@
           "type": "string",
           "enum": [
             "tag",
-            "tag-bare",
             "canonical",
+            "basename",
+            "namespace",
+            "tag-bare",
             "file-tag",
             "slug-tag",
             "name",
@@ -614,8 +743,10 @@
           ],
           "enumDescriptions": [
             "Identity tag with at-sign (@tc-01)",
+            "Level 2 Canonical address delimited by scaffold (ParaBank/bill_pay.case.feature.@tc-01)",
+            "Basename resolution without folder paths (bill_pay.case.feature.@tc-01)",
+            "Dot-notation namespace address (pix.bill_pay.case.feature.@tc-01)",
             "Bare identity tag without at-sign (tc-01)",
-            "Full canonical path address (tests/features/ParaBank/bill_pay.case.feature.@tc-01)",
             "Specification base filename + tag (bill_pay.case.feature.@tc-01)",
             "Filename slug without extension + tag (bill_pay.@tc-01)",
             "Scenario name or title (e.g. Valid payment flow)",
@@ -623,7 +754,7 @@
             "Classic canonical address alias"
           ],
           "default": "tag",
-          "description": "Insertion format for target scenarios inside the rules of a TestRun."
+          "description": "Insertion format for target scenarios inside the rules or direct scenarios of a TestRun."
         },
         "testform.trace.server": {
           "type": "string",
@@ -659,9 +790,65 @@
           "type": "boolean",
           "default": true,
           "description": "Enable CodeLens indicators on bug feature files."
+        },
+        "testform.qaFastPass.autoAdvance": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically advance cursor to the next Scenario after marking status in a testrun."
+        },
+        "testform.qaFastPass.indentation": {
+          "type": "integer",
+          "default": 4,
+          "description": "Indentation (number of spaces) for inserted '* set status = ...' lines."
+        },
+        "testform.qaFastPass.customStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "passed",
+            "failed",
+            "blocked",
+            "skipped",
+            "pending"
+          ],
+          "description": "Allowed or pre-configured statuses displayed in the QA Fast Pass status picker."
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "testform.markPassed",
+        "key": "alt+p",
+        "mac": "alt+p",
+        "when": "editorTextFocus && editorLangId == 'gherkin'"
+      },
+      {
+        "command": "testform.markFailed",
+        "key": "alt+f",
+        "mac": "alt+f",
+        "when": "editorTextFocus && editorLangId == 'gherkin'"
+      },
+      {
+        "command": "testform.markBlocked",
+        "key": "alt+b",
+        "mac": "alt+b",
+        "when": "editorTextFocus && editorLangId == 'gherkin'"
+      },
+      {
+        "command": "testform.markSkipped",
+        "key": "alt+s",
+        "mac": "alt+s",
+        "when": "editorTextFocus && editorLangId == 'gherkin'"
+      },
+      {
+        "command": "testform.markCustom",
+        "key": "alt+m",
+        "mac": "alt+m",
+        "when": "editorTextFocus && editorLangId == 'gherkin'"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",

@@ -121,6 +121,21 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
 
   private mode: 'state' | 'files' = 'state';
   private stateMeta: { version: number; serial: number } | null = null;
+  private filterQuery: string = '';
+
+  public setFilter(query: string): void {
+    this.filterQuery = (query || '').trim().toLowerCase();
+    this.refresh();
+  }
+
+  public clearFilter(): void {
+    this.filterQuery = '';
+    this.refresh();
+  }
+
+  public getFilter(): string {
+    return this.filterQuery;
+  }
 
   public getStateMeta(): { version: number; serial: number } | null {
     return this.stateMeta;
@@ -171,10 +186,14 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
     }
 
     const rootPath = workspaceFolders[0].uri.fsPath;
-    const statePath = path.join(rootPath, 'testform.state');
+    const stateCandidates = [
+      path.join(rootPath, 'testform.state'),
+      path.join(rootPath, '.testform', 'testform.state')
+    ];
+    const statePath = stateCandidates.find(p => fs.existsSync(p));
 
-    if (!fs.existsSync(statePath)) {
-      const item = new StateTreeItem('No state file (run testform apply)', vscode.TreeItemCollapsibleState.None, 'info');
+    if (!statePath) {
+      const item = new StateTreeItem('No state file found (run testform apply or testform plan)', vscode.TreeItemCollapsibleState.None, 'info');
       item.iconPath = new vscode.ThemeIcon('info');
       return [item];
     }
@@ -195,7 +214,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
       const runLookupMap = new Map<string, { title: string; issueNumber?: number; status?: string }>();
 
       for (const r of resources) {
-        const id = (r.identity || '').replace(/\\/g, '/').toLowerCase();
+        const id = (r.address || r.identity || '').replace(/\\/g, '/').toLowerCase();
         const type = r.type || '';
         const title = r.attributes?.title;
 
@@ -233,11 +252,40 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
       const bugs: StateTreeItem[] = [];
       const outputItems: StateTreeItem[] = [];
 
-      for (const r of resources) {
+      let activeResources = resources;
+      if (this.filterQuery) {
+        const q = this.filterQuery;
+        activeResources = resources.filter((r: any) => {
+          const addr = (r.address || r.identity || '').toLowerCase();
+          const phys = (r.physicalAddress || '').toLowerCase();
+          const tag = (r.tag || '').toLowerCase();
+          const type = (r.type || '').toLowerCase();
+          const title = (r.attributes?.title || '').toLowerCase();
+          const status = (r.attributes?.status || '').toLowerCase();
+          const issue = String(r.attributes?.issueNumber || '').toLowerCase();
+          return addr.includes(q) || phys.includes(q) || tag.includes(q) || type.includes(q) || title.includes(q) || status.includes(q) || issue.includes(q);
+        });
+
+        if (activeResources.length === 0) {
+          const emptyItem = new StateTreeItem(
+            `No resources match "${this.filterQuery}" (Click to clear)`,
+            vscode.TreeItemCollapsibleState.None,
+            'info'
+          );
+          emptyItem.command = {
+            command: 'testform.clearStateFilter',
+            title: 'Clear Filter'
+          };
+          emptyItem.iconPath = new vscode.ThemeIcon('clear-all');
+          return [emptyItem];
+        }
+      }
+
+      for (const r of activeResources) {
         const type: string = r.type || '';
-        const identity: string = (r.identity || '').replace(/\\/g, '/');
+        const address: string = (r.address || r.identity || '').replace(/\\/g, '/');
         const attrs = r.attributes || {};
-        const title: string = attrs.title || identity || type;
+        const title: string = attrs.title || address || type;
         const remoteRef = attrs.remoteId || (attrs.issueNumber ? `#${attrs.issueNumber}` : '');
         const isTainted = !!r.tainted;
 
@@ -384,7 +432,16 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           }
         }
 
-        childNodes.push(new StateTreeItem(`Identity: ${identity}`, vscode.TreeItemCollapsibleState.None, 'attribute', identity));
+        childNodes.push(new StateTreeItem(`Address: ${address}`, vscode.TreeItemCollapsibleState.None, 'attribute', address));
+        if (r.path) {
+          childNodes.push(new StateTreeItem(`Path: ${r.path}`, vscode.TreeItemCollapsibleState.None, 'attribute', r.path));
+        }
+        if (r.tag) {
+          childNodes.push(new StateTreeItem(`Tag: ${r.tag}`, vscode.TreeItemCollapsibleState.None, 'attribute', r.tag));
+        }
+        if (r.namespace) {
+          childNodes.push(new StateTreeItem(`Namespace: ${r.namespace}`, vscode.TreeItemCollapsibleState.None, 'attribute', r.namespace));
+        }
         if (remoteRef) {
           childNodes.push(new StateTreeItem(`Remote: ${remoteRef}`, vscode.TreeItemCollapsibleState.None, 'attribute'));
         }
@@ -421,7 +478,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           title,
           vscode.TreeItemCollapsibleState.Collapsed,
           'resource',
-          identity,
+          address,
           remoteRef || '',
           childNodes,
           r,
@@ -531,7 +588,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           const parsed = JSON.parse(raw);
           const resources = parsed.resources || [];
           for (const r of resources) {
-            const ident = (r.identity || '').replace(/\\/g, '/');
+            const ident = (r.address || r.identity || '').replace(/\\/g, '/');
             stateResourceMap.set(ident.toLowerCase(), r);
             const baseIdent = ident.split('/').pop() || ident;
             stateResourceMap.set(baseIdent.toLowerCase(), r);
@@ -558,7 +615,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         if (/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario|Rule|Regla|Feature|Característica):/i.test(stepLine)) {
           break;
         }
-        const markMatch = stepLine.match(/^(?:\*\s*)?mark\s+([a-zA-Z0-9_-]+)\s*=\s*(.*)$/i);
+        const markMatch = stepLine.match(/^(?:\*\s*)?set\s+([a-zA-Z0-9_-]+)\s*=\s*(.*)$/i);
         if (markMatch) {
           const mKey = markMatch[1].toLowerCase();
           const mVal = markMatch[2].trim().replace(/^["']|["']$/g, '');
@@ -685,7 +742,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
               }
 
               const childNodes: StateTreeItem[] = [];
-              childNodes.push(new StateTreeItem(`Identity: ${scAddress}`, vscode.TreeItemCollapsibleState.None, 'attribute', scAddress));
+              childNodes.push(new StateTreeItem(`Address: ${scAddress}`, vscode.TreeItemCollapsibleState.None, 'attribute', scAddress));
 
               if (stateRes) {
                 const remoteRef = stateRes.attributes?.remoteId || (stateRes.attributes?.issueNumber ? `#${stateRes.attributes?.issueNumber}` : '');
@@ -801,7 +858,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
               const { fields, markStatus, markTarget, markTrace, markEvidence } = extractScenarioFields(lines, i);
 
               const childNodes: StateTreeItem[] = [];
-              childNodes.push(new StateTreeItem(`Identity: ${scAddress}`, vscode.TreeItemCollapsibleState.None, 'attribute', scAddress));
+              childNodes.push(new StateTreeItem(`Address: ${scAddress}`, vscode.TreeItemCollapsibleState.None, 'attribute', scAddress));
 
               if (markTarget) {
                 childNodes.push(new StateTreeItem(`Target: ${markTarget}`, vscode.TreeItemCollapsibleState.None, 'attribute', markTarget));
@@ -915,7 +972,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
               const scAddress = tag ? `${relPath}.${tag}` : relPath;
 
               const childNodes: StateTreeItem[] = [];
-              childNodes.push(new StateTreeItem(`Identity: ${scAddress}`, vscode.TreeItemCollapsibleState.None, 'attribute', scAddress));
+              childNodes.push(new StateTreeItem(`Address: ${scAddress}`, vscode.TreeItemCollapsibleState.None, 'attribute', scAddress));
 
               if (markTarget) {
                 childNodes.push(new StateTreeItem(`Target: ${markTarget}`, vscode.TreeItemCollapsibleState.None, 'attribute', markTarget));

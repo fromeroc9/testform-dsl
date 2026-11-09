@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.3] - 2026-11-09
+
+### Added
+
+#### ⚡ Visual Plan Diff Webview (`testform.showPlanDiff`)
+- **Interactive Visual Plan Inspector (`src/client/views/plan-diff-panel.ts`):**
+  - Dedicated rich Webview panel rendering `testform plan -json` execution output.
+  - Color-coded change visualization:
+    - 🟢 **To Add (`+`)**: Green cards showing new resources to create.
+    - 🟡 **To Change (`~`)**: Yellow cards highlighting modified attributes and hash drifts.
+    - 🔴 **To Destroy (`-`)**: Red cards for resources pending deletion.
+    - 🔵 **To Replace (`+/-`)**: Purple cards indicating destructive re-creations.
+  - Live search bar and action filter pills (`All`, `Add`, `Change`, `Destroy`, `Replace`) for instant multi-factor inspection.
+  - Expandable Gherkin step views with highlighted keywords (`Given`, `When`, `Then`, `* set`).
+  - Clickable file location links opening the exact file and line in the active VS Code editor.
+  - Integrated one-click actions:
+    - **Apply Plan (`testform apply`)**: Directly trigger execution in the terminal.
+    - **Apply (-auto-approve)**: Fast-track execution.
+    - **Re-Plan**: Instant recalculation of speculative plan.
+
+#### 🕰️ State Time Machine (`testform.views.history`)
+- **Git-Powered State History Tree Provider (`src/client/views/time-machine-view.ts`):**
+  - Dedicated sidebar tree view discovering all Git revisions that modified `testform.state`.
+  - Serializes commit hashes, authors, relative timestamps, commit messages, and state serial badges (`[#serial]`).
+  - Expandable node inspecting resource breakdowns per snapshot (Serial, Lineage, Provider, Test Cases, Runs, Plans, and Bugs count).
+- **Virtual Document Diff Engine (`StateRevisionContentProvider`):**
+  - Custom virtual URI scheme (`testform-state-revision://`) streaming historical states on-demand via `git show <commit>:testform.state`.
+  - Seamless native VS Code Diff (`vscode.diff`) comparing any historical state revision against the current working state with zero disk clutter.
+  - One-click **Restore State from Commit** action with modal confirmation dialog to safely roll back or revert `testform.state`.
+
+---
+
+## [1.0.2] - 2026-11-09
+
+### Added
+
+#### ⚡ Real-Time LSP Incremental Indexing
+- **Live Content Change Processing (`server.ts`, `workspace-scanner.ts`):**
+  - Switched document change pipeline to `documents.onDidChangeContent`, enabling live AST parsing, scenario indexing, and diagnostics without requiring manual file saves.
+  - Scope detection prioritized by special root tags (`@testcase`, `@testrun`, `@testplan`, `@bug`), followed by file naming conventions and `main.yml` scope mapping.
+
+#### 💡 Enriched `Rule:` Autocompletion
+- **Interactive Markdown Documentation (`completions.ts`):**
+  - `Rule:` step autocompletions now display detailed scenario count, full file namespace path, and formatted markdown documentation previews in the IntelliSense widget.
+
+#### 🛡️ Homonym Collision Diagnostics & Quick Fix
+- **Duplicate Basename Warning (`diagnostics.ts`, `codeactions.ts`):**
+  - Warns developers when multiple `.feature` files share the same basename without namespace segregation across folders.
+  - One-click Quick Fix code action (`Add @ns("${folder}") namespace tag`) to instantly prepend the namespace tag and disambiguate references.
+
+#### 🔍 State Explorer Resource Filtering
+- **Interactive State Search (`state-view.ts`, `extension.ts`):**
+  - Added `testform.filterState` command and title bar search button to instantly filter the State Explorer tree by resource ID, scenario name, or tag.
+  - Added `testform.clearStateFilter` command and reset button to quickly return to the full state view.
+
+#### ⌨️ QA Fast Pass Keybindings
+- **Ergonomic Testing Shortcuts (`package.json`, `extension.ts`):**
+  - Wired direct command shortcuts: `Alt+P` for `testform.plan`, `Alt+F` for `testform.formatFile`, `Alt+B` for `testform.validate`.
+
+#### 🔄 DSL Keyword Modernization: `* set` (Replaced `* mark`)
+- **IntelliSense & Language Server:**
+  - Autocompletions now provide `set status = ...`, `set target = ...`, `set trace = ...`, and `set evidence = ...` snippets in `.run.feature` and `.bug.feature` documents.
+  - Hover and go-to-definition providers upgraded to detect `* set target = ...` and `* set status = ...`.
+- **QA Fast Pass Controller:**
+  - Automated status shortcut insertions update and inject `* set status = <passed|failed|...>` lines cleanly.
+- **Snippets:**
+  - Updated Gherkin snippet prefix `tf-set` generating standard `* set status = ...` directives.
+
+### Changed & Fixed
+
+#### 🧹 Codebase Cleanup & Modernization
+- Removed dead code, unused helper methods, and redundant variables across language server and extension client code.
+- Clean compilation passing `tsc --noUnusedLocals --noUnusedParameters` with 0 warnings.
+
+---
+
 ## [1.0.1] - 2026-11-06
 
 ### Added

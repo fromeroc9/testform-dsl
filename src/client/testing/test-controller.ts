@@ -322,7 +322,6 @@ export class TestformTestController implements vscode.Disposable {
       let currentRuleText = '';
       let currentRefInfo: ReferencedFeatureInfo | null = null;
       let currentScenarioItem: vscode.TestItem | null = null;
-      let currentScenarioTarget = '';
 
       const seenRuleIds = new Set<string>();
       const seenScenIdsByParent = new Map<string, Set<string>>();
@@ -446,8 +445,8 @@ export class TestformTestController implements vscode.Disposable {
           continue;
         }
 
-        // 3. Mark target step: * mark target = ...
-        const targetMarkMatch = trimmed.match(/^\*\s+mark\s+target\s*=\s*(.+)$/i);
+        // 3. Mark target step: * set target = ...
+        const targetMarkMatch = trimmed.match(/^\*\s+set\s+target\s*=\s*(.+)$/i);
         if (targetMarkMatch && currentScenarioItem) {
           const targetVal = targetMarkMatch[1].trim().replace(/^["']|["']$/g, '');
           const info = this.scenarioTargetInfoMap.get(currentScenarioItem.id);
@@ -470,7 +469,7 @@ export class TestformTestController implements vscode.Disposable {
           }
         }
 
-        // 4. Status mark step: * mark status = passed | failed | pending | skipped | blocked
+        // 4. Status mark step: * set status = passed | failed | pending | skipped | blocked
         const statusMatch = trimmed.match(/^\*\s+mark\s+status\s*=\s*([a-zA-Z]+)/i);
         if (statusMatch && currentScenarioItem) {
           const status = statusMatch[1].toLowerCase();
@@ -533,7 +532,7 @@ export class TestformTestController implements vscode.Disposable {
         if (/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario|Rule|Regla):/i.test(trimmed)) {
           break;
         }
-        if (/^\*\s*mark\s+status\s*=/i.test(trimmed)) {
+        if (/^\*\s*set\s+status\s*=/i.test(trimmed)) {
           foundMarkLine = i;
           break;
         }
@@ -542,11 +541,11 @@ export class TestformTestController implements vscode.Disposable {
       if (foundMarkLine !== -1) {
         const existingLine = doc.lineAt(foundMarkLine);
         const indent = existingLine.text.match(/^\s*/)?.[0] || '      ';
-        edit.replace(documentUri, existingLine.range, `${indent}* mark status = ${newStatus}`);
+        edit.replace(documentUri, existingLine.range, `${indent}* set status = ${newStatus}`);
       } else {
         const scenLine = doc.lineAt(scenarioLine);
         const indent = (scenLine.text.match(/^\s*/)?.[0] || '    ') + '  ';
-        edit.insert(documentUri, new vscode.Position(scenarioLine + 1, 0), `${indent}* mark status = ${newStatus}\n`);
+        edit.insert(documentUri, new vscode.Position(scenarioLine + 1, 0), `${indent}* set status = ${newStatus}\n`);
       }
 
       const success = await vscode.workspace.applyEdit(edit);
@@ -570,9 +569,9 @@ export class TestformTestController implements vscode.Disposable {
       for (let i = 0; i < doc.lineCount; i++) {
         const text = doc.lineAt(i).text;
         const trimmed = text.trim();
-        if (/^\*\s*mark\s+status\s*=/i.test(trimmed)) {
+        if (/^\*\s*set\s+status\s*=/i.test(trimmed)) {
           const indent = text.match(/^\s*/)?.[0] || '      ';
-          edit.replace(documentUri, doc.lineAt(i).range, `${indent}* mark status = ${newStatus}`);
+          edit.replace(documentUri, doc.lineAt(i).range, `${indent}* set status = ${newStatus}`);
         }
       }
 
@@ -618,7 +617,7 @@ export class TestformTestController implements vscode.Disposable {
         const uri = item.uri;
         if (!uri) continue;
 
-        // Always reload latest text immediately before running so mark status is 100% current
+        // Always reload latest text immediately before running so set status is 100% current
         await this.updateFileTests(uri);
 
         const isScenario = item.id.includes('::scen::') || item.id.includes('::scenario_');
@@ -714,7 +713,7 @@ export class TestformTestController implements vscode.Disposable {
           const featureOptions: vscode.QuickPickItem[] = [
             {
               label: '$(play) Apply current state',
-              detail: 'Reconcile state ledger preserving existing marks (* mark status) defined in file.'
+              detail: 'Reconcile state ledger preserving existing marks (* set status) defined in file.'
             },
             {
               label: '$(pass-filled) Mark all as passed and apply',

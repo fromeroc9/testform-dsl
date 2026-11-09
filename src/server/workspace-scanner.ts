@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import * as YAML from 'yaml';
-import { VariableInfo, LocalInfo, DataInfo, ScenarioIdentityInfo, TestformWorkspaceConfig } from '../shared/types';
+import { DataInfo, ScenarioIdentityInfo, TestformWorkspaceConfig } from '../shared/types';
 
 export class WorkspaceScanner {
   private workspaceRoot: string;
@@ -23,6 +24,7 @@ export class WorkspaceScanner {
     fullPath: string;
     scope: 'testcase' | 'testrun' | 'testplan' | 'bug';
     title: string;
+    namespace?: string;
   }> = new Map();
 
   constructor(workspaceRoot: string) {
@@ -94,7 +96,7 @@ export class WorkspaceScanner {
             this.parseVariableBlock(parsed.variable || parsed.variables || parsed.vars, fullPath, content);
             this.parseLocalsBlock(parsed.locals || parsed.local, fullPath, content);
             this.parseDataBlock(parsed.data, fullPath, content);
-            this.parseModulesBlock(parsed.module || parsed.modules, fullPath, content);
+            this.parseModulesBlock(parsed.module || parsed.modules);
             const resBlock = parsed.resource || parsed.scopes;
             if (resBlock && typeof resBlock === 'object') {
               if (resBlock.testcase?.match) this.config.scopes.testcase = resBlock.testcase.match;
@@ -264,7 +266,7 @@ export class WorkspaceScanner {
               // 5. Module block (module: or modules:)
               const moduleObj = parsed.module || parsed.modules;
               if (moduleObj && typeof moduleObj === 'object') {
-                this.parseModulesBlock(moduleObj, fullPath, content);
+                this.parseModulesBlock(moduleObj);
               }
             } catch {
               // Ignore syntax errors while typing
@@ -331,6 +333,184 @@ export class WorkspaceScanner {
     }
   }
 
+  public cleanScenarioIndicesForFile(fullPath: string): void {
+    const resolvedPath = path.resolve(fullPath);
+    for (const [tag, info] of Array.from(this.config.scenarios.entries())) {
+      if (path.resolve(info.sourceFile) === resolvedPath) {
+        this.config.scenarios.delete(tag);
+      }
+    }
+    for (const [addr, info] of Array.from(this.config.scenarioAddresses.entries())) {
+      if (path.resolve(info.sourceFile) === resolvedPath) {
+        this.config.scenarioAddresses.delete(addr);
+      }
+    }
+  }
+
+  public indexFeatureContent(fullPath: string, relPath: string, content: string): void {
+    const lowerRel = relPath.toLowerCase().replace(/\\/g, '/');
+    const lines = content.split(/\r?\n/);
+
+    // 1. Detect root special scope tag: highest priority
+    let specialScope: 'testcase' | 'testrun' | 'testplan' | 'bug' | undefined;
+    let featureTitle = path.basename(fullPath);
+
+    for (let i = 0; i < Math.min(lines.length, 30); i++) {
+      const line = lines[i].trim();
+      if (line.includes('@testrun')) specialScope = 'testrun';
+      else if (line.includes('@testplan')) specialScope = 'testplan';
+      else if (line.includes('@testcase')) specialScope = 'testcase';
+      else if (line.includes('@bug')) specialScope = 'bug';
+
+      const featMatch = line.match(/^(?:Feature|Característica):\s*(.+)$/i);
+      if (featMatch) {
+        featureTitle = featMatch[1].trim();
+      }
+    }
+
+    // 2. Scope resolution order: Special tag -> Filename -> main.yml / default
+    let fileScope: 'testcase' | 'testrun' | 'testplan' | 'bug' = specialScope || 'testcase';
+    if (!specialScope) {
+      if (lowerRel.endsWith('.run.feature')) fileScope = 'testrun';
+      else if (lowerRel.endsWith('.plan.feature')) fileScope = 'testplan';
+      else if (lowerRel.endsWith('.bug.feature')) fileScope = 'bug';
+      else if (lowerRel.endsWith('.case.feature')) fileScope = 'testcase';
+    }
+
+    // 3. Detect @ns(...) or @namespace(...) or @ns:...
+    const nsMatch = content.match(/@(?:ns|namespace)(?:\(['"]([^'"]+)['"]\)|\s*:\s*([a-zA-Z0-9_-]+))/i);
+    const fileNamespace = nsMatch ? (nsMatch[1] || nsMatch[2]) : undefined;
+
+    this.featureFiles.set(relPath, {
+      relPath,
+      fullPath,
+      scope: fileScope,
+      title: featureTitle,
+      namespace: fileNamespace
+    });
+
+    // 4. Index individual scenarios and identity tags
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      const lineWithoutDepends = line.replace(/#.*$/, '').replace(/@depends_on\s*\([^)]*\)/gi, '');
+      const idMatch = lineWithoutDepends.match(/@(tc|tr|tp|bg)-([0-9]+)/i);
+      if (idMatch) {
+        const prefix = idMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp' | 'bg';
+        const idNumber = parseInt(idMatch[2], 10);
+        const tag = '@' + prefix + '-' + idNumber;
+
+        if (idNumber > (this.config.maxIdentityIds[prefix] || 0)) {
+          this.config.maxIdentityIds[prefix] = idNumber;
+        }
+
+        let title = tag;
+        let targetLine = i;
+        for (let j = i; j < Math.min(lines.length, i + 5); j++) {
+          const candidate = lines[j].trim();
+          const titleMatch = candidate.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario|Rule|Regla)\s*:\s*(.*)$/i);
+          if (titleMatch) {
+            title = titleMatch[1].trim() || candidate;
+            targetLine = j;
+            break;
+          }
+        }
+
+        const fileNameOnly = path.basename(fullPath);
+        let scaffoldPrefix = '';
+        if (prefix === 'tc') scaffoldPrefix = (this.config.scaffoldDirectories?.testcase || 'testcase').replace(/^[\/\\]+|[\/\\]+$/g, '');
+        else if (prefix === 'tr') scaffoldPrefix = (this.config.scaffoldDirectories?.testrun || 'testruns').replace(/^[\/\\]+|[\/\\]+$/g, '');
+        else if (prefix === 'tp') scaffoldPrefix = (this.config.scaffoldDirectories?.testplan || 'testplans').replace(/^[\/\\]+|[\/\\]+$/g, '');
+        else if (prefix === 'bg') scaffoldPrefix = (this.config.scaffoldDirectories?.bug || 'bugs').replace(/^[\/\\]+|[\/\\]+$/g, '');
+
+        let delimitedRelPath = relPath;
+        const lowerPrefix = scaffoldPrefix ? scaffoldPrefix.toLowerCase() + '/' : '';
+        if (scaffoldPrefix && lowerRel.startsWith(lowerPrefix)) {
+          delimitedRelPath = relPath.substring(scaffoldPrefix.length + 1);
+        }
+
+        const delimitedAddress = delimitedRelPath + '.' + tag;
+        const namespaceAddress = fileNamespace ? fileNamespace + '.' + fileNameOnly + '.' + tag : undefined;
+
+        const info: ScenarioIdentityInfo = {
+          tag,
+          idNumber,
+          scope: prefix === 'tc' ? 'testcase' : (prefix === 'tr' ? 'testrun' : (prefix === 'tp' ? 'testplan' : 'bug')),
+          title,
+          address: relPath + '.' + tag,
+          sourceFile: fullPath,
+          line: targetLine,
+          namespace: fileNamespace,
+          delimitedAddress,
+          namespaceAddress
+        };
+
+        const isPrimaryDeclaration =
+          (prefix === 'tc' && (fileScope === 'testcase' || relPath.includes('.case.'))) ||
+          (prefix === 'tr' && (fileScope === 'testrun' || relPath.includes('.run.'))) ||
+          (prefix === 'tp' && (fileScope === 'testplan' || relPath.includes('.plan.'))) ||
+          (prefix === 'bg' && (fileScope === 'bug' || relPath.includes('.bug.')));
+
+        if (isPrimaryDeclaration) {
+          const existing = this.config.scenarios.get(tag);
+          if (existing && path.resolve(existing.sourceFile) !== path.resolve(fullPath)) {
+            const list = this.config.duplicateScenarioTags.get(tag) || [
+              path.basename(existing.sourceFile) + ':' + (existing.line + 1)
+            ];
+            list.push(path.basename(fullPath) + ':' + (targetLine + 1));
+            this.config.duplicateScenarioTags.set(tag, list);
+          } else {
+            this.config.scenarios.set(tag, info);
+          }
+
+          this.config.scenarioAddresses.set(delimitedAddress, info);
+          if (namespaceAddress) {
+            this.config.scenarioAddresses.set(namespaceAddress, info);
+          }
+          this.config.scenarioAddresses.set(fileNameOnly + '.' + tag, info);
+          this.config.scenarioAddresses.set(info.address, info);
+        }
+      }
+    }
+  }
+
+  public scanSingleDocument(docUriOrPath: string, fileContent?: string): void {
+    let fullPath = docUriOrPath;
+    if (fullPath.startsWith('file://')) {
+      try {
+        fullPath = fileURLToPath(fullPath);
+      } catch {
+        fullPath = decodeURIComponent(fullPath.replace(/^file:\/\/\/?/i, ''));
+      }
+    }
+    fullPath = path.resolve(fullPath);
+
+    const relPath = path.relative(this.workspaceRoot, fullPath).replace(/\\/g, '/');
+    if (relPath.startsWith('..')) {
+      return;
+    }
+    const lowerRel = relPath.toLowerCase();
+    if (!lowerRel.endsWith('.feature')) {
+      return;
+    }
+
+    let content = fileContent;
+    if (content === undefined) {
+      if (!fs.existsSync(fullPath)) {
+        this.featureFiles.delete(relPath);
+        this.cleanScenarioIndicesForFile(fullPath);
+        return;
+      }
+      try {
+        content = fs.readFileSync(fullPath, 'utf8');
+      } catch {
+        return;
+      }
+    }
+
+    this.cleanScenarioIndicesForFile(fullPath);
+    this.indexFeatureContent(fullPath, relPath, content);
+  }
+
   private scanFeatureFiles(): void {
     const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', '.terraform', 'dist', 'coverage', '.system_generated']);
 
@@ -345,106 +525,9 @@ export class WorkspaceScanner {
           } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.feature')) {
             const fullPath = path.join(currentDir, entry.name);
             const relPath = path.relative(this.workspaceRoot, fullPath).replace(/\\/g, '/');
-            const lowerRel = relPath.toLowerCase();
-
-            let fileScope: 'testcase' | 'testrun' | 'testplan' | 'bug' = 'testcase';
-            if (lowerRel.endsWith('.run.feature')) fileScope = 'testrun';
-            else if (lowerRel.endsWith('.plan.feature')) fileScope = 'testplan';
-            else if (lowerRel.endsWith('.bug.feature')) fileScope = 'bug';
-
             try {
               const content = fs.readFileSync(fullPath, 'utf8');
-              const lines = content.split(/\r?\n/);
-
-              // Detect root scope tag and Feature title
-              let featureTitle = path.basename(fullPath);
-              for (let i = 0; i < Math.min(lines.length, 20); i++) {
-                const line = lines[i].trim();
-                if (line.includes('@testrun')) fileScope = 'testrun';
-                else if (line.includes('@testplan')) fileScope = 'testplan';
-                else if (line.includes('@testcase')) fileScope = 'testcase';
-                else if (line.includes('@bug')) fileScope = 'bug';
-
-                const featMatch = line.match(/^(?:Feature|Característica):\s*(.+)$/i);
-                if (featMatch) {
-                  featureTitle = featMatch[1].trim();
-                }
-              }
-
-              this.featureFiles.set(relPath, {
-                relPath,
-                fullPath,
-                scope: fileScope,
-                title: featureTitle
-              });
-
-              for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                // Strip comments and @depends_on references so dependencies aren't treated as declared scenario IDs
-                const lineWithoutDepends = line.replace(/#.*$/, '').replace(/@depends_on\s*\([^)]*\)/gi, '');
-                // Match identity tags: @tc-1, @tr-1, @tp-1, @bg-1
-                const idMatch = lineWithoutDepends.match(/@(tc|tr|tp|bg)-([0-9]+)/i);
-                if (idMatch) {
-                  const prefix = idMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp' | 'bg';
-                  const idNumber = parseInt(idMatch[2], 10);
-                  const tag = `@${prefix}-${idNumber}`;
-
-                  // Update max ID tracker
-                  if (idNumber > (this.config.maxIdentityIds[prefix] || 0)) {
-                    this.config.maxIdentityIds[prefix] = idNumber;
-                  }
-
-                  // Find title on this line or next non-empty lines
-                  let title = tag;
-                  let targetLine = i;
-                  for (let j = i; j < Math.min(lines.length, i + 5); j++) {
-                    const candidate = lines[j].trim();
-                    const titleMatch = candidate.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario|Rule|Regla)\s*:\s*(.*)$/i);
-                    if (titleMatch) {
-                      title = titleMatch[1].trim() || candidate;
-                      targetLine = j;
-                      break;
-                    }
-                  }
-
-                  const info: ScenarioIdentityInfo = {
-                    tag,
-                    idNumber,
-                    scope: prefix === 'tc' ? 'testcase' : (prefix === 'tr' ? 'testrun' : (prefix === 'tp' ? 'testplan' : 'bug')),
-                    title,
-                    address: `${relPath}.${tag}`,
-                    sourceFile: fullPath,
-                    line: targetLine
-                  };
-
-                  // Check duplicates across different files (only primary definitions are tracked)
-                  const isPrimaryDeclaration =
-                    (prefix === 'tc' && (fileScope === 'testcase' || relPath.includes('.case.'))) ||
-                    (prefix === 'tr' && (fileScope === 'testrun' || relPath.includes('.run.'))) ||
-                    (prefix === 'tp' && (fileScope === 'testplan' || relPath.includes('.plan.'))) ||
-                    (prefix === 'bg' && (fileScope === 'bug' || relPath.includes('.bug.')));
-
-                  if (isPrimaryDeclaration) {
-                    const existing = this.config.scenarios.get(tag);
-                    if (existing && path.resolve(existing.sourceFile) !== path.resolve(fullPath)) {
-                      const list = this.config.duplicateScenarioTags.get(tag) || [
-                        `${path.basename(existing.sourceFile)}:${existing.line + 1}`
-                      ];
-                      list.push(`${path.basename(fullPath)}:${targetLine + 1}`);
-                      this.config.duplicateScenarioTags.set(tag, list);
-                    } else {
-                      this.config.scenarios.set(tag, info);
-                    }
-
-                    // Address mapping (full relative: auth/login.case.feature.@tc-1)
-                    this.config.scenarioAddresses.set(info.address, info);
-
-                    // Shorthand address mapping (filename only: login.case.feature.@tc-1)
-                    const fileNameOnly = path.basename(fullPath);
-                    this.config.scenarioAddresses.set(`${fileNameOnly}.${tag}`, info);
-                  }
-                }
-              }
+              this.indexFeatureContent(fullPath, relPath, content);
             } catch {}
           }
         }
@@ -551,7 +634,7 @@ export class WorkspaceScanner {
 
       // 1. Grouped by scope/type (e.g. http: { api: "https://..." } or local_file: { users: "..." })
       if (KNOWN_SCOPES.has(key) && typeof val === 'object' && !Array.isArray(val)) {
-        for (const [subKey, subVal] of Object.entries(val)) {
+        for (const [subKey] of Object.entries(val)) {
           const subLine = this.findKeyLineInYaml(content, subKey);
           const dataInfo: DataInfo = {
             type: key,
@@ -608,7 +691,7 @@ export class WorkspaceScanner {
     }
   }
 
-  private parseModulesBlock(block: any, sourceFile: string, content: string): void {
+  private parseModulesBlock(block: any): void {
     if (!block || typeof block !== 'object') return;
     for (const [key, mod] of Object.entries(block)) {
       if (!mod || typeof mod !== 'object') continue;

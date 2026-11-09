@@ -25,13 +25,15 @@ import {
 } from 'vscode-languageclient/node';
 import { runTestformCommand } from './terminal';
 import { SpecsHubPanel } from './views/specs-hub-panel';
+import { PlanDiffPanel } from './views/plan-diff-panel';
+import { StateTimeMachineProvider, StateRevisionContentProvider, TimeMachineCommitItem } from './views/time-machine-view';
 import { StateTreeProvider } from './views/state-view';
 import { ModulesTreeProvider } from './views/modules-view';
 import { ReportsTreeProvider } from './views/reports-view';
 import { TestformTestController } from './testing/test-controller';
 import { TestformFileDecorationProvider } from './views/decorations';
 import { TestformWorkspaceManager } from './workspace-manager';
-import { detectProjectCustomFields } from './field-detector';
+import { markCurrentScenarioStatus, promptCustomScenarioStatus } from './qa-fast-pass';
 
 let client: LanguageClient;
 
@@ -132,12 +134,15 @@ export function activate(context: vscode.ExtensionContext) {
 
   const updateExplorerContext = () => {
     const currentMode = stateProvider.getMode();
+    const filter = stateProvider.getFilter();
     vscode.commands.executeCommand('setContext', 'testform.explorerMode', currentMode);
+    vscode.commands.executeCommand('setContext', 'testform.hasStateFilter', !!filter);
     if (currentMode === 'state') {
       const meta = stateProvider.getStateMeta();
-      explorerView.description = meta ? `State (serial ${meta.serial})` : 'State';
+      const base = meta ? `State (serial ${meta.serial})` : 'State';
+      explorerView.description = filter ? `${base} [filter: "${filter}"]` : base;
     } else {
-      explorerView.description = 'Files';
+      explorerView.description = filter ? `Files [filter: "${filter}"]` : 'Files';
     }
   };
   updateExplorerContext();
@@ -186,6 +191,24 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
   context.subscriptions.push(reportsTreeView);
+    // 4b. State Time Machine & Revision Provider
+  const revisionProvider = new StateRevisionContentProvider();
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      StateRevisionContentProvider.scheme,
+      revisionProvider
+    )
+  );
+  const timeMachineProvider = new StateTimeMachineProvider();
+  const timeMachineTreeView = vscode.window.createTreeView('testform.views.history', {
+    treeDataProvider: timeMachineProvider,
+    showCollapseAll: true
+  });
+  context.subscriptions.push(timeMachineTreeView);
+  stateWatcher.onDidChange(() => timeMachineProvider.refresh());
+  stateWatcher.onDidCreate(() => timeMachineProvider.refresh());
+  stateWatcher.onDidDelete(() => timeMachineProvider.refresh());
+
   stateWatcher.onDidChange(() => reportsProvider.refresh());
   stateWatcher.onDidCreate(() => reportsProvider.refresh());
   manifestWatcher.onDidChange(() => reportsProvider.refresh());
@@ -216,6 +239,18 @@ export function activate(context: vscode.ExtensionContext) {
           description: 'Open full-screen specification & execution hub in editor tab',
           detail: 'Open full-screen editor tab with Test Cases, Test Runs, and Test Plans view.',
           cmd: 'testform.specs.openHub'
+        },
+        {
+          label: '$(diff) Visual Plan Diff',
+          description: 'Interactive Plan Diff Viewer',
+          detail: 'Inspect speculative resource changes (+ Add, ~ Change, - Destroy) and apply in one click.',
+          cmd: 'testform.showPlanDiff'
+        },
+        {
+          label: '$(history) State Time Machine',
+          description: 'Inspect State Git History',
+          detail: 'Browse historical versions of testform.state from Git, diff against current, or restore snapshots.',
+          cmd: 'testform.state.timeMachine'
         },
         {
           label: '$(check) Validate',
@@ -365,6 +400,23 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('testform.modules.list', () => {
       runTestformCommand('modules');
     }),
+    vscode.commands.registerCommand('testform.filterState', async () => {
+      const current = stateProvider.getFilter();
+      const query = await vscode.window.showInputBox({
+        prompt: 'Filter state resources by tag, address, title, or status',
+        value: current,
+        placeHolder: 'e.g. @tc-1, cart, synced, closed...'
+      });
+      if (query !== undefined) {
+        stateProvider.setFilter(query);
+      }
+    }),
+    vscode.commands.registerCommand('testform.clearStateFilter', () => {
+      stateProvider.clearFilter();
+      vscode.window.showInformationMessage('State filter cleared.');
+    }),
+    vscode.commands.registerCommand('testform.state.filter', () => vscode.commands.executeCommand('testform.filterState')),
+    vscode.commands.registerCommand('testform.state.clearFilter', () => vscode.commands.executeCommand('testform.clearStateFilter')),
     vscode.commands.registerCommand('testform.state.refresh', () => {
       stateProvider.refresh();
       vscode.window.showInformationMessage('Testform state refreshed.');
@@ -659,6 +711,37 @@ export function activate(context: vscode.ExtensionContext) {
 
       if (selected) {
         vscode.commands.executeCommand('testform.report.trigger', selected.description);
+      }
+    }),
+    vscode.commands.registerCommand('testform.markPassed', () => markCurrentScenarioStatus('passed')),
+    vscode.commands.registerCommand('testform.markFailed', () => markCurrentScenarioStatus('failed')),
+    vscode.commands.registerCommand('testform.markBlocked', () => markCurrentScenarioStatus('blocked')),
+    vscode.commands.registerCommand('testform.markSkipped', () => markCurrentScenarioStatus('skipped')),
+    vscode.commands.registerCommand('testform.markPending', () => markCurrentScenarioStatus('pending')),
+    vscode.commands.registerCommand('testform.markCustom', () => promptCustomScenarioStatus()),
+    vscode.commands.registerCommand('testform.showPlanDiff', () => {
+      PlanDiffPanel.createOrShow(context.extensionUri);
+    }),
+    vscode.commands.registerCommand('testform.state.timeMachine', () => {
+      vscode.commands.executeCommand('testform.views.history.focus');
+    }),
+    vscode.commands.registerCommand('testform.state.refreshHistory', () => {
+      timeMachineProvider.refresh();
+      vscode.window.showInformationMessage('State Time Machine history refreshed.');
+    }),
+    vscode.commands.registerCommand('testform.state.compareCommit', (item: TimeMachineCommitItem) => {
+      if (item) {
+        timeMachineProvider.compareCommit(item);
+      }
+    }),
+    vscode.commands.registerCommand('testform.state.viewCommitState', (item: TimeMachineCommitItem) => {
+      if (item) {
+        timeMachineProvider.viewCommit(item);
+      }
+    }),
+    vscode.commands.registerCommand('testform.state.restoreCommitState', (item: TimeMachineCommitItem) => {
+      if (item) {
+        timeMachineProvider.restoreCommit(item);
       }
     })
   );

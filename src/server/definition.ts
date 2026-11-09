@@ -131,7 +131,7 @@ export function provideDefinition(
     }
   }
 
-  // 3.1 Line context: Scenario address or target in Testrun / Bug (e.g. Scenario: login.case.feature.@tc-1 or * mark target = login.case.feature.@tc-1)
+  // 3.1 Line context: Scenario address or target in Testrun / Bug (e.g. Scenario: login.case.feature.@tc-1 or * set target = login.case.feature.@tc-1)
   const markTargetMatch = lineText.match(/^\s*\*\s*mark\s+target\s*=\s*(.+)$/i);
   const targetExpr = markTargetMatch ? markTargetMatch[1].trim().replace(/^["']|["']$/g, '') : null;
 

@@ -1,4 +1,5 @@
-import { Diagnostic, DiagnosticSeverity, Range } from 'vscode-languageserver';
+import * as path from 'path';
+import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
 
@@ -187,39 +188,39 @@ export function validateTextDocument(
     return new RegExp(`${cleanPattern}$`, 'i').test(pathStr);
   };
 
-  if (matchesPattern(uri, tcPattern)) {
-    if (!text.includes('@testcase')) {
+  const hasSpecialRootTag =
+    /@testcase\b/i.test(text) ||
+    /@testrun\b/i.test(text) ||
+    /@testplan\b/i.test(text) ||
+    /@bug\b/i.test(text);
+
+  if (!hasSpecialRootTag) {
+    if (matchesPattern(uri, tcPattern)) {
       diagnostics.push({
         severity: DiagnosticSeverity.Information,
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: lines[0]?.length || 1 } },
-        message: `Resource Notice: File matches '${tcPattern}' but is missing resource tag '@testcase'.`,
+        message: `Resource Notice: File matches '${tcPattern}'. Add '@testcase' to prioritize root scope.`,
         source: 'Testform'
       });
-    }
-  } else if (matchesPattern(uri, trPattern)) {
-    if (!text.includes('@testrun')) {
+    } else if (matchesPattern(uri, trPattern)) {
       diagnostics.push({
         severity: DiagnosticSeverity.Information,
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: lines[0]?.length || 1 } },
-        message: `Resource Notice: File matches '${trPattern}' but is missing resource tag '@testrun'.`,
+        message: `Resource Notice: File matches '${trPattern}'. Add '@testrun' to prioritize root scope.`,
         source: 'Testform'
       });
-    }
-  } else if (matchesPattern(uri, tpPattern)) {
-    if (!text.includes('@testplan')) {
+    } else if (matchesPattern(uri, tpPattern)) {
       diagnostics.push({
         severity: DiagnosticSeverity.Information,
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: lines[0]?.length || 1 } },
-        message: `Resource Notice: File matches '${tpPattern}' but is missing resource tag '@testplan'.`,
+        message: `Resource Notice: File matches '${tpPattern}'. Add '@testplan' to prioritize root scope.`,
         source: 'Testform'
       });
-    }
-  } else if (matchesPattern(uri, bgPattern)) {
-    if (!text.includes('@bug')) {
+    } else if (matchesPattern(uri, bgPattern)) {
       diagnostics.push({
         severity: DiagnosticSeverity.Information,
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: lines[0]?.length || 1 } },
-        message: `Resource Notice: File matches '${bgPattern}' but is missing resource tag '@bug'.`,
+        message: `Resource Notice: File matches '${bgPattern}'. Add '@bug' to prioritize root scope.`,
         source: 'Testform'
       });
     }
@@ -327,7 +328,7 @@ export function validateTextDocument(
           start: { line, character: 0 },
           end: { line, character: lines[line]?.length || 10 }
         },
-        message: `Integrity Warning (bug-target-integrity): Bug scenario lacks origin traceability. Add a step '* mark target = <testcase.identity>' or a tag '@tc-*'.`,
+        message: `Integrity Warning (bug-target-integrity): Bug scenario lacks origin traceability. Add a step '* set target = <testcase.identity>' or a tag '@tc-*'.`,
         source: 'Testform'
       });
     }
@@ -443,5 +444,42 @@ export function validateTextDocument(
     checkBugIntegrity(targetLine, currentScenarioHasTarget, currentScenarioHasTrace, featureTags);
   }
 
+  
+  // 7. Check for homonymous basename collision without @ns
+  const normDocUri = textDocument.uri.toLowerCase();
+  let currentFeat: { relPath: string; fullPath: string; scope: string; title: string; namespace?: string } | undefined;
+  for (const feat of scanner.featureFiles.values()) {
+    const featPath = path.resolve(feat.fullPath).toLowerCase().replace(/\\/g, '/');
+    if (normDocUri.includes(featPath) || normDocUri.endsWith(feat.relPath.toLowerCase())) {
+      currentFeat = feat;
+      break;
+    }
+  }
+
+  if (currentFeat && !currentFeat.namespace) {
+    const currentBase = path.basename(currentFeat.relPath).toLowerCase();
+    const colliding = Array.from(scanner.featureFiles.values()).filter(other =>
+      other.scope === currentFeat!.scope &&
+      path.resolve(other.fullPath) !== path.resolve(currentFeat!.fullPath) &&
+      path.basename(other.relPath).toLowerCase() === currentBase &&
+      !other.namespace
+    );
+
+    if (colliding.length > 0) {
+      const targetLine = featureLineIndex >= 0 ? featureLineIndex : 0;
+      diagnostics.push({
+        severity: DiagnosticSeverity.Warning,
+        code: 'testform-collision-namespace',
+        range: {
+          start: { line: targetLine, character: 0 },
+          end: { line: targetLine, character: lines[targetLine]?.length || 10 }
+        },
+        message: `Collision Warning: Basename '${path.basename(currentFeat.relPath)}' is shared with '${colliding[0].relPath}' without @ns. Add '@ns(...)' to disambiguate its logical address.`,
+        source: 'Testform'
+      });
+    }
+  }
+
   return diagnostics;
 }
+

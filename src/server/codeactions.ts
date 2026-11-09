@@ -2,11 +2,8 @@ import {
   CodeAction,
   CodeActionKind,
   CodeActionParams,
-  Diagnostic,
-  Range,
   TextDocument,
   TextEdit,
-  WorkspaceEdit
 } from 'vscode-languageserver';
 import * as path from 'path';
 import { WorkspaceScanner } from './workspace-scanner';
@@ -86,10 +83,72 @@ export function provideCodeActions(
   scanner: WorkspaceScanner
 ): CodeAction[] {
   const actions: CodeAction[] = [];
+
+  
   const text = document.getText();
   const lines = text.split(/\r?\n/);
   const docScope = detectDocumentScope(document, scanner);
   const inferred = inferContextValues(document.uri);
+
+  // Check for collision diagnostic or collision quick fix
+  const collisionDiag = params.context.diagnostics?.find(
+    d => d.code === 'testform-collision-namespace' || (typeof d.message === 'string' && d.message.includes('Collision Warning'))
+  );
+
+  const normUri = document.uri.toLowerCase();
+  let currentFeat: { relPath: string; fullPath: string; scope: string; title: string; namespace?: string } | undefined;
+  for (const feat of scanner.featureFiles.values()) {
+    const featPath = path.resolve(feat.fullPath).toLowerCase().replace(/\\/g, '/');
+    if (normUri.includes(featPath) || normUri.endsWith(feat.relPath.toLowerCase())) {
+      currentFeat = feat;
+      break;
+    }
+  }
+
+  if (currentFeat && !currentFeat.namespace) {
+    const currentBase = path.basename(currentFeat.relPath).toLowerCase();
+    const colliding = Array.from(scanner.featureFiles.values()).filter(other =>
+      other.scope === currentFeat!.scope &&
+      path.resolve(other.fullPath) !== path.resolve(currentFeat!.fullPath) &&
+      path.basename(other.relPath).toLowerCase() === currentBase
+    );
+
+    if (colliding.length > 0 || collisionDiag) {
+      const parentDir = path.basename(path.dirname(currentFeat.fullPath));
+      let suggestedNs = parentDir.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      if (['testcase', 'testruns', 'testplans', 'bugs', 'tests', 'features'].includes(suggestedNs)) {
+        suggestedNs = inferred.project.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      }
+
+      let targetLine = 0;
+      for (let i = 0; i < lines.length; i++) {
+        if (/^(?:Feature|Característica):/i.test(lines[i].trim())) {
+          targetLine = i;
+          break;
+        }
+      }
+
+      const nsAction = CodeAction.create(
+        `💡 Add '@ns("${suggestedNs}")' to disambiguate feature address`,
+        {
+          changes: {
+            [document.uri]: [
+              TextEdit.insert(
+                { line: targetLine, character: 0 },
+                `@ns("${suggestedNs}")\n`
+              )
+            ]
+          }
+        },
+        CodeActionKind.QuickFix
+      );
+      nsAction.isPreferred = true;
+      if (collisionDiag) {
+        nsAction.diagnostics = [collisionDiag];
+      }
+      actions.push(nsAction);
+    }
+  }
 
   // 1. Collect applicable required fields for this resource type
   const requiredFields: FieldContractInfo[] = [];

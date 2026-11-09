@@ -29,6 +29,9 @@ export interface ScenarioIdentityInfo {
   address: string;     // e.g. "auth/login.case.feature.@tc-1"
   sourceFile: string;  // absolute path
   line: number;        // 0-based line number in file
+  namespace?: string;  // e.g. "pix" from @ns(pix)
+  delimitedAddress?: string; // e.g. "auth/login.case.feature.@tc-1"
+  namespaceAddress?: string; // e.g. "pix.login.case.feature.@tc-1"
 }
 
 export interface TestformWorkspaceConfig {
@@ -56,15 +59,22 @@ export interface TestformWorkspaceConfig {
     testplan?: string;
     bug?: string;
   };
-  targetFormat?: 'tag' | 'tag-bare' | 'canonical' | 'file-tag' | 'slug-tag' | 'name' | 'short' | 'classic';
+  targetFormat?: 'tag' | 'canonical' | 'basename' | 'namespace' | 'tag-bare' | 'file-tag' | 'slug-tag' | 'name' | 'short' | 'classic';
 }
 
 export interface TestformStateResource {
   type: string;
-  name: string;
-  provider: string;
+  address: string;
+  path: string;
+  tag?: string;
+  physicalAddress?: string;
+  namespace?: string;
+  identity?: string;
+  name?: string;
+  provider?: string;
   attributes: Record<string, any>;
   tainted?: boolean;
+  lastApplied?: string;
 }
 
 export interface TestformState {

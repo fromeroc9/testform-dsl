@@ -276,7 +276,7 @@ export function provideHover(
     }
   }
 
-  // 3.01 Hover on mark target = ...
+  // 3.01 Hover on set target = ...
   const markTargetHoverMatch = lineText.match(/^\s*\*\s*mark\s+target\s*=\s*(.+)$/i);
   if (markTargetHoverMatch) {
     const rawTarget = markTargetHoverMatch[1].trim().replace(/^["']|["']$/g, '');
@@ -354,7 +354,7 @@ export function provideHover(
     }
   }
 
-  // 4. Hover on DSL Status: * mark status = [status]
+  // 4. Hover on DSL Status: * set status = [status]
   const statusMatch = lineText.match(/mark\s+status\s*=\s*([a-zA-Z]+)/i);
   if (statusMatch) {
     const status = statusMatch[1].toLowerCase();
@@ -405,14 +405,14 @@ export function provideHover(
           `**Meaning:** ${info.desc}`,
           `**Effect on Ledger (\`testform.state\`):** ${info.ledger}`,
           `---`,
-          `*DSL Syntax:* \`* mark status = ${status}\``
+          `*DSL Syntax:* \`* set status = ${status}\``
         ].join('\n\n')
       }
     };
   }
 
   // 4.1 Hover on mark trace = ...
-  const traceMatch = lineText.match(/mark\s+trace\s*=\s*(.+)$/i);
+  const traceMatch = lineText.match(/set\s+trace\s*=\s*(.+)$/i);
   if (traceMatch) {
     const traceVal = traceMatch[1].trim().replace(/^["']|["']$/g, '');
     return {
@@ -429,7 +429,7 @@ export function provideHover(
   }
 
   // 4.2 Hover on mark evidence = ...
-  const evidenceMatch = lineText.match(/mark\s+evidence\s*=\s*(.+)$/i);
+  const evidenceMatch = lineText.match(/set\s+evidence\s*=\s*(.+)$/i);
   if (evidenceMatch) {
     const evidenceVal = evidenceMatch[1].trim().replace(/^["']|["']$/g, '');
     return {

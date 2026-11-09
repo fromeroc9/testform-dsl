@@ -123,7 +123,7 @@ export function provideCompletions(
           value: '### 🐛 Starter Defect / Bug Feature\n\nCreate a new declarative bug report targeting an existing testcase scenario.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: '@bug @${1:bg-01}\nFeature: ${2:Bug Title}\n\n  Scenario: ${3:Defect Description}\n    * mark target = ${4:path/to.case.feature.@tc-01}\n    * mark status = ${5|failed,passed,pending|}\n    * field severity = ${6|critical,high,medium,low|}\n    * field priority = ${7|urgent,high,normal,low|}\n'
+        insertText: '@bug @${1:bg-01}\nFeature: ${2:Bug Title}\n\n  Scenario: ${3:Defect Description}\n    * set target = ${4:path/to.case.feature.@tc-01}\n    * set status = ${5|failed,passed,pending|}\n    * field severity = ${6|critical,high,medium,low|}\n    * field priority = ${7|urgent,high,normal,low|}\n'
       }
     ];
   }
@@ -373,17 +373,53 @@ function inferContextValues(docUri: string): { project: string; module: string }
 
     if (isTestplan) {
       // In a testplan, Rule: must suggest testrun suite files (*.run.feature)
+      // Stripping scaffold directory (e.g. 'testruns/' or 'testcycle/') so paths are short
+      const trScaffold = (scanner.config.scaffoldDirectories?.testrun || 'testruns').replace(/^[/\\]+|[/\\]+$/g, '');
       for (const [relPath, feat] of scanner.featureFiles.entries()) {
         if (feat.scope === 'testrun') {
+          let shortPath = relPath;
+          const lowerRel = relPath.toLowerCase().replace(/\\/g, '/');
+          const lowerPrefix = trScaffold.toLowerCase() + '/';
+          if (lowerRel.startsWith(lowerPrefix)) {
+            shortPath = relPath.substring(trScaffold.length + 1);
+          } else if (lowerRel.startsWith('testcycle/')) {
+            shortPath = relPath.substring('testcycle/'.length);
+          }
+
+          const runsInFile = Array.from(scanner.config.scenarios.values()).filter(
+            s => path.resolve(s.sourceFile) === path.resolve(feat.fullPath)
+          );
+          const countStr = `${runsInFile.length} ${runsInFile.length === 1 ? 'run' : 'runs'}`;
+          const previewList = runsInFile.length > 0
+            ? '\n\n**Runs:**\n' + runsInFile.slice(0, 8).map(s => `- \`${s.tag}\` ${s.title}`).join('\n') + (runsInFile.length > 8 ? `\n- ... and ${runsInFile.length - 8} more` : '')
+            : '';
+
           items.push({
-            label: relPath,
+            label: shortPath,
             kind: CompletionItemKind.File,
+            detail: `Test Run Target (${feat.title}) • ${countStr}`,
+            filterText: `${shortPath} ${relPath} ${feat.title}`,
             documentation: {
               kind: MarkupKind.Markdown,
-              value: `### 🚀 Test Run Target\n\n**Title:** ${feat.title}\n\n**Path:** \`${relPath}\``
+              value: `### 🚀 Test Run Target\n\n**Title:** ${feat.title}\n\n- **Target:** \`${shortPath}\`\n- **Full Path:** \`${relPath}\`\n- **Runs:** ${countStr}${previewList}`
             },
-            insertText: relPath
+            insertText: shortPath
           });
+
+          if (feat.namespace) {
+            const logicalAddress = `${feat.namespace}.${path.basename(relPath)}`;
+            items.push({
+              label: logicalAddress,
+              kind: CompletionItemKind.Module,
+              detail: `Logical Namespace Target (${feat.title}) • ${countStr}`,
+              filterText: `${logicalAddress} ${feat.namespace} ${feat.title}`,
+              documentation: {
+                kind: MarkupKind.Markdown,
+                value: `### 🌐 Logical Feature Target (@ns: ${feat.namespace})\n\n**Title:** ${feat.title}\n\n- **Logical Target:** \`${logicalAddress}\`\n- **Full Path:** \`${relPath}\`\n- **Runs:** ${countStr}${previewList}`
+              },
+              insertText: logicalAddress
+            });
+          }
         }
       }
       return items;
@@ -394,22 +430,46 @@ function inferContextValues(docUri: string): { project: string; module: string }
       for (const [relPath, feat] of scanner.featureFiles.entries()) {
         if (feat.scope === 'testcase') {
           let shortPath = relPath;
-          const lowerRel = relPath.toLowerCase().replace(/\x5c/g, '/');
+          const lowerRel = relPath.toLowerCase().replace(/\\/g, '/');
           const lowerPrefix = tcScaffold.toLowerCase() + '/';
           if (lowerRel.startsWith(lowerPrefix)) {
             shortPath = relPath.substring(tcScaffold.length + 1);
           }
+
+          const casesInFile = Array.from(scanner.config.scenarios.values()).filter(
+            s => path.resolve(s.sourceFile) === path.resolve(feat.fullPath)
+          );
+          const countStr = `${casesInFile.length} ${casesInFile.length === 1 ? 'case' : 'cases'}`;
+          const previewList = casesInFile.length > 0
+            ? '\n\n**Scenarios:**\n' + casesInFile.slice(0, 8).map(s => `- \`${s.tag}\` ${s.title}`).join('\n') + (casesInFile.length > 8 ? `\n- ... and ${casesInFile.length - 8} more` : '')
+            : '';
+
           items.push({
             label: shortPath,
             kind: CompletionItemKind.File,
-            detail: `Test Case Target (${feat.title})`,
+            detail: `Test Case Target (${feat.title}) • ${countStr}`,
             filterText: `${shortPath} ${relPath} ${feat.title}`,
             documentation: {
               kind: MarkupKind.Markdown,
-              value: `### 🧪 Test Case Feature Target\n\n**Title:** ${feat.title}\n\n- **Target:** \`${shortPath}\`\n- **Full Path:** \`${relPath}\``
+              value: `### 🧪 Test Case Feature Target\n\n**Title:** ${feat.title}\n\n- **Target:** \`${shortPath}\`\n- **Full Path:** \`${relPath}\`\n- **Scenarios:** ${countStr}${previewList}`
             },
             insertText: shortPath
           });
+
+          if (feat.namespace) {
+            const logicalAddress = `${feat.namespace}.${path.basename(relPath)}`;
+            items.push({
+              label: logicalAddress,
+              kind: CompletionItemKind.Module,
+              detail: `Logical Namespace Target (${feat.title}) • ${countStr}`,
+              filterText: `${logicalAddress} ${feat.namespace} ${feat.title}`,
+              documentation: {
+                kind: MarkupKind.Markdown,
+                value: `### 🌐 Logical Feature Target (@ns: ${feat.namespace})\n\n**Title:** ${feat.title}\n\n- **Logical Target:** \`${logicalAddress}\`\n- **Full Path:** \`${relPath}\`\n- **Scenarios:** ${countStr}${previewList}`
+              },
+              insertText: logicalAddress
+            });
+          }
         }
       }
       return items;
@@ -460,7 +520,9 @@ function inferContextValues(docUri: string): { project: string; module: string }
             const atTag = `@${cleanTag}`;
             const fileNameOnly = path.basename(info.sourceFile);
             const fileSlug = fileNameOnly.replace(/(\.(case|run|plan|bug))?\.feature$/i, '');
-            const canonicalAddr = info.address;
+            const canonicalAddr = info.delimitedAddress || info.address;
+            const namespaceAddr = info.namespaceAddress;
+            const basenameAddr = `${fileNameOnly}.${atTag}`;
             const fileTag = `${fileNameOnly}.${atTag}`;
             const slugTag = `${fileSlug}.${atTag}`;
             const scenarioTitle = info.title;
@@ -474,8 +536,12 @@ function inferContextValues(docUri: string): { project: string; module: string }
               case 'classic':
                 targetVal = canonicalAddr;
                 break;
+              case 'basename':
               case 'file-tag':
-                targetVal = fileTag;
+                targetVal = basenameAddr;
+                break;
+              case 'namespace':
+                targetVal = namespaceAddr || canonicalAddr;
                 break;
               case 'slug-tag':
                 targetVal = slugTag;
@@ -497,10 +563,10 @@ function inferContextValues(docUri: string): { project: string; module: string }
                 label: `${cleanTag}: ${info.title}`,
                 kind: CompletionItemKind.Unit,
                 detail: `[${format}] ${targetVal}`,
-                filterText: `${cleanTag} @${cleanTag} ${fileTag} ${slugTag} ${canonicalAddr} ${info.title} ${targetVal}`,
+                filterText: `${cleanTag} @${cleanTag} ${basenameAddr} ${namespaceAddr || ''} ${fileTag} ${slugTag} ${canonicalAddr} ${info.title} ${targetVal}`,
                 documentation: {
                   kind: MarkupKind.Markdown,
-                  value: `### 🧪 Test Target\n\n**Title:** ${info.title}\n\n- **Active format:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRulePath}\`\n- **File:** \`${fileNameOnly}\``
+                  value: `### 🧪 Test Target\n\n**Title:** ${info.title}\n\n- **Active format:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRulePath}\`\n- **Canonical Address:** \`${canonicalAddr}\`${namespaceAddr ? `\n- **Namespace Address:** \`${namespaceAddr}\`` : ''}\n- **File:** \`${fileNameOnly}\``
                 },
                 textEdit: TextEdit.replace(
                   {
@@ -532,7 +598,9 @@ function inferContextValues(docUri: string): { project: string; module: string }
           const atTag = `@${cleanTag}`;
           const fileNameOnly = path.basename(info.sourceFile);
           const fileSlug = fileNameOnly.replace(/(\.(case|run|plan|bug))?\.feature$/i, '');
-          const canonicalAddr = info.address;
+          const canonicalAddr = info.delimitedAddress || info.address;
+          const namespaceAddr = info.namespaceAddress;
+          const basenameAddr = `${fileNameOnly}.${atTag}`;
           const fileTag = `${fileNameOnly}.${atTag}`;
           const slugTag = `${fileSlug}.${atTag}`;
           const scenarioTitle = info.title;
@@ -546,8 +614,12 @@ function inferContextValues(docUri: string): { project: string; module: string }
             case 'classic':
               targetVal = canonicalAddr;
               break;
+            case 'basename':
             case 'file-tag':
-              targetVal = fileTag;
+              targetVal = basenameAddr;
+              break;
+            case 'namespace':
+              targetVal = namespaceAddr || canonicalAddr;
               break;
             case 'slug-tag':
               targetVal = slugTag;
@@ -566,10 +638,10 @@ function inferContextValues(docUri: string): { project: string; module: string }
             label: `${cleanTag}: ${info.title}`,
             kind: CompletionItemKind.Unit,
             detail: `[${format}] ${targetVal} (${fileNameOnly})`,
-            filterText: `${cleanTag} @${cleanTag} ${fileTag} ${slugTag} ${canonicalAddr} ${info.title} ${targetVal} ${fileNameOnly}`,
+            filterText: `${cleanTag} @${cleanTag} ${basenameAddr} ${namespaceAddr || ''} ${fileTag} ${slugTag} ${canonicalAddr} ${info.title} ${targetVal} ${fileNameOnly}`,
             documentation: {
               kind: MarkupKind.Markdown,
-              value: `### 🧪 Test Target (Direct Scenario)\n\n**Title:** ${info.title}\n\n- **Active format:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **File:** \`${fileNameOnly}\`\n- **Canonical Address:** \`${canonicalAddr}\``
+              value: `### 🧪 Test Target (Direct Scenario)\n\n**Title:** ${info.title}\n\n- **Active format:** \`${format}\`\n- **Target:** \`${targetVal}\`\n- **Tag:** \`${info.tag}\`\n- **File:** \`${fileNameOnly}\`\n- **Canonical Address:** \`${canonicalAddr}\`${namespaceAddr ? `\n- **Namespace Address:** \`${namespaceAddr}\`` : ''}`
             },
             textEdit: TextEdit.replace(
               {
@@ -847,97 +919,97 @@ function inferContextValues(docUri: string): { project: string; module: string }
     // Suggest marks according to resource scope:
     // - In testrun: mark status, mark trace, mark evidence (NO mark target, target is scenario)
     // - In bug: mark target, mark status, mark trace, mark evidence
-    const isMarkTrigger = rest.startsWith('m') || ['status', 'target', 'trace', 'evidence'].some(k => rest.startsWith(k));
-    if (docScope === 'testrun' || (docScope === 'bug' && isMarkTrigger) || isMarkTrigger) {
+    const isSetTrigger = rest.startsWith('s') || ['status', 'target', 'trace', 'evidence'].some(k => rest.startsWith(k));
+    if (docScope === 'testrun' || (docScope === 'bug' && isSetTrigger) || isSetTrigger) {
       if (docScope === 'testrun') {
         items.push(
           {
-            label: 'mark status = ...',
+            label: 'set status = ...',
             kind: CompletionItemKind.Snippet,
             detail: 'Testform DSL: Set execution status',
             insertTextFormat: InsertTextFormat.Snippet,
-            filterText: 'mark status status',
+            filterText: 'set status status',
             textEdit: TextEdit.replace(
               { start: { line: position.line, character: prefixCol }, end: position },
-              'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+              'set status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
             ),
-            insertText: 'mark status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+            insertText: 'set status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
           },
           {
-            label: 'mark trace = ...',
+            label: 'set trace = ...',
             kind: CompletionItemKind.Snippet,
             detail: 'Testform DSL: Record failure trace or error detail',
             insertTextFormat: InsertTextFormat.Snippet,
-            filterText: 'mark trace trace',
+            filterText: 'set trace trace',
             textEdit: TextEdit.replace(
               { start: { line: position.line, character: prefixCol }, end: position },
-              'mark trace = "${1:trace description or error stack}"'
+              'set trace = "${1:trace description or error stack}"'
             ),
-            insertText: 'mark trace = "${1:trace description or error stack}"'
+            insertText: 'set trace = "${1:trace description or error stack}"'
           },
           {
-            label: 'mark evidence = ...',
+            label: 'set evidence = ...',
             kind: CompletionItemKind.Snippet,
             detail: 'Testform DSL: Attach execution evidence (screenshot, file, URL)',
             insertTextFormat: InsertTextFormat.Snippet,
-            filterText: 'mark evidence evidence',
+            filterText: 'set evidence evidence',
             textEdit: TextEdit.replace(
               { start: { line: position.line, character: prefixCol }, end: position },
-              'mark evidence = "${1:evidence.png or url}"'
+              'set evidence = "${1:evidence.png or url}"'
             ),
-            insertText: 'mark evidence = "${1:evidence.png or url}"'
+            insertText: 'set evidence = "${1:evidence.png or url}"'
           }
         );
         return items;
       } else if (docScope === 'bug') {
         items.push(
           {
-            label: 'mark target = ...',
+            label: 'set target = ...',
             kind: CompletionItemKind.Snippet,
             detail: 'Testform DSL: Set failing test case canonical target',
             insertTextFormat: InsertTextFormat.Snippet,
-            filterText: 'mark target target',
+            filterText: 'set target target',
             textEdit: TextEdit.replace(
               { start: { line: position.line, character: prefixCol }, end: position },
-              'mark target = ${1:testcase/path.case.feature.@tc-01}'
+              'set target = ${1:testcase/path.case.feature.@tc-01}'
             ),
-            insertText: 'mark target = ${1:testcase/path.case.feature.@tc-01}'
+            insertText: 'set target = ${1:testcase/path.case.feature.@tc-01}'
           },
           {
-            label: 'mark status = ...',
+            label: 'set status = ...',
             kind: CompletionItemKind.Snippet,
             detail: 'Testform DSL: Set defect status',
             insertTextFormat: InsertTextFormat.Snippet,
-            filterText: 'mark status status',
+            filterText: 'set status status',
             textEdit: TextEdit.replace(
               { start: { line: position.line, character: prefixCol }, end: position },
-              'mark status = ${1|failed,passed,pending|}'
+              'set status = ${1|failed,passed,pending|}'
             ),
-            insertText: 'mark status = ${1|failed,passed,pending|}'
+            insertText: 'set status = ${1|failed,passed,pending|}'
           },
           {
-            label: 'mark trace = ...',
+            label: 'set trace = ...',
             kind: CompletionItemKind.Snippet,
             detail: 'Testform DSL: Record failure trace or error detail',
             insertTextFormat: InsertTextFormat.Snippet,
-            filterText: 'mark trace trace',
+            filterText: 'set trace trace',
             textEdit: TextEdit.replace(
               { start: { line: position.line, character: prefixCol }, end: position },
-              'mark trace = "${1:trace description or error stack}"'
+              'set trace = "${1:trace description or error stack}"'
             ),
-            insertText: 'mark trace = "${1:trace description or error stack}"'
+            insertText: 'set trace = "${1:trace description or error stack}"'
           },
           {
-            label: 'mark evidence = ...',
+            label: 'set evidence = ...',
             kind: CompletionItemKind.Snippet,
             detail: 'Testform DSL: Attach execution evidence (screenshot, file, URL)',
             insertTextFormat: InsertTextFormat.Snippet,
-            filterText: 'mark evidence evidence',
+            filterText: 'set evidence evidence',
             textEdit: TextEdit.replace(
               { start: { line: position.line, character: prefixCol }, end: position },
-              'mark evidence = "${1:evidence.png or url}"'
+              'set evidence = "${1:evidence.png or url}"'
             ),
-            insertText: 'mark evidence = "${1:evidence.png or url}"'
+            insertText: 'set evidence = "${1:evidence.png or url}"'
           }
         );
         return items;
@@ -945,7 +1017,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
     }
   }
 
-  if (/(?:mark\s+)?status\s*=\s*[a-zA-Z]*$/i.test(lineText)) {
+  if (/(?:set\s+)?status\s*=\s*[a-zA-Z]*$/i.test(lineText)) {
     const statuses = ['passed', 'failed', 'pending', 'skipped', 'blocked', 'unexecuted'];
     return statuses.map(s => ({
       label: s,
@@ -955,7 +1027,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
     }));
   }
 
-  if (/(?:mark\s+)?target\s*=\s*.*$/i.test(lineText)) {
+  if (/(?:set\s+)?target\s*=\s*.*$/i.test(lineText)) {
     for (const [address, info] of scanner.config.scenarioAddresses.entries()) {
       items.push({
         label: address,
@@ -989,7 +1061,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
     else if (matchesPat(docUri, bgPat) || docContent.includes('@bug')) currentResourceType = 'bug';
 
     // 1. Defined fields in main.yml / workspace filtered by resource scope
-    for (const [name, info] of scanner.customFields.entries()) {
+    for (const [, info] of scanner.customFields.entries()) {
       if (info.scopes && info.scopes.length > 0 && !info.scopes.includes('global')) {
         if (currentResourceType !== 'other' && !info.scopes.includes(currentResourceType)) {
           continue; // Skip fields belonging strictly to other resources!
@@ -1306,7 +1378,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
 
     // Dynamic tags declared in workspace configuration (fields with source: "tag")
     // Clean "field" label on the right side for immediate identification
-    for (const [fieldName, fieldInfo] of scanner.customFields.entries()) {
+    for (const [, fieldInfo] of scanner.customFields.entries()) {
       if (fieldInfo.source === 'tag') {
         if (fieldInfo.enum && fieldInfo.enum.length > 0) {
           for (const enumVal of fieldInfo.enum) {
