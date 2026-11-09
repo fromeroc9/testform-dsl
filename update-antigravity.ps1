@@ -12,6 +12,9 @@ Copy-Item -Path "package.json" -Destination "$targetDir\package.json" -Force
 if (Test-Path "language-configuration.json") {
     Copy-Item -Path "language-configuration.json" -Destination "$targetDir\language-configuration.json" -Force
 }
+if (Test-Path "schemas") {
+    Copy-Item -Path "schemas" -Destination "$targetDir\" -Recurse -Force
+}
 if (Test-Path "assets") {
     Copy-Item -Path "assets" -Destination "$targetDir\" -Recurse -Force
 }

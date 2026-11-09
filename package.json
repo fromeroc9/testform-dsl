@@ -63,6 +63,23 @@
           "light": "./assets/cucumber.svg",
           "dark": "./assets/cucumber.svg"
         }
+      },
+      {
+        "id": "testform-yaml",
+        "aliases": [
+          "YAML",
+          "yaml"
+        ],
+        "filenames": [
+          "main.yml",
+          "main.yaml",
+          "testform.yml",
+          "testform.yaml"
+        ],
+        "icon": {
+          "light": "./assets/testform.svg",
+          "dark": "./assets/testform.svg"
+        }
       }
     ],
     "grammars": [
@@ -70,11 +87,20 @@
         "language": "gherkin",
         "scopeName": "source.feature",
         "path": "./syntaxes/testform-dsl.tmLanguage.json"
+      },
+      {
+        "language": "testform-yaml",
+        "scopeName": "source.yaml.testform",
+        "path": "./syntaxes/yaml-testform.tmLanguage.json"
       }
     ],
     "snippets": [
       {
         "language": "yaml",
+        "path": "./snippets/yaml.json"
+      },
+      {
+        "language": "testform-yaml",
         "path": "./snippets/yaml.json"
       }
     ],
@@ -598,11 +624,6 @@
           ],
           "default": "tag",
           "description": "Insertion format for target scenarios inside the rules of a TestRun."
-        },
-        "testform.decorations.moduleFolders": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show a blue cube badge (📦) in the file explorer for module subfolders containing test case features."
         },
         "testform.trace.server": {
           "type": "string",

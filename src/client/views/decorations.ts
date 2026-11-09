@@ -66,19 +66,6 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
     this._onDidChangeFileDecorations.fire(undefined);
   }
 
-  private containsFeatureFiles(dir: string): boolean {
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const e of entries) {
-        if (e.isFile() && e.name.toLowerCase().endsWith('.feature')) return true;
-        if (e.isDirectory() && !e.name.startsWith('.')) {
-          if (this.containsFeatureFiles(path.join(dir, e.name))) return true;
-        }
-      }
-    } catch {}
-    return false;
-  }
-
   provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
     if (!this.isTestformProject) return undefined;
 
@@ -94,30 +81,8 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
       return undefined;
     }
 
-    // 1. Directory Decoration: Subfolders containing .feature inside testcase scaffold dir get the blue cube 📦
+    // Do not decorate directories (preserves native folder icons and colors)
     if (isDirectory) {
-      const enabled = vscode.workspace.getConfiguration('testform').get('decorations.moduleFolders', true);
-      if (!enabled) return undefined;
-
-      const relPath = path.relative(root, uri.fsPath).replace(/\\/g, '/');
-      const tcScaffold = (this.testcaseScaffoldDir || 'testcase').replace(/^[/\\]+|[/\\]+$/g, '');
-
-      // The root scaffold directory itself (e.g. 'testcase') does not get the cube badge
-      if (relPath.toLowerCase() === tcScaffold.toLowerCase()) {
-        return undefined;
-      }
-
-      // Check if it is a subfolder of the testcase scaffold folder
-      const prefix = tcScaffold.toLowerCase() + '/';
-      if (relPath.toLowerCase().startsWith(prefix)) {
-        if (this.containsFeatureFiles(uri.fsPath)) {
-          return {
-            badge: '📦',
-            color: new vscode.ThemeColor('charts.blue'),
-            tooltip: `Testform Module: ${path.basename(uri.fsPath)}`
-          };
-        }
-      }
       return undefined;
     }
 

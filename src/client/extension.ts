@@ -50,6 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
       { scheme: 'file', language: 'yaml' },
+      { scheme: 'file', language: 'testform-yaml' },
       { scheme: 'file', language: 'gherkin' },
       { scheme: 'file', pattern: '**/*.feature' }
     ],
