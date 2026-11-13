@@ -233,11 +233,20 @@
           "type": "object",
           "properties": {
             "match": { "type": "string", "default": "*.case.feature" },
+            "identity": {
+              "type": "string",
+              "default": "tc-*",
+              "description": "Identity tag pattern for testcase scenarios (e.g. 'tc-*' or 'flaviotag-*')"
+            },
             "scaffold": {
               "type": "object",
               "properties": {
                 "directory": { "type": "string" },
-                "filename": { "type": "string" }
+                "filename": { "type": "string" },
+                "attach": {
+                  "type": "string",
+                  "description": "Directory for attachments (documents, datasets, mocks) for testcases"
+                }
               }
             },
             "fields": { "type": "array" }
@@ -247,11 +256,20 @@
           "type": "object",
           "properties": {
             "match": { "type": "string", "default": "*.run.feature" },
+            "identity": {
+              "type": "string",
+              "default": "tr-*",
+              "description": "Identity tag pattern for testrun scenarios (e.g. 'tr-*')"
+            },
             "scaffold": {
               "type": "object",
               "properties": {
                 "directory": { "type": "string" },
-                "filename": { "type": "string" }
+                "filename": { "type": "string" },
+                "attach": {
+                  "type": "string",
+                  "description": "Directory for attachments (documents, datasets, mocks) for testcases"
+                }
               }
             },
             "fields": { "type": "array" }
@@ -261,11 +279,20 @@
           "type": "object",
           "properties": {
             "match": { "type": "string", "default": "*.plan.feature" },
+            "identity": {
+              "type": "string",
+              "default": "tp-*",
+              "description": "Identity tag pattern for testplan scenarios (e.g. 'tp-*')"
+            },
             "scaffold": {
               "type": "object",
               "properties": {
                 "directory": { "type": "string" },
-                "filename": { "type": "string" }
+                "filename": { "type": "string" },
+                "attach": {
+                  "type": "string",
+                  "description": "Directory for attachments (documents, datasets, mocks) for testcases"
+                }
               }
             },
             "fields": { "type": "array" }
@@ -275,11 +302,20 @@
           "type": "object",
           "properties": {
             "match": { "type": "string", "default": "*.bug.feature" },
+            "identity": {
+              "type": "string",
+              "default": "bg-*",
+              "description": "Identity tag pattern for bug scenarios (e.g. 'bg-*')"
+            },
             "scaffold": {
               "type": "object",
               "properties": {
                 "directory": { "type": "string" },
-                "filename": { "type": "string" }
+                "filename": { "type": "string" },
+                "attach": {
+                  "type": "string",
+                  "description": "Directory for attachments (documents, datasets, mocks) for testcases"
+                }
               }
             },
             "fields": { "type": "array" }
@@ -288,6 +324,16 @@
         "global": {
           "type": "object",
           "properties": {
+            "scaffold": {
+              "type": "object",
+              "properties": {
+                "directory": { "type": "string" },
+                "attach": {
+                  "type": "string",
+                  "description": "Default directory for attachments across all resources"
+                }
+              }
+            },
             "fields": { "type": "array" }
           }
         }

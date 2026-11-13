@@ -140,6 +140,38 @@ export function provideYamlCompletions(
       ];
     }
 
+    if (key === 'identity') {
+      const beforeLines = fullTextBefore.split('\n');
+      const curIndent = lineText.match(/^\s*/)?.[0].length || 0;
+      let scopeHint: string | undefined;
+      for (let i = beforeLines.length - 2; i >= 0; i--) {
+        const trimmed = beforeLines[i].trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const ind = beforeLines[i].match(/^\s*/)?.[0].length || 0;
+        if (ind < curIndent) {
+          const m = trimmed.match(/^(testcase|testrun|testplan|bug)\s*:/i);
+          if (m) scopeHint = m[1].toLowerCase();
+          break;
+        }
+      }
+      const defaults: Record<string, string> = {
+        testcase: 'tc-*',
+        testrun: 'tr-*',
+        testplan: 'tp-*',
+        bug: 'bg-*'
+      };
+      const preferred = (scopeHint && defaults[scopeHint]) || 'tc-*';
+      const ordered = [preferred, ...Object.values(defaults).filter(d => d !== preferred)];
+      return ordered.map((pat, idx) => ({
+        label: `"${pat}"`,
+        kind: CompletionItemKind.Value,
+        detail: idx === 0 && scopeHint ? `Default ${scopeHint} identity tag pattern` : 'Identity tag pattern (e.g. "flaviotag-*")',
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: `"${pat}"`,
+        sortText: `0_${idx}`
+      }));
+    }
+
     // CRITICAL FIX: If key is a dictionary parent (variable, locals, resource, data, module, output)
     // DO NOT emit properties inline on the same line! They require a line break + indent.
     const DICTIONARY_PARENTS = new Set([
@@ -222,7 +254,7 @@ export function provideYamlCompletions(
         kind: CompletionItemKind.Property,
         detail: 'Resource scopes and scaffolding configuration',
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'resource:\n  testcase:\n    match: "${1:*.case.feature}"\n    scaffold:\n      directory: "testcase"\n      filename: "{slug}.case.feature"\n    fields: {}\n  testrun:\n    match: "${2:*.run.feature}"\n    scaffold:\n      directory: "testrun"\n      filename: "{slug}.run.feature"\n    fields: {}\n  testplan:\n    match: "${3:*.plan.feature}"\n    scaffold:\n      directory: "testplan"\n      filename: "{slug}.plan.feature"\n    fields: {}'
+        insertText: 'resource:\n  testcase:\n    match: "${1:*.case.feature}"\n    identity: "${2:tc-*}"\n    scaffold:\n      directory: "testcase"\n      filename: "{slug}.case.feature"\n    fields: {}\n  testrun:\n    match: "${3:*.run.feature}"\n    identity: "${4:tr-*}"\n    scaffold:\n      directory: "testrun"\n      filename: "{slug}.run.feature"\n    fields: {}\n  testplan:\n    match: "${5:*.plan.feature}"\n    identity: "${6:tp-*}"\n    scaffold:\n      directory: "testplan"\n      filename: "{slug}.plan.feature"\n    fields: {}'
       },
       {
         label: 'data:',
@@ -316,21 +348,28 @@ export function provideYamlCompletions(
           kind: CompletionItemKind.Property,
           detail: 'TestCase scope mapping and scaffolding',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'testcase:\n  match: "${1:*.case.feature}"\n  scaffold:\n    directory: "testcase"\n    filename: "{slug}.case.feature"\n  fields: {}'
+          insertText: 'testcase:\n  match: "${1:*.case.feature}"\n  identity: "${2:tc-*}"\n  scaffold:\n    directory: "testcase"\n    filename: "{slug}.case.feature"\n  fields: {}'
         },
         {
           label: 'testrun:',
           kind: CompletionItemKind.Property,
           detail: 'TestRun scope mapping and scaffolding',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'testrun:\n  match: "${1:*.run.feature}"\n  scaffold:\n    directory: "testrun"\n    filename: "{slug}.run.feature"\n  fields: {}'
+          insertText: 'testrun:\n  match: "${1:*.run.feature}"\n  identity: "${2:tr-*}"\n  scaffold:\n    directory: "testrun"\n    filename: "{slug}.run.feature"\n  fields: {}'
         },
         {
           label: 'testplan:',
           kind: CompletionItemKind.Property,
           detail: 'TestPlan scope mapping and scaffolding',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'testplan:\n  match: "${1:*.plan.feature}"\n  scaffold:\n    directory: "testplan"\n    filename: "{slug}.plan.feature"\n  fields: {}'
+          insertText: 'testplan:\n  match: "${1:*.plan.feature}"\n  identity: "${2:tp-*}"\n  scaffold:\n    directory: "testplan"\n    filename: "{slug}.plan.feature"\n  fields: {}'
+        },
+        {
+          label: 'bug:',
+          kind: CompletionItemKind.Property,
+          detail: 'Bug scope mapping and scaffolding',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'bug:\n  match: "${1:*.bug.feature}"\n  identity: "${2:bg-*}"\n  scaffold:\n    directory: "bugs"\n    filename: "{slug}.bug.feature"\n  fields: {}'
         },
         {
           label: 'global:',
@@ -344,9 +383,24 @@ export function provideYamlCompletions(
 
     // Indent 4: Inside resource.testcase, testrun, etc.
     if (ancestry.length === 2) {
+      const scopeName = ancestry[1]?.toLowerCase();
+      const defaultIdentity =
+        scopeName === 'testrun' ? 'tr-*' :
+        scopeName === 'testplan' ? 'tp-*' :
+        scopeName === 'bug' ? 'bg-*' :
+        'tc-*';
+      const defaultMatch =
+        scopeName === 'testrun' ? '*.run.feature' :
+        scopeName === 'testplan' ? '*.plan.feature' :
+        scopeName === 'bug' ? '*.bug.feature' :
+        '*.case.feature';
+      const defaultDir = scopeName || 'testcase';
+      const defaultFile = `{slug}${defaultMatch.replace(/^\*/, '')}`;
+
       return [
-        { label: 'match:', kind: CompletionItemKind.Property, detail: 'Glob pattern for feature files', insertTextFormat: InsertTextFormat.Snippet, insertText: 'match: "${1:*.case.feature}"' },
-        { label: 'scaffold:', kind: CompletionItemKind.Property, detail: 'Scaffolding directory and filename pattern', insertTextFormat: InsertTextFormat.Snippet, insertText: 'scaffold:\n  directory: "${1:testcase}"\n  filename: "${2:{slug}.case.feature}"' },
+        { label: 'match:', kind: CompletionItemKind.Property, detail: 'Glob pattern for feature files', insertTextFormat: InsertTextFormat.Snippet, insertText: `match: "\${1:${defaultMatch}}"` },
+        { label: 'identity:', kind: CompletionItemKind.Property, detail: 'Custom scenario identity tag pattern (e.g. "tc-*", "flaviotag-*")', insertTextFormat: InsertTextFormat.Snippet, insertText: `identity: "\${1:${defaultIdentity}}"` },
+        { label: 'scaffold:', kind: CompletionItemKind.Property, detail: 'Scaffolding directory and filename pattern', insertTextFormat: InsertTextFormat.Snippet, insertText: `scaffold:\n  directory: "\${1:${defaultDir}}"\n  filename: "\${2:${defaultFile}}"` },
         { label: 'fields:', kind: CompletionItemKind.Property, detail: 'Custom metadata fields definition', insertText: 'fields:\n  ' }
       ];
     }

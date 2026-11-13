@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0-beta.7] - 2026-11-13
+
+### Added
+
+- **First-Class Attachment System & Clipboard Paste Provider:**
+  - Added support for `scaffold.attach` in `testform.schema.json` across global, testcase, testrun, testplan, and bug scopes.
+  - Registered `DocumentPasteEditProvider` allowing developers to paste images from clipboard (`Ctrl+V`) directly into `.feature` files; automatically stores files into the configured attachment directory and inserts `* set attach = "attachments/..."`.
+  - Added IntelliSense completions, hover documentation, and syntax diagnostics for `* set attach = ...` according to resource governance rules.
+
+---
+
+## [1.0.4] - 2026-11-11
+
+### Added
+
+- **Custom Per-Scope Identity Tag Patterns (`src/shared/identity.ts`, `src/shared/identity-config.ts`, `schemas/testform.schema.json`, `snippets/yaml.json`, `src/server/yaml-completions.ts`):**
+  - Added support for configurable `resource.<scope>.identity` tag patterns (e.g. `tc-*`, `tr-*`, `tp-*`, `bg-*`, or custom prefixes) in `main.yml` JSON schema validation, YAML snippets, and autocompletions.
+  - Propagated workspace-configured identity pattern matching and normalization across LSP diagnostics, completions, code actions, CodeLens, hover, go-to-definition, references, workspace scanning, State Explorer, and the native Test Controller.
+- **File-Scoped Visual Plan Diff (`testform.showPlanDiffCurrent`):**
+  - Added the `testform.showPlanDiffCurrent` command (`package.json`, `src/client/extension.ts`) along with a `File Scope` badge, targeted loading/empty states, and a `Full Plan` toggle inside `PlanDiffPanel`.
+
+### Changed
+
+- **Cucumber Gherkin Status Alignment & `* set duration` Support (`package.json`, `src/client/extension.ts`, `src/client/qa-fast-pass.ts`, `src/server/completions.ts`, `src/server/hover.ts`, `src/server/codelens.ts`):**
+  - Added `testform.markUndefined` and `testform.markAmbiguous` QA Fast Pass commands and aligned status picker options, LSP status completions, hover descriptions, and `@testrun`/`@bug` snippet placeholders with Cucumber Gherkin statuses (`passed`, `failed`, `pending`, `skipped`, `undefined`, `ambiguous`) alongside legacy `blocked`.
+  - Added `* set duration = ...` snippet and keyword trigger autocompletion (`src/server/completions.ts`), updated status hover/CodeLens matching to support `* set` and `* mark`, and surfaced separate `undefined`, `ambiguous`, and `blocked` summary pills in TestRun CodeLens indicators (`src/server/codelens.ts`).
+
+### Fixed
+
+- **Editor Title Visual Plan Diff Scope (`package.json`, `src/client/extension.ts`, `src/client/views/plan-diff-panel.ts`):**
+  - Bound the `.feature` editor title bar diff button (`editor/title`) to `testform.showPlanDiffCurrent` so it computes `testform plan -target="<file>" -json` exclusively for the active feature file instead of running a full workspace plan.
+  - Scoped `Apply Plan` and `Apply (-auto-approve)` actions inside `PlanDiffPanel` to `-target="<file>"` when inspecting a single file, added stale-response protection via `_requestId`, and resolved `openFile` links using `scenario.uri` for files inside scaffold directories.
+
+---
+
+## [1.0.3] - 2026-11-11
+
+### Changed
+
+- **Unquoted `@ns(...)` Parsing & Quick Fix Modernization (`src/server/workspace-scanner.ts`, `src/server/codeactions.ts`):**
+  - Updated feature scanning to support unquoted (`@ns(name)`), single-quoted, and double-quoted `@ns(...)` / `@namespace(...)` / `@ns:name` directives while ignoring `#` Gherkin comments and normalizing namespaces to lowercase to match `testform` CLI semantics.
+  - Updated the homonym collision Quick Fix action to exclude colliding siblings that already declare `@ns(...)` and insert standard unquoted `@ns(<folder>)` tags.
+
+### Fixed
+
+- **LSP Collision Diagnostics & Windows URI Resolution (`src/server/workspace-scanner.ts`, `src/server/diagnostics.ts`):**
+  - Added `WorkspaceScanner.findFeatureByUri()` with `fileURLToPath` normalization so open documents reliably match scanned workspace features on Windows and prevent false `Collision Warning` diagnostics when `@ns(...)` is declared.
+  - Added a `Collision Warning` check flagging duplicate `@ns(...)` values across colliding feature files that share the same basename.
+
+---
+
 ## [1.0.2] - 2026-11-09
 
 ### Added

@@ -4,6 +4,11 @@ import { pathToFileURL } from 'url';
 import * as fs from 'fs';
 import * as path from 'path';
 import { WorkspaceScanner } from './workspace-scanner';
+import {
+  buildSameNumberSearchRegex,
+  extractFeatureAddressAtLine,
+  findAllIdentityMatchesInLine
+} from '../shared/identity';
 
 /**
  * =========================================================================================
@@ -32,22 +37,18 @@ export function provideReferences(
 
   const locations: Location[] = [];
 
-  // 1. Detect Scenario Identity Tag (@tc-X, @tr-X, @tp-X, @bg-X)
-  const tagMatch = lineText.match(/@(tc|tr|tp|bg)-([0-9]+)/i);
-  let targetTag: string | null = null;
-  let targetNumber: number | null = null;
-
-  if (tagMatch) {
-    targetTag = `@${tagMatch[1].toLowerCase()}-${tagMatch[2]}`;
-    targetNumber = parseInt(tagMatch[2], 10);
-  }
+  // 1. Detect Scenario Identity Tag (configured resource.<scope>.identity or @tc-X, @tr-X, @tp-X, @bg-X)
+  const idMatches = findAllIdentityMatchesInLine(lineText, scanner.config.identities);
+  const idMatch =
+    idMatches.find(m => params.position.character >= m.index && params.position.character <= m.index + m.length) ||
+    idMatches[0];
+  const targetTag = idMatch ? idMatch.rawTag.toLowerCase() : null;
 
   // 2. Detect canonical or namespace address on current line
-  const addrMatch = lineText.match(/([a-zA-Z0-9_./-]+\.(?:case|run|plan|bug)\.feature(?:\.@(?:tc|tr|tp|bg)-[0-9]+)?)/i);
-  const targetAddress = addrMatch ? addrMatch[1].trim() : null;
+  const targetAddress = extractFeatureAddressAtLine(lineText);
 
   // 3. Detect Rule feature target (Rule: filename.feature)
-  const ruleMatch = lineText.match(/^(?:\s*Rule|\s*Regla):\s*([a-zA-Z0-9_./-]+\.(?:case|run|plan|bug)\.feature)/i);
+  const ruleMatch = lineText.match(/^(?:\s*Rule|\s*Regla):\s*([a-zA-Z0-9_./-]+\.feature)/i);
   const targetRuleFile = ruleMatch ? path.basename(ruleMatch[1].trim()) : null;
 
   // 4. Detect variable reference (var.name)
@@ -61,10 +62,12 @@ export function provideReferences(
   // Collect search terms to match against all feature files
   const searchPatterns: RegExp[] = [];
 
-  if (targetTag && targetNumber !== null) {
-    // Matches @tc-1, @tc-01, @tc-001 with word boundaries
-    const prefix = targetTag.split('-')[0].replace(/^@/, '');
-    searchPatterns.push(new RegExp(`@${prefix}-0*${targetNumber}\\b`, 'i'));
+  if (targetTag) {
+    // Matches @flaviotag-1, @flaviotag-01, @flaviotag-001 with word boundaries
+    const tagRegex = buildSameNumberSearchRegex(targetTag, scanner.config.identities);
+    if (tagRegex) {
+      searchPatterns.push(tagRegex);
+    }
   }
 
   if (targetAddress) {

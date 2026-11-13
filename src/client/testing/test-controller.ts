@@ -1,3 +1,13 @@
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import { runTestformCommand } from '../terminal';
+import {
+  findFirstIdentityMatchInLine,
+  IdentityConfigMap,
+  normalizeIdentityTagWithConfig
+} from '../../shared/identity';
+import { loadWorkspaceIdentitiesSync } from '../../shared/identity-config';
 
 function findProjectRoot(filePath: string): string {
   let curr = path.dirname(filePath);
@@ -14,18 +24,9 @@ function findProjectRoot(filePath: string): string {
   return ws ? ws.uri.fsPath : path.dirname(filePath);
 }
 
-function normalizeIdentityTag(tag: string): string {
-  const m = tag.toLowerCase().match(/^@?(tc|tr|tp)-0*([0-9]+)$/);
-  if (m) {
-    return `@${m[1]}-${parseInt(m[2], 10)}`;
-  }
-  return tag.toLowerCase();
+function normalizeIdentityTag(tag: string, identities?: Partial<IdentityConfigMap>): string {
+  return normalizeIdentityTagWithConfig(tag, identities);
 }
-
-import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
-import { runTestformCommand } from '../terminal';
 
 interface ReferencedScenario {
   id: string;
@@ -141,7 +142,7 @@ export class TestformTestController implements vscode.Disposable {
    * Resolves a referenced feature file:
    * In a testrun: Rule points to a testcase (*.case.feature)
    */
-  private resolveReferencedFeature(rootPath: string, ruleText: string): ReferencedFeatureInfo | null {
+  private resolveReferencedFeature(rootPath: string, ruleText: string, identities?: IdentityConfigMap): ReferencedFeatureInfo | null {
     try {
       const candidates = [
         path.resolve(rootPath, ruleText),
@@ -210,10 +211,10 @@ export class TestformTestController implements vscode.Disposable {
         const scenMatch = line.match(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*(.+)$/i);
         if (scenMatch) {
           const title = scenMatch[1].trim();
-          const identityTag = pendingTags.find(t => /^@(tc|tr|tp)-[0-9]+/i.test(t));
+          const identityTag = pendingTags.map(t => findFirstIdentityMatchInLine(t, identities)?.rawTag).find(Boolean);
           if (identityTag) {
             scenariosByTag.set(identityTag.toLowerCase(), title);
-            scenariosByTag.set(normalizeIdentityTag(identityTag), title);
+            scenariosByTag.set(normalizeIdentityTag(identityTag, identities), title);
           }
 
           currentScen = {
@@ -269,13 +270,14 @@ export class TestformTestController implements vscode.Disposable {
       }
 
       const rootPath = findProjectRoot(uri.fsPath);
+      const identities = loadWorkspaceIdentitiesSync(rootPath);
       const relPathNative = rootPath ? path.relative(rootPath, uri.fsPath) : path.basename(uri.fsPath);
       const relPath = relPathNative.replace(/\\/g, '/');
       const fileName = path.basename(uri.fsPath);
 
       const lines = content.split(/\r?\n/);
 
-      // Extract Feature title, line index, and testrun tag (@tr-X)
+      // Extract Feature title, line index, and testrun tag (@tr-X or custom testrun.identity)
       let featureTitle = fileName;
       let featureLineIndex = 0;
       let testrunTag = '';
@@ -283,9 +285,9 @@ export class TestformTestController implements vscode.Disposable {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!testrunTag && i < 25) {
-          const trMatch = line.match(/@(tr-[0-9]+)\b/i);
+          const trMatch = findFirstIdentityMatchInLine(line, { testrun: identities.testrun });
           if (trMatch) {
-            testrunTag = trMatch[1].toLowerCase();
+            testrunTag = trMatch.rawTag.replace(/^@/, '').toLowerCase();
           }
         }
         const featMatch = line.match(/^(?:Feature|Característica):\s*(.+)$/i);
@@ -336,7 +338,7 @@ export class TestformTestController implements vscode.Disposable {
         const ruleMatch = trimmed.match(/^(?:Rule|Regla):\s*(.+)$/i);
         if (ruleMatch) {
           currentRuleText = ruleMatch[1].trim();
-          currentRefInfo = this.resolveReferencedFeature(rootPath, currentRuleText);
+          currentRefInfo = this.resolveReferencedFeature(rootPath, currentRuleText, identities);
 
           const ruleLabel = currentRefInfo?.featureTitle || currentRuleText;
           // Stable rule ID based on rule target instead of line index
@@ -369,8 +371,8 @@ export class TestformTestController implements vscode.Disposable {
             continue;
           }
 
-          const tagMatch = rawScenarioText.match(/@(tc|tr|tp|bg)-[0-9]+/i);
-          const tag = tagMatch ? tagMatch[0].toLowerCase() : undefined;
+          const tagMatch = findFirstIdentityMatchInLine(rawScenarioText, identities);
+          const tag = tagMatch ? tagMatch.rawTag.toLowerCase() : undefined;
 
           // Determine testcase target address
           let currentTestCaseTarget = rawScenarioText;
@@ -387,7 +389,7 @@ export class TestformTestController implements vscode.Disposable {
           if (currentRuleItem && tag && currentRefInfo) {
             const resolved =
               currentRefInfo.scenariosByTag.get(tag) ||
-              currentRefInfo.scenariosByTag.get(normalizeIdentityTag(tag));
+              currentRefInfo.scenariosByTag.get(normalizeIdentityTag(tag, identities));
             if (resolved) {
               displayTitle = resolved;
             }
@@ -396,11 +398,11 @@ export class TestformTestController implements vscode.Disposable {
             const featMatch = rawScenarioText.match(/^([^@]+?\.feature)(?:\.@|\.|\/)?/i);
             if (featMatch) {
               const refFeaturePath = featMatch[1];
-              const refInfo = this.resolveReferencedFeature(rootPath, refFeaturePath);
+              const refInfo = this.resolveReferencedFeature(rootPath, refFeaturePath, identities);
               if (refInfo && tag) {
                 const resolved =
                   refInfo.scenariosByTag.get(tag) ||
-                  refInfo.scenariosByTag.get(normalizeIdentityTag(tag));
+                  refInfo.scenariosByTag.get(normalizeIdentityTag(tag, identities));
                 if (resolved) {
                   displayTitle = resolved;
                 } else if (refInfo.featureTitle) {
@@ -453,15 +455,15 @@ export class TestformTestController implements vscode.Disposable {
           if (info) {
             info.testcaseTarget = targetVal;
           }
-          const tTagMatch = targetVal.match(/@(tc|tr|tp|bg)-[0-9]+/i);
+          const tTagMatch = findFirstIdentityMatchInLine(targetVal, identities);
           if (tTagMatch) {
-            const tTag = tTagMatch[0].toLowerCase();
+            const tTag = tTagMatch.rawTag.toLowerCase();
             const featMatch = targetVal.match(/^([^@]+?\.feature)/i);
             if (featMatch) {
-              const refInfo = this.resolveReferencedFeature(rootPath, featMatch[1]);
+              const refInfo = this.resolveReferencedFeature(rootPath, featMatch[1], identities);
               const resolved =
                 refInfo?.scenariosByTag.get(tTag) ||
-                refInfo?.scenariosByTag.get(normalizeIdentityTag(tTag));
+                refInfo?.scenariosByTag.get(normalizeIdentityTag(tTag, identities));
               if (resolved) {
                 currentScenarioItem.label = resolved;
               }
@@ -475,7 +477,7 @@ export class TestformTestController implements vscode.Disposable {
           const status = statusMatch[1].toLowerCase();
           this.scenarioStatusMap.set(currentScenarioItem.id, status);
 
-          const tagPrefix = (currentScenarioItem.id.match(/@(tc|tr|tp|bg)-[0-9]+/i)?.[0] || '').toUpperCase();
+          const tagPrefix = (findFirstIdentityMatchInLine(currentScenarioItem.id, identities)?.rawTag || '').toUpperCase();
           currentScenarioItem.description = tagPrefix || undefined;
         }
       }
@@ -694,7 +696,8 @@ export class TestformTestController implements vscode.Disposable {
 
           // 3. Immediately reflect in memory and UI
           this.scenarioStatusMap.set(item.id, chosenStatus);
-          const tagPrefix = (item.id.match(/@(tc|tr|tp|bg)-[0-9]+/i)?.[0] || '').toUpperCase();
+          const runIdentities = loadWorkspaceIdentitiesSync(rootPath);
+          const tagPrefix = (findFirstIdentityMatchInLine(item.id, runIdentities)?.rawTag || '').toUpperCase();
           item.description = tagPrefix || undefined;
 
           if (chosenStatus === 'passed') {

@@ -7,6 +7,7 @@ import {
 } from 'vscode-languageserver';
 import * as path from 'path';
 import { WorkspaceScanner } from './workspace-scanner';
+import { detectFeatureDocumentScope, ResourceScope } from '../shared/identity';
 
 interface FieldContractInfo {
   name: string;
@@ -17,30 +18,16 @@ interface FieldContractInfo {
   scopes?: string[];
 }
 
-function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner): 'testcase' | 'testrun' | 'testplan' | 'bug' {
-  const docText = document.getText();
-  if (/@testrun\b/i.test(docText)) return 'testrun';
-  if (/@testplan\b/i.test(docText)) return 'testplan';
-  if (/@testcase\b/i.test(docText)) return 'testcase';
-  if (/@bug\b/i.test(docText)) return 'bug';
-
-  if (/@tr-\d+\b/i.test(docText)) return 'testrun';
-  if (/@tp-\d+\b/i.test(docText)) return 'testplan';
-  if (/@tc-\d+\b/i.test(docText)) return 'testcase';
-  if (/@bg-\d+\b/i.test(docText)) return 'bug';
-
-  const uriPath = document.uri.replace(/\\/g, '/').toLowerCase();
-  for (const [_, feat] of scanner.featureFiles.entries()) {
-    const featPath = feat.fullPath.replace(/\\/g, '/').toLowerCase();
-    if (uriPath === featPath || uriPath.endsWith(feat.relPath.toLowerCase())) {
-      return feat.scope;
-    }
-  }
-
-  if (uriPath.endsWith('.run.feature')) return 'testrun';
-  if (uriPath.endsWith('.plan.feature')) return 'testplan';
-  if (uriPath.endsWith('.bug.feature')) return 'bug';
-  return 'testcase';
+function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner): ResourceScope {
+  return (
+    detectFeatureDocumentScope(
+      document.getText(),
+      document.uri,
+      scanner.featureFiles.values(),
+      scanner.config.identities,
+      scanner.config.scopes
+    ) ?? 'testcase'
+  );
 }
 
 function inferContextValues(docUri: string): { project: string; module: string } {
@@ -95,22 +82,15 @@ export function provideCodeActions(
     d => d.code === 'testform-collision-namespace' || (typeof d.message === 'string' && d.message.includes('Collision Warning'))
   );
 
-  const normUri = document.uri.toLowerCase();
-  let currentFeat: { relPath: string; fullPath: string; scope: string; title: string; namespace?: string } | undefined;
-  for (const feat of scanner.featureFiles.values()) {
-    const featPath = path.resolve(feat.fullPath).toLowerCase().replace(/\\/g, '/');
-    if (normUri.includes(featPath) || normUri.endsWith(feat.relPath.toLowerCase())) {
-      currentFeat = feat;
-      break;
-    }
-  }
+  const currentFeat = scanner.findFeatureByUri(document.uri);
 
   if (currentFeat && !currentFeat.namespace) {
     const currentBase = path.basename(currentFeat.relPath).toLowerCase();
     const colliding = Array.from(scanner.featureFiles.values()).filter(other =>
-      other.scope === currentFeat!.scope &&
-      path.resolve(other.fullPath) !== path.resolve(currentFeat!.fullPath) &&
-      path.basename(other.relPath).toLowerCase() === currentBase
+      other.scope === currentFeat.scope &&
+      path.resolve(other.fullPath) !== path.resolve(currentFeat.fullPath) &&
+      path.basename(other.relPath).toLowerCase() === currentBase &&
+      !other.namespace
     );
 
     if (colliding.length > 0 || collisionDiag) {
@@ -129,13 +109,13 @@ export function provideCodeActions(
       }
 
       const nsAction = CodeAction.create(
-        `💡 Add '@ns("${suggestedNs}")' to disambiguate feature address`,
+        `💡 Add '@ns(${suggestedNs})' to disambiguate feature address`,
         {
           changes: {
             [document.uri]: [
               TextEdit.insert(
                 { line: targetLine, character: 0 },
-                `@ns("${suggestedNs}")\n`
+                `@ns(${suggestedNs})\n`
               )
             ]
           }

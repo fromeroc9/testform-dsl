@@ -40,30 +40,37 @@ export class PlanDiffPanel {
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
   private _projectRoot: string;
+  private _target?: string;
+  private _requestId: number = 0;
   private _disposables: vscode.Disposable[] = [];
 
   private _loading: boolean = false;
   private _error: string | null = null;
   private _planResult: PlanJsonOutput | null = null;
 
-  public static createOrShow(extensionUri: vscode.Uri, projectRoot?: string): PlanDiffPanel {
+  private static formatTitle(target?: string): string {
+    return target ? `Testform Plan Diff (${path.basename(target)})` : 'Testform Plan Diff';
+  }
+
+  public static createOrShow(extensionUri: vscode.Uri, projectRoot?: string, target?: string): PlanDiffPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn || vscode.ViewColumn.One
       : vscode.ViewColumn.One;
 
+    const effectiveRoot = projectRoot || PlanDiffPanel.findProjectRoot();
+
     if (PlanDiffPanel.currentPanel) {
       PlanDiffPanel.currentPanel._panel.reveal(column);
-      if (projectRoot && projectRoot !== PlanDiffPanel.currentPanel._projectRoot) {
-        PlanDiffPanel.currentPanel._projectRoot = projectRoot;
-        PlanDiffPanel.currentPanel.runPlan();
-      }
+      PlanDiffPanel.currentPanel._projectRoot = effectiveRoot;
+      PlanDiffPanel.currentPanel._target = target;
+      PlanDiffPanel.currentPanel.updateTitle();
+      PlanDiffPanel.currentPanel.runPlan();
       return PlanDiffPanel.currentPanel;
     }
 
-    const effectiveRoot = projectRoot || PlanDiffPanel.findProjectRoot();
     const panel = vscode.window.createWebviewPanel(
       'testformPlanDiff',
-      'Testform Plan Diff',
+      PlanDiffPanel.formatTitle(target),
       column,
       {
         enableScripts: true,
@@ -72,7 +79,7 @@ export class PlanDiffPanel {
       }
     );
 
-    PlanDiffPanel.currentPanel = new PlanDiffPanel(panel, extensionUri, effectiveRoot);
+    PlanDiffPanel.currentPanel = new PlanDiffPanel(panel, extensionUri, effectiveRoot, target);
     return PlanDiffPanel.currentPanel;
   }
 
@@ -96,10 +103,11 @@ export class PlanDiffPanel {
     return ws && ws.length > 0 ? ws[0].uri.fsPath : process.cwd();
   }
 
-  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, projectRoot: string) {
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, projectRoot: string, target?: string) {
     this._panel = panel;
     this._extensionUri = extensionUri;
     this._projectRoot = projectRoot;
+    this._target = target;
 
     const iconPath = vscode.Uri.joinPath(this._extensionUri, 'assets', 'icon.svg');
     this._panel.iconPath = iconPath;
@@ -114,11 +122,16 @@ export class PlanDiffPanel {
           case 'refresh':
             this.runPlan();
             break;
+          case 'showAll':
+            this._target = undefined;
+            this.updateTitle();
+            this.runPlan();
+            break;
           case 'apply':
-            runTestformCommand('apply');
+            runTestformCommand(`apply${this.getTargetFlag()}`);
             break;
           case 'applyAutoApprove':
-            runTestformCommand('apply -auto-approve');
+            runTestformCommand(`apply -auto-approve${this.getTargetFlag()}`);
             break;
           case 'openFile':
             if (message.fsPath) {
@@ -151,16 +164,27 @@ export class PlanDiffPanel {
     );
   }
 
+  private updateTitle(): void {
+    this._panel.title = PlanDiffPanel.formatTitle(this._target);
+  }
+
+  private getTargetFlag(): string {
+    if (!this._target) return '';
+    return ` -target="${this._target.replace(/"/g, '\\"')}"`;
+  }
+
   public runPlan(): void {
+    const reqId = ++this._requestId;
     this._loading = true;
     this._error = null;
     this.updateWebview();
 
     const config = vscode.workspace.getConfiguration('testform');
     const executable = config.get<string>('executablePath') || 'testform';
-    const cmd = `"${executable}" plan -json`;
+    const cmd = `"${executable}" plan${this.getTargetFlag()} -json`;
 
     exec(cmd, { cwd: this._projectRoot, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (reqId !== this._requestId) return;
       this._loading = false;
       const combinedOutput = (stdout || '') + (stderr || '');
 
@@ -611,12 +635,14 @@ export class PlanDiffPanel {
     <div class="title-area">
       <div class="title">
         <span>⚡ Testform Plan Diff</span>
+        ${this._target ? `<span class="badge-scope" style="background: rgba(0,122,204,0.2); border: 1px solid rgba(0,122,204,0.4);">File Scope</span>` : ''}
       </div>
       <div class="subtitle">
-        Directory: <code>${escapeHtml(this._projectRoot)}</code>
+        Directory: <code>${escapeHtml(this._projectRoot)}</code>${this._target ? ` &bull; Target: <code>${escapeHtml(this._target)}</code>` : ''}
       </div>
     </div>
     <div class="actions-bar">
+      ${this._target ? `<button class="btn" onclick="sendCmd('showAll')" title="Calculate diff for the entire workspace">🌐 Full Plan</button>` : ''}
       <button class="btn" onclick="sendCmd('refresh')">↻ Re-Plan</button>
       <button class="btn btn-primary" onclick="sendCmd('apply')">▶ Apply Plan</button>
       <button class="btn" onclick="sendCmd('applyAutoApprove')">⚡ Apply (-auto-approve)</button>
@@ -629,7 +655,7 @@ export class PlanDiffPanel {
     <div class="state-container">
       <div class="spinner"></div>
       <div style="font-weight: 500;">Calculating execution plan...</div>
-      <div style="font-size: 0.85rem; opacity: 0.7;">Running <code>testform plan -json</code></div>
+      <div style="font-size: 0.85rem; opacity: 0.7;">Running <code>testform plan${escapeHtml(this.getTargetFlag())} -json</code></div>
     </div>
     `
       : this._error
@@ -646,9 +672,9 @@ export class PlanDiffPanel {
       ? `
     <div class="state-container">
       <div style="font-size: 2.2rem;">✨</div>
-      <div style="font-size: 1.2rem; font-weight: 600;">No changes. Infrastructure is up to date.</div>
+      <div style="font-size: 1.2rem; font-weight: 600;">No changes. ${this._target ? 'Target file is up to date.' : 'Infrastructure is up to date.'}</div>
       <div style="font-size: 0.85rem; opacity: 0.7; max-width: 500px;">
-        Your configuration matches the recorded state in <code>testform.state</code>. No actions are needed.
+        ${this._target ? `<code>${escapeHtml(this._target)}</code> matches` : 'Your configuration matches'} the recorded state in <code>testform.state</code>. No actions are needed.
       </div>
       <button class="btn" style="margin-top: 10px;" onclick="sendCmd('refresh')">↻ Refresh Plan</button>
     </div>
@@ -694,6 +720,7 @@ export class PlanDiffPanel {
           const actionSymbol = c.action === 'add' ? '+ ADD' : c.action === 'change' ? '~ CHANGE' : c.action === 'destroy' ? '- DESTROY' : '+/- REPLACE';
           const scenarioName = c.scenario?.name || c.address;
           const line = c.scenario?.line || 1;
+          const openPath = c.scenario?.uri && c.scenario.uri !== '(state)' ? c.scenario.uri : c.path;
           const tags = c.scenario?.tags || [];
           const steps = c.scenario?.steps || [];
 
@@ -708,8 +735,8 @@ export class PlanDiffPanel {
             </div>
             <div class="card-meta-right">
               ${
-                c.path
-                  ? `<a class="file-link" onclick="openFile('${escapeHtml(c.path)}', ${line})">📄 ${escapeHtml(c.path)}:${line}</a>`
+                c.path || openPath
+                  ? `<a class="file-link" onclick="openFile('${escapeHtml(openPath || c.path)}', ${line})">📄 ${escapeHtml(c.path || openPath)}:${line}</a>`
                   : ''
               }
             </div>

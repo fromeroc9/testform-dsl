@@ -1,6 +1,7 @@
 import { Hover, MarkupKind, Position } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
+import { findAllIdentityMatchesInLine, findScenarioByIdentityTag } from '../shared/identity';
 
 export function provideHover(
   document: TextDocument,
@@ -299,10 +300,14 @@ export function provideHover(
     }
   }
 
-  // 3.1 Hover on Identity Tag: @tc-X, @tr-X, @tp-X, @bg-X
-  const idTagMatch = lineText.match(/@(tc|tr|tp|bg)-[0-9]+/i);
-  if (idTagMatch) {
-    const tag = idTagMatch[0].toLowerCase();
+  // 3.1 Hover on Identity Tag (e.g. @tc-X, @tr-X, @tp-X, @bg-X, or custom resource.<scope>.identity)
+  const idMatches = findAllIdentityMatchesInLine(lineText, scanner.config.identities);
+  const idMatch =
+    idMatches.find(m => position.character >= m.index && position.character <= m.index + m.length) ||
+    idMatches[0];
+  if (idMatch) {
+    const tag = idMatch.rawTag.toLowerCase();
+    const normTag = idMatch.normalizedTag;
 
     // Check if within an enclosing Rule: in a testrun file
     let scenario = null;
@@ -322,7 +327,7 @@ export function provideHover(
       for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
         const normAddr = addr.replace(/\\/g, '/').toLowerCase();
         const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
-        if ((normAddr.includes(normBase) || normSource.includes(normBase)) && normAddr.endsWith(tag)) {
+        if ((normAddr.includes(normBase) || normSource.includes(normBase)) && (normAddr.endsWith(tag) || normAddr.endsWith(normTag))) {
           scenario = info;
           break;
         }
@@ -330,7 +335,7 @@ export function provideHover(
     }
 
     if (!scenario) {
-      scenario = scanner.config.scenarios.get(tag);
+      scenario = findScenarioByIdentityTag(scanner.config.scenarios, tag, scanner.config.identities, idMatch.scope) || null;
     }
 
     if (scenario) {
@@ -355,7 +360,7 @@ export function provideHover(
   }
 
   // 4. Hover on DSL Status: * set status = [status]
-  const statusMatch = lineText.match(/mark\s+status\s*=\s*([a-zA-Z]+)/i);
+  const statusMatch = lineText.match(/(?:mark|set)\s+status\s*=\s*([a-zA-Z]+)/i);
   if (statusMatch) {
     const status = statusMatch[1].toLowerCase();
     const STATUS_INFO: Record<string, { badge: string; desc: string; ledger: string }> = {
@@ -371,17 +376,27 @@ export function provideHover(
       },
       pending: {
         badge: '⏳ PENDING',
-        desc: 'Scenario planned but pending execution or under development.',
-        ledger: 'Maintains the resource in pending state without breaking development quality gates.'
+        desc: 'Scenario planned or step definition threw Cucumber PendingException / TODO.',
+        ledger: 'Maintains the resource in pending state.'
       },
       skipped: {
         badge: '⏭️ SKIPPED',
-        desc: 'Execution deliberately skipped (via tag filters or preconditions).',
-        ledger: 'Preserves the entry without altering the consolidated suite outcome.'
+        desc: 'Execution omitted (after a prior failure, failed hook, or filter).',
+        ledger: 'Records skipped execution status in testform.state.'
+      },
+      undefined: {
+        badge: '❓ UNDEFINED',
+        desc: 'Cucumber found no matching step definition (glue code) for at least one Gherkin step.',
+        ledger: 'Flags missing step automation in the testform.state execution ledger.'
+      },
+      ambiguous: {
+        badge: '🔀 AMBIGUOUS',
+        desc: 'Multiple Cucumber step definitions matched the same Gherkin step.',
+        ledger: 'Flags conflicting step regex/expressions in the testform.state execution ledger.'
       },
       blocked: {
         badge: '🚫 BLOCKED',
-        desc: 'Execution blocked due to failure of a declared dependency in @depends_on.',
+        desc: 'Execution blocked due to an environment blocker or dependency in @depends_on.',
         ledger: 'Prevents execution of this case until prerequisite is resolved.'
       },
       unexecuted: {
@@ -428,18 +443,18 @@ export function provideHover(
     };
   }
 
-  // 4.2 Hover on mark evidence = ...
-  const evidenceMatch = lineText.match(/set\s+evidence\s*=\s*(.+)$/i);
-  if (evidenceMatch) {
-    const evidenceVal = evidenceMatch[1].trim().replace(/^["']|["']$/g, '');
+  // 4.2 Hover on mark attach = ... or evidence = ...
+  const attachMatch = lineText.match(/set\s+(?:attach|evidence)\s*=\s*(.+)$/i);
+  if (attachMatch) {
+    const attachVal = attachMatch[1].trim().replace(/^["']|["']$/g, '');
     return {
       contents: {
         kind: MarkupKind.Markdown,
         value: [
-          `### 📎 Execution Evidence — Canonical Field`,
-          `**Reference:** \`${evidenceVal}\``,
+          `### 📎 Attachment / Evidence — Canonical Field`,
+          `**Reference:** \`${attachVal}\``,
           `---`,
-          `*Effect:* Attaches screenshot, log file, or external link to scenario execution in \`testform.state\`.*`
+          `*Effect:* Attaches screenshot, log file, document, or dataset into \`testform.state\` and reports.*`
         ].join('\n\n')
       }
     };

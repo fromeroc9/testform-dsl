@@ -9,6 +9,14 @@ import {
 } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
+import {
+  detectFeatureDocumentScope,
+  formatNextIdentityForDocument,
+  formatSampleIdentityTag,
+  matchTypingIdentityPrefix,
+  parseIdentityPattern,
+  ResourceScope
+} from '../shared/identity';
 
 export const BUILTIN_FUNCTIONS = [
   // Strings
@@ -43,44 +51,17 @@ export const BUILTIN_FUNCTIONS = [
   { name: 'file', desc: 'Reads the contents of a local file as a string.', snippet: 'file("${1:path/to/file}")' }
 ];
 
-function getNextIdForDocument(docText: string, prefix: 'tc' | 'tr' | 'tp' | 'bg', fallbackMax: number): string {
-  const regex = new RegExp(`@${prefix}-([0-9]+)\\b`, 'gi');
-  let maxNum = 0;
-  let padLength = 0;
-
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(docText)) !== null) {
-    const digits = match[1];
-    const num = parseInt(digits, 10);
-    if (!isNaN(num) && num > maxNum) {
-      maxNum = num;
-      padLength = digits.length;
-    }
-  }
-
-  if (maxNum === 0) {
-    if (prefix === 'tc') {
-      return 'tc-01';
-    }
-    if (prefix === 'bg') {
-      return 'bg-01';
-    }
-    return `${prefix}-${fallbackMax + 1}`;
-  }
-
-  const nextNum = maxNum + 1;
-  const nextStr = padLength > 1
-    ? String(nextNum).padStart(padLength, '0')
-    : String(nextNum);
-
-  return `${prefix}-${nextStr}`;
-}
-
 export function provideCompletions(
   document: TextDocument,
   position: Position,
   scanner: WorkspaceScanner
 ): CompletionItem[] {
+  const sampleTcBody = formatSampleIdentityTag(scanner.config.identities.testcase, 1, true, false);
+  const sampleTcTag = `@${sampleTcBody}`;
+  const sampleBgBody = formatSampleIdentityTag(scanner.config.identities.bug, 1, true, false);
+  const nextTrBody = formatNextIdentityForDocument('', scanner.config.identities.testrun, 'testrun', scanner.config.maxIdentityByScope.testrun, false);
+  const nextTpBody = formatNextIdentityForDocument('', scanner.config.identities.testplan, 'testplan', scanner.config.maxIdentityByScope.testplan, false);
+
   // 0. Starter scaffolding snippets ONLY when the document is empty ("en la nada")
   const docFullText = document.getText().trim();
   if (docFullText === '') {
@@ -93,7 +74,7 @@ export function provideCompletions(
           value: '### 🧪 Starter Test Case Feature\n\nCreate a new declarative test case manifest with standard tags and scenarios.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: '@testcase\nFeature: ${1:Feature Name}\n\n  @${2:tc-01}\n  Scenario: ${3:Scenario Title}\n    Given ${4:precondition}\n    When ${5:action}\n    Then ${6:expected outcome}\n'
+        insertText: `@testcase\nFeature: \${1:Feature Name}\n\n  @\${2:${sampleTcBody}}\n  Scenario: \${3:Scenario Title}\n    Given \${4:precondition}\n    When \${5:action}\n    Then \${6:expected outcome}\n`
       },
       {
         label: 'tf-testrun',
@@ -103,7 +84,7 @@ export function provideCompletions(
           value: '### 🚀 Starter Test Run Suite\n\nCreate a new TestRun suite linking testcase feature rules.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: '@testrun @${1:tr-1}\nFeature: ${2:Execution Suite}\n\n  Rule: ${3:path/to.case.feature}\n\n    Scenario: ${4:@tc-01}\n      * mark status = ${5|passed,failed,pending,skipped,blocked|}\n'
+        insertText: `@testrun @\${1:${nextTrBody}}\nFeature: \${2:Execution Suite}\n\n  Rule: \${3:path/to.case.feature}\n\n    Scenario: \${4:${sampleTcTag}}\n      * set status = \${5|passed,failed,pending,skipped,undefined,ambiguous,blocked|}\n`
       },
       {
         label: 'tf-testplan',
@@ -113,7 +94,7 @@ export function provideCompletions(
           value: '### 📋 Starter Test Plan\n\nCreate a new Master TestPlan linking testrun rules.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: '@testplan @${1:tp-1}\nFeature: ${2:Master Test Plan}\n\n  Rule: ${3:path/to.run.feature}\n'
+        insertText: `@testplan @\${1:${nextTpBody}}\nFeature: \${2:Master Test Plan}\n\n  Rule: \${3:path/to.run.feature}\n`
       },
       {
         label: 'tf-bug',
@@ -123,7 +104,7 @@ export function provideCompletions(
           value: '### 🐛 Starter Defect / Bug Feature\n\nCreate a new declarative bug report targeting an existing testcase scenario.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: '@bug @${1:bg-01}\nFeature: ${2:Bug Title}\n\n  Scenario: ${3:Defect Description}\n    * set target = ${4:path/to.case.feature.@tc-01}\n    * set status = ${5|failed,passed,pending|}\n    * field severity = ${6|critical,high,medium,low|}\n    * field priority = ${7|urgent,high,normal,low|}\n'
+        insertText: `@bug @\${1:${sampleBgBody}}\nFeature: \${2:Bug Title}\n\n  Scenario: \${3:Defect Description}\n    * set target = \${4:path/to.case.feature.${sampleTcTag}}\n    * set status = \${5|failed,passed,pending|}\n    * field severity = \${6|critical,high,medium,low|}\n    * field priority = \${7|urgent,high,normal,low|}\n`
       }
     ];
   }
@@ -263,45 +244,14 @@ export function provideCompletions(
     return items;
   }
 
-function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner): 'testcase' | 'testrun' | 'testplan' | 'bug' | null {
-  const docText = document.getText();
-  // 1. Explicit tags in document (@testrun, @testplan, etc.)
-  if (/@testrun\b/i.test(docText)) return 'testrun';
-  if (/@testplan\b/i.test(docText)) return 'testplan';
-  if (/@testcase\b/i.test(docText)) return 'testcase';
-  if (/@bug\b/i.test(docText)) return 'bug';
-
-  // 2. Feature identity tags (@tr-, @tp-, @tc-, @bg-)
-  if (/@tr-\d+\b/i.test(docText)) return 'testrun';
-  if (/@tp-\d+\b/i.test(docText)) return 'testplan';
-  if (/@tc-\d+\b/i.test(docText)) return 'testcase';
-  if (/@bg-\d+\b/i.test(docText)) return 'bug';
-
-  // 3. Registered featureFiles in workspace scanner
-  const uriPath = document.uri.replace(/\\/g, '/').toLowerCase();
-  for (const [_, feat] of scanner.featureFiles.entries()) {
-    const featPath = feat.fullPath.replace(/\\/g, '/').toLowerCase();
-    if (uriPath === featPath || uriPath.endsWith(feat.relPath.toLowerCase())) {
-      return feat.scope;
-    }
-  }
-
-  // 4. Configured scope patterns in scanner.config.scopes
-  const scopes = scanner.config.scopes;
-  if (scopes) {
-    if (scopes.testrun && uriPath.endsWith(scopes.testrun.replace(/^\*/, '').toLowerCase())) return 'testrun';
-    if (scopes.testplan && uriPath.endsWith(scopes.testplan.replace(/^\*/, '').toLowerCase())) return 'testplan';
-    if (scopes.bug && uriPath.endsWith(scopes.bug.replace(/^\*/, '').toLowerCase())) return 'bug';
-    if (scopes.testcase && uriPath.endsWith(scopes.testcase.replace(/^\*/, '').toLowerCase())) return 'testcase';
-  }
-
-  // 5. Default filename extensions
-  if (uriPath.endsWith('.run.feature')) return 'testrun';
-  if (uriPath.endsWith('.plan.feature')) return 'testplan';
-  if (uriPath.endsWith('.bug.feature')) return 'bug';
-  if (uriPath.endsWith('.case.feature')) return 'testcase';
-
-  return null;
+function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner): ResourceScope | null {
+  return detectFeatureDocumentScope(
+    document.getText(),
+    document.uri,
+    scanner.featureFiles.values(),
+    scanner.config.identities,
+    scanner.config.scopes
+  );
 }
 function getGherkinContext(document: TextDocument, position: Position): {
   section: 'header' | 'background' | 'rule' | 'scenario';
@@ -765,6 +715,25 @@ function inferContextValues(docUri: string): { project: string; module: string }
         insertText: 'field ${1:name} = ${2:value}'
       });
 
+      // 4. Attach field snippet for Background (allowed in testcase, testrun, testplan; PROHIBITED in bug!)
+      if (docScope !== 'bug') {
+        items.push({
+          label: 'set attach = ...',
+          kind: CompletionItemKind.Snippet,
+          detail: docScope === 'testplan'
+            ? 'Testform DSL: Attach test plan document or specification'
+            : 'Testform DSL: Attach file, mockup or document at feature/suite level',
+          sortText: '03_set_attach',
+          insertTextFormat: InsertTextFormat.Snippet,
+          filterText: 'set attach attach evidence',
+          textEdit: TextEdit.replace(
+            { start: { line: position.line, character: prefixCol }, end: position },
+            'set attach = "${1:attachments/path}"'
+          ),
+          insertText: 'set attach = "${1:attachments/path}"'
+        });
+      }
+
       // 4. Individual fields with priority sorting and (Required) badge
       for (const info of applicableFields) {
         const requiredText = info.required ? ' (Required)' : '';
@@ -917,10 +886,11 @@ function inferContextValues(docUri: string): { project: string; module: string }
 
     // Inside Scenario:
     // Suggest marks according to resource scope:
-    // - In testrun: mark status, mark trace, mark evidence (NO mark target, target is scenario)
-    // - In bug: mark target, mark status, mark trace, mark evidence
-    const isSetTrigger = rest.startsWith('s') || ['status', 'target', 'trace', 'evidence'].some(k => rest.startsWith(k));
-    if (docScope === 'testrun' || (docScope === 'bug' && isSetTrigger) || isSetTrigger) {
+    // - In testrun: mark status, mark trace, mark attach/evidence (NO mark target, target is scenario)
+    // - In bug: mark target, mark status, mark trace, mark attach/evidence
+    // - In testcase: mark attach
+    const isSetTrigger = rest.startsWith('s') || ['status', 'target', 'trace', 'evidence', 'attach', 'duration'].some(k => rest.startsWith(k));
+    if (docScope === 'testrun' || (docScope === 'bug' && isSetTrigger) || (docScope === 'testcase' && isSetTrigger) || isSetTrigger) {
       if (docScope === 'testrun') {
         items.push(
           {
@@ -931,9 +901,21 @@ function inferContextValues(docUri: string): { project: string; module: string }
             filterText: 'set status status',
             textEdit: TextEdit.replace(
               { start: { line: position.line, character: prefixCol }, end: position },
-              'set status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+              'set status = ${1|passed,failed,pending,skipped,undefined,ambiguous,blocked|}'
             ),
-            insertText: 'set status = ${1|passed,failed,pending,skipped,blocked,unexecuted|}'
+            insertText: 'set status = ${1|passed,failed,pending,skipped,undefined,ambiguous,blocked|}'
+          },
+          {
+            label: 'set duration = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Record scenario execution duration (e.g. 1.25s, 250ms)',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'set duration duration',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'set duration = ${1:1.25s}'
+            ),
+            insertText: 'set duration = ${1:1.25s}'
           },
           {
             label: 'set trace = ...',
@@ -946,6 +928,18 @@ function inferContextValues(docUri: string): { project: string; module: string }
               'set trace = "${1:trace description or error stack}"'
             ),
             insertText: 'set trace = "${1:trace description or error stack}"'
+          },
+          {
+            label: 'set attach = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Attach execution artifact, log, or video',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'set attach attach',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'set attach = "${1:attachments/runs/file}"'
+            ),
+            insertText: 'set attach = "${1:attachments/runs/file}"'
           },
           {
             label: 'set evidence = ...',
@@ -962,6 +956,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
         );
         return items;
       } else if (docScope === 'bug') {
+        const sampleTcTag = formatSampleIdentityTag(scanner.config.identities.testcase, 1, true, true);
         items.push(
           {
             label: 'set target = ...',
@@ -971,9 +966,9 @@ function inferContextValues(docUri: string): { project: string; module: string }
             filterText: 'set target target',
             textEdit: TextEdit.replace(
               { start: { line: position.line, character: prefixCol }, end: position },
-              'set target = ${1:testcase/path.case.feature.@tc-01}'
+              `set target = \${1:testcase/path.case.feature.${sampleTcTag}}`
             ),
-            insertText: 'set target = ${1:testcase/path.case.feature.@tc-01}'
+            insertText: `set target = \${1:testcase/path.case.feature.${sampleTcTag}}`
           },
           {
             label: 'set status = ...',
@@ -1000,6 +995,18 @@ function inferContextValues(docUri: string): { project: string; module: string }
             insertText: 'set trace = "${1:trace description or error stack}"'
           },
           {
+            label: 'set attach = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Attach defect screenshot, payload, or file',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'set attach attach',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'set attach = "${1:attachments/bugs/screenshot.png}"'
+            ),
+            insertText: 'set attach = "${1:attachments/bugs/screenshot.png}"'
+          },
+          {
             label: 'set evidence = ...',
             kind: CompletionItemKind.Snippet,
             detail: 'Testform DSL: Attach execution evidence (screenshot, file, URL)',
@@ -1013,12 +1020,26 @@ function inferContextValues(docUri: string): { project: string; module: string }
           }
         );
         return items;
+      } else if (docScope === 'testcase') {
+        items.push({
+          label: 'set attach = ...',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Testform DSL: Attach mock, dataset, or diagram to testcase',
+          insertTextFormat: InsertTextFormat.Snippet,
+          filterText: 'set attach attach',
+          textEdit: TextEdit.replace(
+            { start: { line: position.line, character: prefixCol }, end: position },
+            'set attach = "${1:attachments/cases/file}"'
+          ),
+          insertText: 'set attach = "${1:attachments/cases/file}"'
+        });
+        return items;
       }
     }
   }
 
-  if (/(?:set\s+)?status\s*=\s*[a-zA-Z]*$/i.test(lineText)) {
-    const statuses = ['passed', 'failed', 'pending', 'skipped', 'blocked', 'unexecuted'];
+  if (/(?:set\s+|mark\s+)?status\s*=\s*[a-zA-Z]*$/i.test(lineText)) {
+    const statuses = ['passed', 'failed', 'pending', 'skipped', 'undefined', 'ambiguous', 'blocked'];
     return statuses.map(s => ({
       label: s,
       kind: CompletionItemKind.EnumMember,
@@ -1272,11 +1293,17 @@ function inferContextValues(docUri: string): { project: string; module: string }
     return items;
   }
 
-  // 8. Identity Tag next-ID completion (@tc-, @tr-, @tp-, @bg-)
-  const tcPrefixMatch = lineText.match(/@(tc|tr|tp|bg)-?([0-9]*)$/i);
-  if (tcPrefixMatch) {
-    const prefix = tcPrefixMatch[1].toLowerCase() as 'tc' | 'tr' | 'tp' | 'bg';
-    const nextTag = getNextIdForDocument(document.getText(), prefix, scanner.config.maxIdentityIds[prefix]);
+  // 8. Identity Tag next-ID completion (configured resource.<scope>.identity or @tc-, @tr-, @tp-, @bg-)
+  const activeScopeForLine = detectDocumentScope(document, scanner) || 'testcase';
+  const typedIdentityMatch = matchTypingIdentityPrefix(lineText, scanner.config.identities, activeScopeForLine);
+  if (typedIdentityMatch) {
+    const nextTag = formatNextIdentityForDocument(
+      document.getText(),
+      typedIdentityMatch.pattern,
+      typedIdentityMatch.scope,
+      scanner.config.maxIdentityByScope[typedIdentityMatch.scope],
+      false
+    );
 
     items.push({
       label: nextTag,
@@ -1285,14 +1312,18 @@ function inferContextValues(docUri: string): { project: string; module: string }
       insertText: nextTag
     });
 
-    // Also list existing scenario tags
+    // Also list existing scenario tags matching this configured prefix
+    const lowerPrefixWithAt = `@${typedIdentityMatch.prefix.toLowerCase()}`;
+    const seenTags = new Set<string>([nextTag.toLowerCase()]);
     for (const [tag, info] of scanner.config.scenarios.entries()) {
-      if (tag.toLowerCase().startsWith(`@${prefix}-`)) {
+      const clean = tag.replace(/^@/, '');
+      if (tag.toLowerCase().startsWith(lowerPrefixWithAt) && !seenTags.has(clean.toLowerCase())) {
+        seenTags.add(clean.toLowerCase());
         items.push({
-          label: tag.replace(/^@/, ''),
+          label: clean,
           kind: CompletionItemKind.Reference,
           detail: info.title,
-          insertText: tag.replace(/^@/, '')
+          insertText: clean
         });
       }
     }
@@ -1302,8 +1333,8 @@ function inferContextValues(docUri: string): { project: string; module: string }
   // 8. General Tags completion: @
   if (/@([a-zA-Z0-9_-]*)$/.test(lineText)) {
     const docText = document.getText();
-    const docUri = document.uri.toLowerCase();
-    const isTestrun = docUri.endsWith('.run.feature') || /@testrun\b/i.test(docText);
+    const docScope = detectDocumentScope(document, scanner);
+    const isTestrun = docScope === 'testrun';
 
     // If inside a testrun Rule, suggest testcases of that specific Rule
     if (isTestrun) {
@@ -1320,12 +1351,17 @@ function inferContextValues(docUri: string): { project: string; module: string }
       if (enclosingRule) {
         const normRule = enclosingRule.replace(/\\/g, '/').toLowerCase();
         const normBase = normRule.split('/').pop() || normRule;
+        const seenRuleScenarios = new Set<string>();
 
         for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
           const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
           const normAddr = addr.replace(/\\/g, '/').toLowerCase();
 
           if (normSource.endsWith(normRule) || normSource.endsWith(normBase) || normAddr.includes(normBase)) {
+            const dedupKey = `${info.sourceFile}:${info.line}:${info.tag}`;
+            if (seenRuleScenarios.has(dedupKey)) continue;
+            seenRuleScenarios.add(dedupKey);
+
             const cleanTag = info.tag.replace(/^@/, '');
             items.push({
               label: cleanTag,
@@ -1405,17 +1441,16 @@ function inferContextValues(docUri: string): { project: string; module: string }
       }
     }
 
-    // Next ID computed for THIS document
-    let activePrefix: 'tc' | 'tr' | 'tp' | 'bg' = 'tc';
-    if (docUri.includes('.run.') || docText.includes('@testrun')) {
-      activePrefix = 'tr';
-    } else if (docUri.includes('.plan.') || docText.includes('@testplan')) {
-      activePrefix = 'tp';
-    } else if (docUri.includes('.bug.') || docText.includes('@bug')) {
-      activePrefix = 'bg';
-    }
-
-    const nextIdTag = getNextIdForDocument(docText, activePrefix, scanner.config.maxIdentityIds[activePrefix]);
+    // Next ID computed for THIS document using configured resource.<scope>.identity
+    const activeScope: ResourceScope = docScope || 'testcase';
+    const activePattern = scanner.config.identities[activeScope];
+    const nextIdTag = formatNextIdentityForDocument(
+      docText,
+      activePattern,
+      activeScope,
+      scanner.config.maxIdentityByScope[activeScope],
+      false
+    );
     items.push({
       label: nextIdTag,
       kind: CompletionItemKind.Value,

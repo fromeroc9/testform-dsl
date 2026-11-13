@@ -2,6 +2,11 @@ import * as path from 'path';
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
+import {
+  buildIdentityRegexForPattern,
+  findAllIdentityMatchesInLine,
+  parseIdentityPattern
+} from '../shared/identity';
 
 export function validateTextDocument(
   textDocument: TextDocument,
@@ -154,20 +159,20 @@ export function validateTextDocument(
       });
     }
 
-    const idMatches = [...lineWithoutDepends.matchAll(/@(tc|tr|tp|bg)-([0-9]+)/gi)];
+    const idMatches = findAllIdentityMatchesInLine(lineWithoutDepends, scanner.config.identities);
     for (const idMatch of idMatches) {
-      const tag = idMatch[0].toLowerCase();
+      const tag = idMatch.normalizedTag;
       if (seenTagsInScope.has(tag)) {
         const firstLine = seenTagsInScope.get(tag)!;
-        const tagCol = line.indexOf(idMatch[0]);
+        const tagCol = idMatch.index;
         const scopeDesc = currentRuleName ? `in Rule '${currentRuleName}'` : `in this file`;
         diagnostics.push({
           severity: DiagnosticSeverity.Error,
           range: {
             start: { line: i, character: tagCol },
-            end: { line: i, character: tagCol + idMatch[0].length }
+            end: { line: i, character: tagCol + idMatch.length }
           },
-          message: `Duplicate scenario ID ${scopeDesc}: '${idMatch[0]}' was already declared on line ${firstLine + 1}.`,
+          message: `Duplicate scenario ID ${scopeDesc}: '${idMatch.rawTag}' was already declared on line ${firstLine + 1}.`,
           source: 'Testform'
         });
       } else {
@@ -320,15 +325,18 @@ export function validateTextDocument(
 
   const checkBugIntegrity = (line: number, hasTarget: boolean, hasTrace: boolean, tags: Set<string>) => {
     if (resourceType !== 'bug') return;
-    const hasTargetTag = Array.from(tags).some(t => t.startsWith('@tc-') || t.startsWith('@tr-'));
+    const tcTagRegex = buildIdentityRegexForPattern(scanner.config.identities.testcase, { flags: 'i', numericOnly: false });
+    const trTagRegex = buildIdentityRegexForPattern(scanner.config.identities.testrun, { flags: 'i', numericOnly: false });
+    const hasTargetTag = Array.from(tags).some(t => tcTagRegex.test(t) || trTagRegex.test(t));
     if (!hasTarget && !hasTrace && !hasTargetTag) {
+      const tcSample = `@${parseIdentityPattern(scanner.config.identities.testcase).cleanPattern}`;
       diagnostics.push({
         severity: DiagnosticSeverity.Warning,
         range: {
           start: { line, character: 0 },
           end: { line, character: lines[line]?.length || 10 }
         },
-        message: `Integrity Warning (bug-target-integrity): Bug scenario lacks origin traceability. Add a step '* set target = <testcase.identity>' or a tag '@tc-*'.`,
+        message: `Integrity Warning (bug-target-integrity): Bug scenario lacks origin traceability. Add a step '* set target = <testcase.identity>' or a tag '${tcSample}'.`,
         source: 'Testform'
       });
     }
@@ -377,6 +385,36 @@ export function validateTextDocument(
     if (currentScenarioLine >= 0) {
       if (/\btarget\s*=/i.test(trimmed)) currentScenarioHasTarget = true;
       if (/\btrace\s*=/i.test(trimmed)) currentScenarioHasTrace = true;
+    }
+
+    // Attachment validation by resource scope
+    const attachMatch = trimmed.match(/(?:^|\s+)\*?\s*set\s+(?:attach|evidence)\s*=\s*(.+)$/i);
+    if (attachMatch) {
+      if (currentScenarioLine < 0 && backgroundLineIndex >= 0) {
+        if (resourceType === 'bug') {
+          diagnostics.push({
+            severity: DiagnosticSeverity.Error,
+            range: {
+              start: { line: i, character: rawLine.indexOf(trimmed) >= 0 ? rawLine.indexOf(trimmed) : 0 },
+              end: { line: i, character: rawLine.length }
+            },
+            message: `Attachments are prohibited in Background for bug specifications. Defect attachments must be declared at Scenario level.`,
+            source: 'Testform'
+          });
+        }
+      } else if (currentScenarioLine >= 0) {
+        if (resourceType === 'testplan') {
+          diagnostics.push({
+            severity: DiagnosticSeverity.Warning,
+            range: {
+              start: { line: i, character: rawLine.indexOf(trimmed) >= 0 ? rawLine.indexOf(trimmed) : 0 },
+              end: { line: i, character: rawLine.length }
+            },
+            message: `Test plan attachments must be declared in Background (plan level).`,
+            source: 'Testform'
+          });
+        }
+      }
     }
 
     const fieldMatch = trimmed.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
@@ -445,38 +483,53 @@ export function validateTextDocument(
   }
 
   
-  // 7. Check for homonymous basename collision without @ns
-  const normDocUri = textDocument.uri.toLowerCase();
-  let currentFeat: { relPath: string; fullPath: string; scope: string; title: string; namespace?: string } | undefined;
-  for (const feat of scanner.featureFiles.values()) {
-    const featPath = path.resolve(feat.fullPath).toLowerCase().replace(/\\/g, '/');
-    if (normDocUri.includes(featPath) || normDocUri.endsWith(feat.relPath.toLowerCase())) {
-      currentFeat = feat;
-      break;
-    }
-  }
+  // 7. Check for homonymous basename collision without @ns (or duplicate @ns on shared basename)
+  const currentFeat = scanner.findFeatureByUri(textDocument.uri);
 
-  if (currentFeat && !currentFeat.namespace) {
+  if (currentFeat) {
     const currentBase = path.basename(currentFeat.relPath).toLowerCase();
-    const colliding = Array.from(scanner.featureFiles.values()).filter(other =>
-      other.scope === currentFeat!.scope &&
-      path.resolve(other.fullPath) !== path.resolve(currentFeat!.fullPath) &&
-      path.basename(other.relPath).toLowerCase() === currentBase &&
-      !other.namespace
-    );
+    const targetLine = featureLineIndex >= 0 ? featureLineIndex : 0;
 
-    if (colliding.length > 0) {
-      const targetLine = featureLineIndex >= 0 ? featureLineIndex : 0;
-      diagnostics.push({
-        severity: DiagnosticSeverity.Warning,
-        code: 'testform-collision-namespace',
-        range: {
-          start: { line: targetLine, character: 0 },
-          end: { line: targetLine, character: lines[targetLine]?.length || 10 }
-        },
-        message: `Collision Warning: Basename '${path.basename(currentFeat.relPath)}' is shared with '${colliding[0].relPath}' without @ns. Add '@ns(...)' to disambiguate its logical address.`,
-        source: 'Testform'
-      });
+    if (!currentFeat.namespace) {
+      const colliding = Array.from(scanner.featureFiles.values()).filter(other =>
+        other.scope === currentFeat.scope &&
+        path.resolve(other.fullPath) !== path.resolve(currentFeat.fullPath) &&
+        path.basename(other.relPath).toLowerCase() === currentBase &&
+        !other.namespace
+      );
+
+      if (colliding.length > 0) {
+        diagnostics.push({
+          severity: DiagnosticSeverity.Warning,
+          code: 'testform-collision-namespace',
+          range: {
+            start: { line: targetLine, character: 0 },
+            end: { line: targetLine, character: lines[targetLine]?.length || 10 }
+          },
+          message: `Collision Warning: Basename '${path.basename(currentFeat.relPath)}' is shared with '${colliding[0].relPath}' without @ns. Add '@ns(...)' to disambiguate its logical address.`,
+          source: 'Testform'
+        });
+      }
+    } else {
+      const duplicateNs = Array.from(scanner.featureFiles.values()).filter(other =>
+        other.scope === currentFeat.scope &&
+        path.resolve(other.fullPath) !== path.resolve(currentFeat.fullPath) &&
+        path.basename(other.relPath).toLowerCase() === currentBase &&
+        other.namespace?.toLowerCase() === currentFeat.namespace!.toLowerCase()
+      );
+
+      if (duplicateNs.length > 0) {
+        diagnostics.push({
+          severity: DiagnosticSeverity.Warning,
+          code: 'testform-collision-namespace',
+          range: {
+            start: { line: targetLine, character: 0 },
+            end: { line: targetLine, character: lines[targetLine]?.length || 10 }
+          },
+          message: `Collision Warning: Namespace '@ns(${currentFeat.namespace})' on basename '${path.basename(currentFeat.relPath)}' duplicates '${duplicateNs[0].relPath}'. Use a distinct '@ns(...)' value.`,
+          source: 'Testform'
+        });
+      }
     }
   }
 

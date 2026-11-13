@@ -131,16 +131,28 @@ export async function promptCustomScenarioStatus(): Promise<void> {
   const configuredStatuses: string[] = config.get<string[]>('customStatuses', [
     'passed',
     'failed',
-    'blocked',
+    'pending',
     'skipped',
-    'pending'
+    'undefined',
+    'ambiguous',
+    'blocked'
   ]);
 
+  const STATUS_ICONS: Record<string, string> = {
+    passed: '✔',
+    failed: '✖',
+    pending: '⏳',
+    skipped: '⏭',
+    undefined: '❓',
+    ambiguous: '🔀',
+    blocked: '🚫'
+  };
+
   const items: vscode.QuickPickItem[] = configuredStatuses.map(s => {
-    const icon = s === 'passed' ? '✔' : s === 'failed' ? '✖' : s === 'blocked' ? '🚫' : s === 'skipped' ? '⏭' : '⏳';
+    const icon = STATUS_ICONS[s.toLowerCase()] || '🏷️';
     return {
       label: `${icon} ${s}`,
-      description: `Mark status = ${s}`
+      description: `set status = ${s}`
     };
   });
 

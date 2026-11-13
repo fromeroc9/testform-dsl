@@ -2,7 +2,7 @@
   "name": "testform-dsl",
   "displayName": "Testform DSL",
   "description": "Declarative Test-as-Code orchestration for Git: Gherkin IntelliSense, variables autoload, native Test Explorer, state management, and quality gates.",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "publisher": "fromeroc9",
   "license": "GPL-3.0-or-later",
   "author": "Flavio Romero <flavio.arc9@gmail.com>",
@@ -438,6 +438,18 @@
         "icon": "$(clock)"
       },
       {
+        "command": "testform.markUndefined",
+        "title": "Mark Scenario as Undefined (QA Fast Pass)",
+        "category": "Testform",
+        "icon": "$(question)"
+      },
+      {
+        "command": "testform.markAmbiguous",
+        "title": "Mark Scenario as Ambiguous (QA Fast Pass)",
+        "category": "Testform",
+        "icon": "$(warning)"
+      },
+      {
         "command": "testform.markCustom",
         "title": "Mark Scenario with Status... (QA Fast Pass)",
         "category": "Testform",
@@ -456,6 +468,12 @@
       {
         "command": "testform.showPlanDiff",
         "title": "Show Visual Plan Diff",
+        "category": "Testform",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "testform.showPlanDiffCurrent",
+        "title": "Show Visual Plan Diff Current Feature",
         "category": "Testform",
         "icon": "$(diff)"
       },
@@ -565,7 +583,7 @@
       ],
       "editor/title": [
         {
-          "command": "testform.showPlanDiff",
+          "command": "testform.showPlanDiffCurrent",
           "when": "resourceExtname == .feature",
           "group": "navigation@0.5"
         },
@@ -809,9 +827,11 @@
           "default": [
             "passed",
             "failed",
-            "blocked",
+            "pending",
             "skipped",
-            "pending"
+            "undefined",
+            "ambiguous",
+            "blocked"
           ],
           "description": "Allowed or pre-configured statuses displayed in the QA Fast Pass status picker."
         }

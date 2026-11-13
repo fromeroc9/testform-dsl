@@ -34,8 +34,27 @@ import { TestformTestController } from './testing/test-controller';
 import { TestformFileDecorationProvider } from './views/decorations';
 import { TestformWorkspaceManager } from './workspace-manager';
 import { markCurrentScenarioStatus, promptCustomScenarioStatus } from './qa-fast-pass';
+import { AttachmentPasteEditProvider } from './attach-paste-provider';
 
 let client: LanguageClient;
+
+function resolveFeatureTarget(
+  uri?: vscode.Uri,
+  fallbackToActiveEditor: boolean = true
+): { rootPath: string; relPath: string } | undefined {
+  const explicitUri =
+    uri && typeof uri === 'object' && typeof (uri as vscode.Uri).fsPath === 'string'
+      ? (uri as vscode.Uri)
+      : undefined;
+  const targetUri =
+    explicitUri || (fallbackToActiveEditor ? vscode.window.activeTextEditor?.document.uri : undefined);
+  if (!targetUri || targetUri.scheme !== 'file' || !targetUri.fsPath.endsWith('.feature')) {
+    return undefined;
+  }
+  const rootPath = findProjectRoot(targetUri.fsPath);
+  const relPath = path.relative(rootPath, targetUri.fsPath).replace(/\\/g, '/');
+  return { rootPath, relPath };
+}
 
 export function activate(context: vscode.ExtensionContext) {
   // 1. Language Server Setup
@@ -718,9 +737,24 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('testform.markBlocked', () => markCurrentScenarioStatus('blocked')),
     vscode.commands.registerCommand('testform.markSkipped', () => markCurrentScenarioStatus('skipped')),
     vscode.commands.registerCommand('testform.markPending', () => markCurrentScenarioStatus('pending')),
+    vscode.commands.registerCommand('testform.markUndefined', () => markCurrentScenarioStatus('undefined')),
+    vscode.commands.registerCommand('testform.markAmbiguous', () => markCurrentScenarioStatus('ambiguous')),
     vscode.commands.registerCommand('testform.markCustom', () => promptCustomScenarioStatus()),
-    vscode.commands.registerCommand('testform.showPlanDiff', () => {
-      PlanDiffPanel.createOrShow(context.extensionUri);
+    vscode.commands.registerCommand('testform.showPlanDiff', (uri?: vscode.Uri) => {
+      const target = resolveFeatureTarget(uri, false);
+      if (target) {
+        PlanDiffPanel.createOrShow(context.extensionUri, target.rootPath, target.relPath);
+      } else {
+        PlanDiffPanel.createOrShow(context.extensionUri);
+      }
+    }),
+    vscode.commands.registerCommand('testform.showPlanDiffCurrent', (uri?: vscode.Uri) => {
+      const target = resolveFeatureTarget(uri, true);
+      if (target) {
+        PlanDiffPanel.createOrShow(context.extensionUri, target.rootPath, target.relPath);
+      } else {
+        PlanDiffPanel.createOrShow(context.extensionUri);
+      }
     }),
     vscode.commands.registerCommand('testform.state.timeMachine', () => {
       vscode.commands.executeCommand('testform.views.history.focus');
@@ -744,6 +778,18 @@ export function activate(context: vscode.ExtensionContext) {
         timeMachineProvider.restoreCommit(item);
       }
     })
+,
+    vscode.languages.registerDocumentPasteEditProvider(
+      [
+        { scheme: 'file', language: 'gherkin' },
+        { scheme: 'file', pattern: '**/*.feature' }
+      ],
+      new AttachmentPasteEditProvider(),
+      {
+        providedPasteEditKinds: [AttachmentPasteEditProvider.kind],
+        pasteMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/*']
+      }
+    )
   );
 }
 

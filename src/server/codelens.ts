@@ -5,6 +5,7 @@ import {
 } from 'vscode-languageserver';
 import * as fs from 'fs';
 import { WorkspaceScanner } from './workspace-scanner';
+import { buildScenarioTagHeaderRegex, detectFeatureDocumentScope, ResourceScope } from '../shared/identity';
 
 export interface CodeLensSettings {
   enable: boolean;
@@ -14,30 +15,16 @@ export interface CodeLensSettings {
   bug: boolean;
 }
 
-function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner): 'testcase' | 'testrun' | 'testplan' | 'bug' {
-  const docText = document.getText();
-  if (/@testrun\b/i.test(docText)) return 'testrun';
-  if (/@testplan\b/i.test(docText)) return 'testplan';
-  if (/@testcase\b/i.test(docText)) return 'testcase';
-  if (/@bug\b/i.test(docText)) return 'bug';
-
-  if (/@tr-\d+\b/i.test(docText)) return 'testrun';
-  if (/@tp-\d+\b/i.test(docText)) return 'testplan';
-  if (/@tc-\d+\b/i.test(docText)) return 'testcase';
-  if (/@bg-\d+\b/i.test(docText)) return 'bug';
-
-  const uriPath = document.uri.replace(/\\/g, '/').toLowerCase();
-  for (const [_, feat] of scanner.featureFiles.entries()) {
-    const featPath = feat.fullPath.replace(/\\/g, '/').toLowerCase();
-    if (uriPath === featPath || uriPath.endsWith(feat.relPath.toLowerCase())) {
-      return feat.scope;
-    }
-  }
-
-  if (uriPath.endsWith('.run.feature')) return 'testrun';
-  if (uriPath.endsWith('.plan.feature')) return 'testplan';
-  if (uriPath.endsWith('.bug.feature')) return 'bug';
-  return 'testcase';
+function detectDocumentScope(document: TextDocument, scanner: WorkspaceScanner): ResourceScope {
+  return (
+    detectFeatureDocumentScope(
+      document.getText(),
+      document.uri,
+      scanner.featureFiles.values(),
+      scanner.config.identities,
+      scanner.config.scopes
+    ) ?? 'testcase'
+  );
 }
 
 export function provideCodeLenses(
@@ -139,7 +126,7 @@ export function provideCodeLenses(
       }
     }
 
-    const statusMatch = trimmed.match(/(?:^|\s+)mark\s+status\s*=\s*([a-zA-Z]+)/i);
+    const statusMatch = trimmed.match(/(?:^|\s+)(?:mark|set)\s+status\s*=\s*([a-zA-Z]+)/i);
     if (statusMatch && activeScenario) {
       activeScenario.status = statusMatch[1].trim().toLowerCase();
     }
@@ -177,7 +164,10 @@ export function provideCodeLenses(
       const passed = scenarios.filter(s => s.status === 'passed').length;
       const failed = scenarios.filter(s => s.status === 'failed').length;
       const pending = scenarios.filter(s => !s.status || s.status === 'pending').length;
-      const skipped = scenarios.filter(s => s.status === 'skipped' || s.status === 'blocked').length;
+      const skipped = scenarios.filter(s => s.status === 'skipped').length;
+      const undef = scenarios.filter(s => s.status === 'undefined').length;
+      const ambiguous = scenarios.filter(s => s.status === 'ambiguous').length;
+      const blocked = scenarios.filter(s => s.status === 'blocked').length;
       const total = scenarios.length;
       const pct = Math.round((passed / total) * 100);
 
@@ -186,6 +176,9 @@ export function provideCodeLenses(
       if (failed > 0) parts.push(`✗ ${failed} Failed`);
       if (pending > 0) parts.push(`⏳ ${pending} Pending`);
       if (skipped > 0) parts.push(`⊘ ${skipped} Skipped`);
+      if (undef > 0) parts.push(`❓ ${undef} Undefined`);
+      if (ambiguous > 0) parts.push(`🔀 ${ambiguous} Ambiguous`);
+      if (blocked > 0) parts.push(`🚫 ${blocked} Blocked`);
 
       const summary = `${parts.join(' · ')} (${pct}%)`;
       lenses.push({
@@ -248,9 +241,10 @@ export function provideCodeLenses(
         // Read testrun file and compute pass/fail stats
         try {
           const runContent = fs.readFileSync(targetRunFeat.fullPath, 'utf8');
-          const runScenarios = (runContent.match(/Scenario:\s*@tc-[0-9]+/gi) || []).length;
-          const runPassed = (runContent.match(/mark\s+status\s*=\s*passed/gi) || []).length;
-          const runFailed = (runContent.match(/mark\s+status\s*=\s*failed/gi) || []).length;
+          const tcScenarioRegex = buildScenarioTagHeaderRegex(scanner.config.identities.testcase, 'gi');
+          const runScenarios = (runContent.match(tcScenarioRegex) || []).length;
+          const runPassed = (runContent.match(/(?:mark|set)\s+status\s*=\s*passed/gi) || []).length;
+          const runFailed = (runContent.match(/(?:mark|set)\s+status\s*=\s*failed/gi) || []).length;
 
           if (runScenarios > 0) {
             const pct = Math.round((runPassed / runScenarios) * 100);

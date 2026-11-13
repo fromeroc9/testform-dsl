@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { findFirstIdentityMatchInLine } from '../../shared/identity';
+import { loadWorkspaceIdentitiesSync } from '../../shared/identity-config';
 
 export type StateNodeKind =
   | 'category'
@@ -210,6 +212,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         ];
       }
 
+      const identities = loadWorkspaceIdentitiesSync(rootPath);
       const caseTitleMap = new Map<string, string>();
       const runLookupMap = new Map<string, { title: string; issueNumber?: number; status?: string }>();
 
@@ -222,9 +225,9 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           caseTitleMap.set(id, title);
           const cleanNoScope = id.replace(/^(?:testcase\/|tests\/)/i, '');
           caseTitleMap.set(cleanNoScope, title);
-          const tagMatch = id.match(/@(tc|tr|tp)-[0-9]+/i);
+          const tagMatch = findFirstIdentityMatchInLine(id, identities);
           if (tagMatch) {
-            caseTitleMap.set(tagMatch[0].toLowerCase(), title);
+            caseTitleMap.set(tagMatch.rawTag.toLowerCase(), title);
           }
           const baseName = id.split('/').pop() || id;
           caseTitleMap.set(baseName, title);
@@ -239,9 +242,9 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
           runLookupMap.set(cleanNoScope, runInfo);
           const baseName = id.split('/').pop() || id;
           runLookupMap.set(baseName, runInfo);
-          const tagMatch = id.match(/@tr-[0-9]+/i);
+          const tagMatch = findFirstIdentityMatchInLine(id, { testrun: identities.testrun });
           if (tagMatch) {
-            runLookupMap.set(tagMatch[0].toLowerCase(), runInfo);
+            runLookupMap.set(tagMatch.rawTag.toLowerCase(), runInfo);
           }
         }
       }
@@ -303,8 +306,8 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
             if (!tcAddr) continue;
             const shortAddr = tcAddr.replace(/\\/g, '/');
             const normAddr = shortAddr.toLowerCase();
-            const tagMatch = shortAddr.match(/@(tc|tr|tp)-[0-9]+/i);
-            const tag = tagMatch ? tagMatch[0] : '';
+            const tagMatch = findFirstIdentityMatchInLine(shortAddr, identities);
+            const tag = tagMatch ? tagMatch.rawTag : '';
 
             const scenarioName =
               caseTitleMap.get(normAddr) ||
@@ -564,6 +567,7 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
     }
 
     const rootPath = workspaceFolders[0].uri.fsPath;
+    const identities = loadWorkspaceIdentitiesSync(rootPath);
     const uris = await vscode.workspace.findFiles('**/*.feature', '{**/node_modules/**,**/.git/**}');
 
     if (uris.length === 0) {
@@ -592,9 +596,9 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
             stateResourceMap.set(ident.toLowerCase(), r);
             const baseIdent = ident.split('/').pop() || ident;
             stateResourceMap.set(baseIdent.toLowerCase(), r);
-            const tagMatch = ident.match(/@(tc|tr|tp|bg)-[0-9]+/i);
+            const tagMatch = findFirstIdentityMatchInLine(ident, identities);
             if (tagMatch) {
-              stateResourceMap.set(tagMatch[0].toLowerCase(), r);
+              stateResourceMap.set(tagMatch.rawTag.toLowerCase(), r);
             }
           }
           break;
@@ -648,9 +652,9 @@ export class StateTreeProvider implements vscode.TreeDataProvider<StateTreeItem>
         if (!prev.startsWith('@')) break;
         const tokens = prev.split(/\s+/).filter(t => t.startsWith('@'));
         for (const tok of tokens) {
-          const tagMatch = tok.match(/^@(tc|tr|tp|bg)-\w+/i);
+          const tagMatch = findFirstIdentityMatchInLine(tok, identities);
           if (tagMatch && !tag) {
-            tag = tagMatch[0];
+            tag = tagMatch.rawTag;
           } else if (tok.toLowerCase() !== '@testcase' && tok.toLowerCase() !== '@testrun' && tok.toLowerCase() !== '@testplan' && tok.toLowerCase() !== '@bug') {
             const eqIdx = tok.indexOf('=');
             if (eqIdx > 1) {

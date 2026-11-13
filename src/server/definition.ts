@@ -2,6 +2,11 @@ import { Definition, Location, Position, Range } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { pathToFileURL } from 'url';
 import { WorkspaceScanner } from './workspace-scanner';
+import {
+  extractFeatureAddressAtLine,
+  findAllIdentityMatchesInLine,
+  findScenarioByIdentityTag
+} from '../shared/identity';
 
 export function provideDefinition(
   document: TextDocument,
@@ -131,14 +136,16 @@ export function provideDefinition(
     }
   }
 
-  // 3.1 Line context: Scenario address or target in Testrun / Bug (e.g. Scenario: login.case.feature.@tc-1 or * set target = login.case.feature.@tc-1)
+  // 3.1 Line context: Scenario address or target in Testrun / Bug (e.g. Scenario: login.case.feature.@tc-1 or * set target = login.case.feature.@flaviotag-1)
   const markTargetMatch = lineText.match(/^\s*\*\s*mark\s+target\s*=\s*(.+)$/i);
   const targetExpr = markTargetMatch ? markTargetMatch[1].trim().replace(/^["']|["']$/g, '') : null;
 
-  const addrMatch = targetExpr ? [targetExpr, targetExpr] : lineText.match(/([a-zA-Z0-9_./-]+\.(?:case|run|plan|bug)\.feature(?:\.@(?:tc|tr|tp|bg)-[0-9]+)?)/i);
-  if (addrMatch) {
-    const rawAddr = addrMatch[1];
-    const targetScenario = scanner.config.scenarioAddresses.get(rawAddr);
+  const rawAddr = targetExpr || extractFeatureAddressAtLine(lineText);
+  if (rawAddr) {
+    const lowerRawAddr = rawAddr.toLowerCase();
+    const targetScenario =
+      scanner.config.scenarioAddresses.get(rawAddr) ||
+      [...scanner.config.scenarioAddresses.entries()].find(([k]) => k.toLowerCase() === lowerRawAddr)?.[1];
     if (targetScenario) {
       const uri = pathToFileURL(targetScenario.sourceFile).href;
       return Location.create(uri, {
@@ -211,10 +218,14 @@ export function provideDefinition(
     }
   }
 
-  // 5. Line context: @tc-X reference in step or tag
-  const tcTagMatch = lineText.match(/@(tc|tr|tp|bg)-([0-9]+)/i);
-  if (tcTagMatch) {
-    const tag = `@${tcTagMatch[1].toLowerCase()}-${tcTagMatch[2]}`;
+  // 5. Line context: Identity tag reference in step or tag (configured resource.<scope>.identity or @tc-X)
+  const idMatches = findAllIdentityMatchesInLine(lineText, scanner.config.identities);
+  const idMatch =
+    idMatches.find(m => position.character >= m.index && position.character <= m.index + m.length) ||
+    idMatches[0];
+  if (idMatch) {
+    const tag = idMatch.rawTag.toLowerCase();
+    const normTag = idMatch.normalizedTag;
 
     // If within an enclosing Rule: in a testrun, resolve specifically against that Rule's feature target
     const docLines = document.getText().split(/\r?\n/);
@@ -234,7 +245,7 @@ export function provideDefinition(
       for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
         const normAddr = addr.replace(/\\/g, '/').toLowerCase();
         const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
-        if ((normAddr.includes(normBase) || normSource.includes(normBase)) && normAddr.endsWith(tag)) {
+        if ((normAddr.includes(normBase) || normSource.includes(normBase)) && (normAddr.endsWith(tag) || normAddr.endsWith(normTag))) {
           return Location.create(pathToFileURL(info.sourceFile).href, {
             start: { line: info.line, character: 0 },
             end: { line: info.line, character: 100 }
@@ -243,7 +254,7 @@ export function provideDefinition(
       }
     }
 
-    const scenario = scanner.config.scenarios.get(tag);
+    const scenario = findScenarioByIdentityTag(scanner.config.scenarios, tag, scanner.config.identities, idMatch.scope);
     if (scenario) {
       const uri = pathToFileURL(scenario.sourceFile).href;
       return Location.create(uri, {

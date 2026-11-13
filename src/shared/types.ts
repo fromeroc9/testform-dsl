@@ -1,3 +1,5 @@
+import { IdentityConfigMap, ResourceScope } from './identity';
+
 export interface VariableInfo {
   name: string;
   type?: string;
@@ -22,9 +24,10 @@ export interface DataInfo {
 }
 
 export interface ScenarioIdentityInfo {
-  tag: string;         // e.g. "@tc-1"
-  idNumber: number;    // e.g. 1
-  scope: 'testcase' | 'testrun' | 'testplan' | 'bug';
+  tag: string;         // e.g. "@tc-1" or "@flaviotag-1"
+  normalizedTag?: string; // zero-padded-stripped lowercase form e.g. "@flaviotag-1"
+  idNumber: number;    // e.g. 1 (0 if non-numeric custom suffix)
+  scope: ResourceScope;
   title: string;       // e.g. "Inicio de sesión exitoso con usuario estándar"
   address: string;     // e.g. "auth/login.case.feature.@tc-1"
   sourceFile: string;  // absolute path
@@ -47,6 +50,8 @@ export interface TestformWorkspaceConfig {
     tp: number;
     bg: number;
   };
+  maxIdentityByScope: Record<ResourceScope, number>;
+  identities: IdentityConfigMap;
   scopes: {
     testcase: string;
     testrun: string;
