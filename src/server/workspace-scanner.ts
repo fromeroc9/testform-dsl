@@ -230,6 +230,17 @@ export class WorkspaceScanner {
    * Reads and merges blocks (variable, locals, resource, data, module, output, policy)
    * regardless of arbitrary file naming.
    */
+  private isNestedProjectBoundary(dir: string): boolean {
+    if (path.resolve(dir) === path.resolve(this.workspaceRoot)) return false;
+    const candidateFiles = ['main.yml', 'main.yaml', 'testform.yml', 'testform.yaml', 'testform.config.yml', 'testform.config.yaml'];
+    for (const c of candidateFiles) {
+      if (fs.existsSync(path.join(dir, c))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private scanManifestFiles(baseFile: string | null): void {
     const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', '.terraform', 'dist', 'coverage', '.system_generated']);
 
@@ -239,7 +250,10 @@ export class WorkspaceScanner {
         for (const entry of entries) {
           if (entry.isDirectory()) {
             if (!IGNORED_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
-              walk(path.join(currentDir, entry.name));
+              const fullDir = path.join(currentDir, entry.name);
+              if (!this.isNestedProjectBoundary(fullDir)) {
+                walk(fullDir);
+              }
             }
           } else if (entry.isFile()) {
             const lower = entry.name.toLowerCase();
@@ -590,7 +604,10 @@ export class WorkspaceScanner {
         for (const entry of entries) {
           if (entry.isDirectory()) {
             if (!IGNORED_DIRS.has(entry.name) && !entry.name.startsWith('.')) {
-              walk(path.join(currentDir, entry.name));
+              const fullDir = path.join(currentDir, entry.name);
+              if (!this.isNestedProjectBoundary(fullDir)) {
+                walk(fullDir);
+              }
             }
           } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.feature')) {
             const fullPath = path.join(currentDir, entry.name);
