@@ -9,6 +9,56 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
 import { BUILTIN_FUNCTIONS } from './completions';
 
+/**
+ * Scans the YAML text to discover providers declared under testform.required_providers
+ */
+function getDeclaredRequiredProviders(documentText: string): string[] {
+  const providers: string[] = [];
+  const lines = documentText.split(/\r?\n/);
+  let inTestform = false;
+  let inRequiredProviders = false;
+  let requiredProvidersIndent = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const indent = line.match(/^\s*/)?.[0].length || 0;
+
+    if (indent === 0) {
+      inTestform = /^testform\s*:/i.test(trimmed);
+      inRequiredProviders = false;
+      continue;
+    }
+
+    if (inTestform) {
+      if (/^required_providers\s*:/i.test(trimmed)) {
+        inRequiredProviders = true;
+        requiredProvidersIndent = indent;
+        continue;
+      }
+
+      if (inRequiredProviders) {
+        if (indent <= requiredProvidersIndent) {
+          inRequiredProviders = false;
+        } else {
+          const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
+          if (match) {
+            const pName = match[1];
+            const lower = pName.toLowerCase();
+            if (!['source', 'version', 'constraints'].includes(lower)) {
+              if (!providers.includes(pName)) {
+                providers.push(pName);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return providers;
+}
+
 
 
 export function provideYamlCompletions(
@@ -91,14 +141,54 @@ export function provideYamlCompletions(
   if (inlineColonMatch) {
     const key = inlineColonMatch[1].toLowerCase();
 
-    // Scalar fields that accept inline values
+    // Scalar or dictionary provider completions
     if (key === 'provider') {
-      return [
-        { label: 'local', kind: CompletionItemKind.EnumMember, detail: 'Offline Local Provider', insertText: 'local' },
-        { label: 'github', kind: CompletionItemKind.EnumMember, detail: 'GitHub Projects Provider', insertText: 'github' },
-        { label: 'gitlab', kind: CompletionItemKind.EnumMember, detail: 'GitLab Issues Provider', insertText: 'gitlab' },
-        { label: 'custom', kind: CompletionItemKind.EnumMember, detail: 'Custom Provider (source path)', insertText: 'custom' }
+      const fullDocText = document.getText();
+      const declared = getDeclaredRequiredProviders(fullDocText);
+      const providerItems: CompletionItem[] = [
+        {
+          label: 'github',
+          kind: CompletionItemKind.Snippet,
+          detail: 'GitHub Projects Provider (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: '\n  github:\n    owner: "${1:owner}"\n    repository: "${2:repository}"\n    project_id: "${3:PVT_...}"\n    token_env: "${4:GITHUB_TOKEN}"'
+        },
+        {
+          label: 'gitlab',
+          kind: CompletionItemKind.Snippet,
+          detail: 'GitLab Issues Provider (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: '\n  gitlab:\n    host: "${1:https://gitlab.com}"\n    project_id: "${2:12345678}"\n    token_env: "${3:GITLAB_TOKEN}"'
+        },
+        {
+          label: 'local',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Offline Local Provider (zero configuration)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: '\n  local: {}'
+        },
+        {
+          label: 'custom',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Custom Provider (source path)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: '\n  custom:\n    source: "${1:./custom-providers/my-provider.ts}"'
+        }
       ];
+
+      for (const p of declared) {
+        if (!['github', 'gitlab', 'local', 'custom'].includes(p.toLowerCase())) {
+          providerItems.push({
+            label: p,
+            kind: CompletionItemKind.Snippet,
+            detail: `Declared Provider (${p})`,
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: `\n  ${p}:\n    \${1:param}: "\${2:value}"`
+          });
+        }
+      }
+
+      return providerItems;
     }
 
     if (key === 'backend') {
@@ -172,9 +262,12 @@ export function provideYamlCompletions(
       }));
     }
 
-    // CRITICAL FIX: If key is a dictionary parent (variable, locals, resource, data, module, output)
+    // CRITICAL FIX: If key is a dictionary parent (variable, locals, resource, data, module, output, testform, provider)
     // DO NOT emit properties inline on the same line! They require a line break + indent.
     const DICTIONARY_PARENTS = new Set([
+      'testform',
+      'provider',
+      'required_providers',
       'variable', 'variables', 'vars',
       'locals', 'local',
       'resource', 'scopes',
@@ -218,6 +311,13 @@ export function provideYamlCompletions(
   if (currentIndent === 0) {
     return [
       {
+        label: 'testform:',
+        kind: CompletionItemKind.Property,
+        detail: 'Testform root engine configuration (required_version, backend, required_providers)',
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: 'testform:\n  required_version: ">= 1.0.0"\n  backend: ${1|local,s3,azurerm,gcs,oci,github|}\n  required_providers:\n    ${2}'
+      },
+      {
         label: 'version: "1.0"',
         kind: CompletionItemKind.Property,
         detail: 'Testform manifest version',
@@ -228,7 +328,7 @@ export function provideYamlCompletions(
         kind: CompletionItemKind.Property,
         detail: 'Provider configuration (local, github, gitlab, custom)',
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'provider: ${1|local,github,gitlab,custom|}'
+        insertText: 'provider:\n  ${1|local,github,gitlab,custom|}:'
       },
       {
         label: 'backend:',
@@ -282,6 +382,166 @@ export function provideYamlCompletions(
         insertText: 'policy:\n  disabled:\n    - "${1:policy-id}"'
       }
     ];
+  }
+
+  // Case T: Inside "testform" root block
+  if (rootSection === 'testform') {
+    // Indent 2: Properties of testform block
+    if (ancestry.length === 1) {
+      return [
+        {
+          label: 'required_version:',
+          kind: CompletionItemKind.Property,
+          detail: 'Minimum required Testform CLI version',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'required_version: "${1:>= 1.0.0}"'
+        },
+        {
+          label: 'backend:',
+          kind: CompletionItemKind.Property,
+          detail: 'State backend ledger configuration (local, s3, azurerm, gcs, oci, github)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'backend: ${1|local,s3,azurerm,gcs,oci,github|}'
+        },
+        {
+          label: 'required_providers:',
+          kind: CompletionItemKind.Property,
+          detail: 'Declare required providers and versions (Terraform parity)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'required_providers:\n  '
+        }
+      ];
+    }
+
+    // Inside required_providers:
+    if (ancestry.includes('required_providers')) {
+      const lastKey = ancestry[ancestry.length - 1].toLowerCase();
+      if (lastKey === 'required_providers') {
+        return [
+          {
+            label: 'custom_provider (Git Repository)',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Declare provider from Git repository',
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: '${1:jira}:\n  source: "git::https://${2:github.com/my-org/testform-provider-${1}.git}"\n  version: "${3:>= 1.0.0}"'
+          },
+          {
+            label: 'custom_provider (NPM Package)',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Declare provider from NPM or private registry',
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: '${1:jira}:\n  source: "@${2:my-org}/testform-provider-${1}"\n  version: "${3:^1.0.0}"'
+          },
+          {
+            label: 'custom_provider (Local File)',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Declare provider from local TypeScript/JS file',
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: '${1:my_provider}:\n  source: "${2:./custom-providers/my-provider.ts}"'
+          },
+          {
+            label: 'github',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Official GitHub Provider constraint',
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: 'github:\n  source: "github"\n  version: ">= 1.0.0"'
+          },
+          {
+            label: 'gitlab',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Official GitLab Provider constraint',
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: 'gitlab:\n  source: "gitlab"\n  version: ">= 1.0.0"'
+          }
+        ];
+      } else {
+        // Indent 6+: Inside a declared provider definition under required_providers
+        return [
+          { label: 'source:', kind: CompletionItemKind.Property, detail: 'Git URL, NPM package, or local path', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: "${1:source}"' },
+          { label: 'version:', kind: CompletionItemKind.Property, detail: 'Version constraint (e.g. ">= 1.0.0", "~> 1.2.0")', insertTextFormat: InsertTextFormat.Snippet, insertText: 'version: "${1:>= 1.0.0}"' },
+          { label: 'constraints:', kind: CompletionItemKind.Property, detail: 'Optional additional version constraint', insertTextFormat: InsertTextFormat.Snippet, insertText: 'constraints: "${1:>= 1.0.0}"' }
+        ];
+      }
+    }
+  }
+
+  // Case P: Inside "provider" block
+  if (rootSection === 'provider') {
+    const fullDocText = document.getText();
+    const declared = getDeclaredRequiredProviders(fullDocText);
+
+    // Indent 2: Declaring provider name under provider:
+    if (ancestry.length === 1) {
+      const items: CompletionItem[] = [
+        {
+          label: 'github',
+          kind: CompletionItemKind.Snippet,
+          detail: 'GitHub Projects Provider (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'github:\n  owner: "${1:owner}"\n  repository: "${2:repository}"\n  project_id: "${3:PVT_...}"\n  token_env: "${4:GITHUB_TOKEN}"'
+        },
+        {
+          label: 'gitlab',
+          kind: CompletionItemKind.Snippet,
+          detail: 'GitLab Issues Provider (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'gitlab:\n  host: "${1:https://gitlab.com}"\n  project_id: "${2:12345678}"\n  token_env: "${3:GITLAB_TOKEN}"'
+        },
+        {
+          label: 'local',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Offline Local Provider (zero configuration)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'local: {}'
+        },
+        {
+          label: 'custom',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Custom Provider (source path)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'custom:\n  source: "${1:./custom-providers/my-provider.ts}"'
+        }
+      ];
+
+      for (const p of declared) {
+        if (!['github', 'gitlab', 'local', 'custom'].includes(p.toLowerCase())) {
+          items.push({
+            label: p,
+            kind: CompletionItemKind.Snippet,
+            detail: `Declared Provider (${p})`,
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: `${p}:\n  \${1:param}: "\${2:value}"`
+          });
+        }
+      }
+
+      return items;
+    }
+
+    // Indent 4+: Inside a specific provider definition, e.g. provider.github
+    if (ancestry.length >= 2) {
+      const targetProvider = ancestry[1]?.toLowerCase();
+      if (targetProvider === 'github') {
+        return [
+          { label: 'owner:', kind: CompletionItemKind.Property, detail: 'GitHub user or organization name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'owner: "${1:owner}"' },
+          { label: 'repository:', kind: CompletionItemKind.Property, detail: 'Target repository name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'repository: "${1:repository}"' },
+          { label: 'project_id:', kind: CompletionItemKind.Property, detail: 'GitHub Projects V2 node ID (PVT_...)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'project_id: "${1:PVT_...}"' },
+          { label: 'token_env:', kind: CompletionItemKind.Property, detail: 'Environment variable name holding token (default: GITHUB_TOKEN)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'token_env: "${1:GITHUB_TOKEN}"' }
+        ];
+      }
+      if (targetProvider === 'gitlab') {
+        return [
+          { label: 'host:', kind: CompletionItemKind.Property, detail: 'GitLab instance URL (default: https://gitlab.com)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'host: "${1:https://gitlab.com}"' },
+          { label: 'project_id:', kind: CompletionItemKind.Property, detail: 'GitLab project numeric ID or URL-encoded path', insertTextFormat: InsertTextFormat.Snippet, insertText: 'project_id: "${1:12345678}"' },
+          { label: 'token_env:', kind: CompletionItemKind.Property, detail: 'Environment variable name holding token (default: GITLAB_TOKEN)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'token_env: "${1:GITLAB_TOKEN}"' }
+        ];
+      }
+      if (targetProvider === 'custom') {
+        return [
+          { label: 'source:', kind: CompletionItemKind.Property, detail: 'Local path, Git URL, or npm package', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: "${1:./custom-providers/my-provider.ts}"' }
+        ];
+      }
+    }
   }
 
   // Case B: Inside "variable"
