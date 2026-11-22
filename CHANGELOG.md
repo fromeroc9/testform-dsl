@@ -45,6 +45,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Scenario Autocompletions in `@bug` files (`src/server/completions.ts`):**
+  - Typing `* ` inside a `@bug` scenario now immediately offers both DSL marks (`set target = ...`, `set status = ...`, `set trace = ...`, `set attach = ...`, `set evidence = ...`) and metadata fields (`field <name> = ...`, `field severity = ...`, `field priority = ...`).
+  - Added dedicated enum completions for bug defect statuses (`open`, `reopened`, `resolved`, `closed`, `failed`, `passed`).
+  - Added testcase target autocompletion when typing `* set target = ` in defect specifications.
+- **Direct Scenario Target Autocompletion without `Rule:` in `@testcycle` / `@testrun` (`src/server/completions.ts`):**
+  - Autocompleting testcase targets on `Scenario: ` lines without an enclosing `Rule:` now sets the canonical logical address (e.g. `ParaBank/loan.case.feature.@tc-01`) instead of only the local tag (`@tc-01`), guaranteeing unambiguous testcase traceability.
+- **First-Class `@testcycle` Scope Directive & Step Autocompletions (`src/shared/identity.ts`, `src/server/diagnostics.ts`, `src/server/workspace-scanner.ts`, `src/server/completions.ts`):**
+  - Added `@testcycle` as an official scope directive alias for `testrun`.
+  - Inside `@testcycle` and testrun scenarios, typing `* ` now correctly suggests both execution marks (`set status`, `set duration`, `set trace`, `set attach`, `set evidence`) and contract metadata fields (`field <name> = ...`).
 - **Multi-Bug Target Support & Diagnostic Step Isolation (`src/server/diagnostics.ts`, `src/server/workspace-scanner.ts`):**
   - Fixed false-positive `Duplicate scenario ID in this file` error when multiple `@bug` scenarios reference the same target testcase (`* set target = <testcase>.@tc-XX`), honoring the QA architecture where one testcase can have $N$ associated defect scenarios.
   - Excluded step lines (`*`, `Given`, `When`, `Then`, `And`, `But`, tables, docstrings), `Background:`, and `Feature:` headers from duplicate scenario ID checks.

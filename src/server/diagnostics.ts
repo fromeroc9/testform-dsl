@@ -138,7 +138,7 @@ export function validateTextDocument(
   let fileResourceScope: 'testcase' | 'testrun' | 'testplan' | 'bug' | null = null;
   if (matchesPattern(uri, bgPattern) || /@bug\b/i.test(text)) {
     fileResourceScope = 'bug';
-  } else if (matchesPattern(uri, trPattern) || /@testrun\b/i.test(text)) {
+  } else if (matchesPattern(uri, trPattern) || /@(?:testrun|testcycle)\b/i.test(text)) {
     fileResourceScope = 'testrun';
   } else if (matchesPattern(uri, tpPattern) || /@testplan\b/i.test(text)) {
     fileResourceScope = 'testplan';
@@ -252,7 +252,7 @@ export function validateTextDocument(
   // 6. Validate Resource tags vs configured patterns in main.yml
   const hasSpecialRootTag =
     /@testcase\b/i.test(text) ||
-    /@testrun\b/i.test(text) ||
+    /@(?:testrun|testcycle)\b/i.test(text) ||
     /@testplan\b/i.test(text) ||
     /@bug\b/i.test(text);
 
@@ -292,7 +292,7 @@ export function validateTextDocument(
   let resourceType: 'testcase' | 'testrun' | 'testplan' | 'bug' | 'other' = 'other';
   if (matchesPattern(uri, tcPattern) || text.includes('@testcase')) {
     resourceType = 'testcase';
-  } else if (matchesPattern(uri, trPattern) || text.includes('@testrun')) {
+  } else if (matchesPattern(uri, trPattern) || /@(?:testrun|testcycle)\b/i.test(text)) {
     resourceType = 'testrun';
   } else if (matchesPattern(uri, tpPattern) || text.includes('@testplan')) {
     resourceType = 'testplan';

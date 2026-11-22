@@ -394,7 +394,7 @@ export class WorkspaceScanner {
 
     for (let i = 0; i < Math.min(lines.length, 30); i++) {
       const line = lines[i].trim();
-      if (line.includes('@testrun')) specialScope = 'testrun';
+      if (line.includes('@testrun') || line.includes('@testcycle')) specialScope = 'testrun';
       else if (line.includes('@testplan')) specialScope = 'testplan';
       else if (line.includes('@testcase')) specialScope = 'testcase';
       else if (line.includes('@bug')) specialScope = 'bug';

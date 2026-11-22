@@ -333,7 +333,7 @@ export function buildSameNumberSearchRegex(
   return new RegExp(`${escapeRegex(m.rawTag)}(?![a-zA-Z0-9_-])`, 'i');
 }
 
-const RESERVED_DIRECTIVES = ['testcase', 'testrun', 'testplan', 'bug', 'depends_on'];
+const RESERVED_DIRECTIVES = ['testcase', 'testrun', 'testcycle', 'testplan', 'bug', 'depends_on'];
 
 export function matchTypingIdentityPrefix(
   lineTextBeforeCursor: string,
@@ -389,7 +389,7 @@ export function detectFeatureDocumentScope(
   identities?: Partial<IdentityConfigMap>,
   scopes?: Partial<Record<ResourceScope, string>>
 ): ResourceScope | null {
-  if (/@testrun\b/i.test(docText)) return 'testrun';
+  if (/@(?:testrun|testcycle)\b/i.test(docText)) return 'testrun';
   if (/@testplan\b/i.test(docText)) return 'testplan';
   if (/@testcase\b/i.test(docText)) return 'testcase';
   if (/@bug\b/i.test(docText)) return 'bug';
@@ -414,7 +414,7 @@ export function detectFeatureDocumentScope(
     if (matchesGlobMatchPattern(uriPath, scopes.testcase)) return 'testcase';
   }
 
-  if (uriPath.endsWith('.run.feature')) return 'testrun';
+  if (uriPath.endsWith('.run.feature') || uriPath.endsWith('.cycle.feature') || uriPath.includes('/testcycle/')) return 'testrun';
   if (uriPath.endsWith('.plan.feature')) return 'testplan';
   if (uriPath.endsWith('.bug.feature')) return 'bug';
   if (uriPath.endsWith('.case.feature')) return 'testcase';
