@@ -7,10 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.6] - 2026-11-22
+## [1.0.5] - 2026-11-22
 
 ### Added
-
 - **IntelliSense Autocompletions for Logical Namespace Directive (`@ns` & `@namespace`):**
   - Registered `@ns` and `@namespace` in the general `@` tag completions menu (`src/server/completions.ts`).
   - Added smart namespace auto-detection based on parent directory structure (e.g. suggests `@ns(magento)` when editing inside `testcase/Magento/`).
@@ -20,13 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Rich hover preview for `@ns(...)` and `@namespace(...)` tags showing the computed logical resource address (e.g. `magento.cart.case.feature`), full file path, and explanation.
 - **Syntax Highlighting for `@namespace`:**
   - Extended directive regex pattern in `syntaxes/testform-dsl.tmLanguage.json` to highlight both `@ns` and `@namespace`.
-
----
-
-## [1.0.5] - 2026-11-22
-
-### Added
-
 - **Strict DSL Mark vs Field Governance Diagnostics (`src/server/diagnostics.ts`):**
   - Rejects any `* set` step in `testcase` specifications (testcases are pure BDD specifications with `Given`, `When`, `Then` steps and contract `* field` metadata).
   - Enforces `testrun` section boundaries: `Background:` allows `* set duration`, `* set attach`, `* set trace`, while prohibiting manual `status` (suite status is autocalculated). `Scenario:` strictly allows `* set status`.

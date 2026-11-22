@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { Hover, MarkupKind, Position } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';

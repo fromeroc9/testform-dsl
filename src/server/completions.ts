@@ -1556,10 +1556,10 @@ function inferContextValues(docUri: string): { project: string; module: string }
       {
         label: 'ns',
         kind: CompletionItemKind.Property,
-        detail: 'directive',
+        detail: 'directive (canonical)',
         documentation: {
           kind: MarkupKind.Markdown,
-          value: `### 🌐 Namespace Directive (\`@ns\`)\n\nDisambiguates feature logical addresses across modules or subfolders.\n\n\`\`\`gherkin\n@testcase @ns(${smartNsCandidate})\nFeature: ...\n\`\`\``
+          value: `### 🌐 Namespace Directive (\`@ns\`)\n\nCanonical directive to disambiguate feature logical addresses across modules or subfolders.\n\n\`\`\`gherkin\n@testcase @ns(${smartNsCandidate})\nFeature: ...\n\`\`\``
         },
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: `ns(\${1:${smartNsCandidate}})`
@@ -1567,10 +1567,10 @@ function inferContextValues(docUri: string): { project: string; module: string }
       {
         label: 'namespace',
         kind: CompletionItemKind.Property,
-        detail: 'directive',
+        detail: 'directive (alias)',
         documentation: {
           kind: MarkupKind.Markdown,
-          value: `### 🌐 Namespace Directive (\`@namespace\`)\n\nDisambiguates feature logical addresses across modules or subfolders.\n\n\`\`\`gherkin\n@testcase @namespace(${smartNsCandidate})\nFeature: ...\n\`\`\``
+          value: `### 🌐 Namespace Directive (\`@namespace\` - alias of \`@ns\`)\n\nDisambiguates feature logical addresses across modules or subfolders.\n\n\`\`\`gherkin\n@testcase @namespace(${smartNsCandidate})\nFeature: ...\n\`\`\``
         },
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: `namespace(\${1:${smartNsCandidate}})`
