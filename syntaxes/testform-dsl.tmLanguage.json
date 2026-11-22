@@ -117,7 +117,7 @@
         },
         {
           "name": "entity.name.tag.directive.testform",
-          "match": "@(module|depends_on|target|ns)\\b"
+          "match": "@(module|depends_on|target|ns|namespace)\\b"
         },
         {
           "name": "entity.name.tag.flag.testform",

@@ -79,6 +79,13 @@
     ],
     "description": "Insert @depends_on dependency directive"
   },
+  "Testform Namespace": {
+    "prefix": "tf-ns",
+    "body": [
+      "@ns(${1:namespace})"
+    ],
+    "description": "Insert @ns logical namespace directive"
+  },
   "Testform Mark Status": {
     "prefix": "tf-set",
     "body": [

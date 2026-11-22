@@ -1410,6 +1410,51 @@ function inferContextValues(docUri: string): { project: string; module: string }
     return items;
   }
 
+  // 7.5 Namespace completion inside @ns(...) or @namespace(...)
+  const nsArgMatch = lineText.match(/@(?:ns|namespace)\(\s*(["']?)([^"')]*)$/i);
+  if (nsArgMatch) {
+    const quote = nsArgMatch[1];
+    const seenNs = new Set<string>();
+
+    // Suggest inferred namespace from current file's folder structure
+    const currentFeat = scanner.findFeatureByUri(document.uri);
+    if (currentFeat) {
+      const parentDir = path.basename(path.dirname(currentFeat.fullPath));
+      let suggestedNs = parentDir.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      if (!['testcase', 'testcases', 'testrun', 'testruns', 'testplan', 'testplans', 'bug', 'bugs', 'tests', 'features', '.'].includes(suggestedNs)) {
+        seenNs.add(suggestedNs);
+        items.push({
+          label: suggestedNs,
+          kind: CompletionItemKind.Module,
+          detail: `Inferred from folder '${parentDir}'`,
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: `### 🌐 Inferred Namespace\n\nDerived from folder: \`${parentDir}\`\n\nResulting logical address: \`${suggestedNs}.${path.basename(currentFeat.relPath)}\``
+          },
+          insertText: quote ? `${suggestedNs}${quote}` : suggestedNs
+        });
+      }
+    }
+
+    // Suggest any namespaces already defined across features in the workspace
+    for (const feat of scanner.featureFiles.values()) {
+      if (feat.namespace && !seenNs.has(feat.namespace)) {
+        seenNs.add(feat.namespace);
+        items.push({
+          label: feat.namespace,
+          kind: CompletionItemKind.Module,
+          detail: `Workspace Namespace (${feat.relPath})`,
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: `### 🌐 Existing Workspace Namespace\n\nUsed in: \`${feat.relPath}\``
+          },
+          insertText: quote ? `${feat.namespace}${quote}` : feat.namespace
+        });
+      }
+    }
+    return items;
+  }
+
   // 8. Identity Tag next-ID completion (configured resource.<scope>.identity or @tc-, @tr-, @tp-, @bg-)
   const activeScopeForLine = detectDocumentScope(document, scanner) || 'testcase';
   const typedIdentityMatch = matchTypingIdentityPrefix(lineText, scanner.config.identities, activeScopeForLine);
@@ -1495,8 +1540,41 @@ function inferContextValues(docUri: string): { project: string; module: string }
       }
     }
 
-    // Resources: All use the exact same Class icon (standard Resource representation)
+    // Infer smart namespace candidate based on directory
+    const currentFeatForNs = scanner.findFeatureByUri(document.uri);
+    let smartNsCandidate = 'namespace';
+    if (currentFeatForNs) {
+      const parentDir = path.basename(path.dirname(currentFeatForNs.fullPath));
+      const cand = parentDir.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      if (!['testcase', 'testcases', 'testrun', 'testruns', 'testplan', 'testplans', 'bug', 'bugs', 'tests', 'features', '.'].includes(cand)) {
+        smartNsCandidate = cand;
+      }
+    }
+
+    // Directives & Resources
     items.push(
+      {
+        label: 'ns',
+        kind: CompletionItemKind.Property,
+        detail: 'directive',
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: `### 🌐 Namespace Directive (\`@ns\`)\n\nDisambiguates feature logical addresses across modules or subfolders.\n\n\`\`\`gherkin\n@testcase @ns(${smartNsCandidate})\nFeature: ...\n\`\`\``
+        },
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: `ns(\${1:${smartNsCandidate}})`
+      },
+      {
+        label: 'namespace',
+        kind: CompletionItemKind.Property,
+        detail: 'directive',
+        documentation: {
+          kind: MarkupKind.Markdown,
+          value: `### 🌐 Namespace Directive (\`@namespace\`)\n\nDisambiguates feature logical addresses across modules or subfolders.\n\n\`\`\`gherkin\n@testcase @namespace(${smartNsCandidate})\nFeature: ...\n\`\`\``
+        },
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: `namespace(\${1:${smartNsCandidate}})`
+      },
       {
         label: 'testcase',
         kind: CompletionItemKind.Class,

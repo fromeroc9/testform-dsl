@@ -561,6 +561,26 @@ export function provideHover(
     };
   }
 
+  // 5.1 Match namespace directive hover: @ns(...) or @namespace(...)
+  const nsHoverMatch = lineText.match(/@(?:ns|namespace)\s*(?:\(\s*['"]?([^'"()\s]+)['"]?\s*\)|:\s*([a-zA-Z0-9_-]+))/i);
+  if (nsHoverMatch) {
+    const nsVal = (nsHoverMatch[1] || nsHoverMatch[2]).trim();
+    const currentFeat = scanner.findFeatureByUri(document.uri);
+    const fileName = currentFeat ? path.basename(currentFeat.relPath) : 'feature';
+    return {
+      contents: {
+        kind: MarkupKind.Markdown,
+        value: [
+          `### 🌐 Logical Namespace: \`${nsVal}\``,
+          `Disambiguates this feature's logical resource address across multiple modules or folders sharing the same basename.`,
+          `- **Logical Feature Address:** \`${nsVal}.${fileName}\``,
+          currentFeat ? `- **File Path:** \`${currentFeat.relPath}\`` : '',
+          `- **Directive:** \`@ns(${nsVal})\``
+        ].filter(Boolean).join('\n\n')
+      }
+    };
+  }
+
   // 6. Match Rule path hover: Rule: auth/login.case.feature or Rule: suites/smoke.run.feature
   const ruleMatch = lineText.match(/^(?:\s*Rule|\s*Regla):\s*([a-zA-Z0-9_./-]+\.(?:case|run|plan|bug)\.feature)/i);
   if (ruleMatch) {
