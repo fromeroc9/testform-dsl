@@ -123,22 +123,72 @@ export function validateTextDocument(
     }
   }
 
-  // 4. Check for duplicate identity tags (scoped per Rule or file)
+  // 4. Precompute Resource Scope and Patterns
+  const uri = textDocument.uri.toLowerCase();
+  const tcPattern = scanner.config.scopes.testcase || '*.case.feature';
+  const trPattern = scanner.config.scopes.testrun || '*.run.feature';
+  const tpPattern = scanner.config.scopes.testplan || '*.plan.feature';
+  const bgPattern = scanner.config.scopes.bug || '*.bug.feature';
+
+  const matchesPattern = (pathStr: string, pattern: string) => {
+    const cleanPattern = pattern.replace(/\*/g, '.*');
+    return new RegExp(`${cleanPattern}$`, 'i').test(pathStr);
+  };
+
+  let fileResourceScope: 'testcase' | 'testrun' | 'testplan' | 'bug' | null = null;
+  if (matchesPattern(uri, bgPattern) || /@bug\b/i.test(text)) {
+    fileResourceScope = 'bug';
+  } else if (matchesPattern(uri, trPattern) || /@testrun\b/i.test(text)) {
+    fileResourceScope = 'testrun';
+  } else if (matchesPattern(uri, tpPattern) || /@testplan\b/i.test(text)) {
+    fileResourceScope = 'testplan';
+  } else if (matchesPattern(uri, tcPattern) || /@testcase\b/i.test(text)) {
+    fileResourceScope = 'testcase';
+  }
+
+  // 5. Check for duplicate identity tags (scoped per Rule or file)
   const lines = text.split(/\r?\n/);
   const seenTagsInScope = new Map<string, number>(); // tag -> first line 0-based
   let currentRuleName: string | null = null;
+  let inFeatureHeader = true;
+  let inBackground = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // Feature header boundary
+    if (/^(?:Feature|Característica):/i.test(trimmed)) {
+      inFeatureHeader = false;
+      continue;
+    }
+
+    // Background boundary
+    if (/^(?:Background|Antecedentes):/i.test(trimmed)) {
+      inBackground = true;
+      continue;
+    }
 
     // In files with Rules (like testruns), each Rule scopes its own testcases independently
     const ruleMatch = trimmed.match(/^(?:Rule|Regla):\s*(.*)$/i);
     if (ruleMatch) {
       currentRuleName = ruleMatch[1].trim();
       seenTagsInScope.clear(); // Clear scope for the new Rule!
+      inBackground = false;
       continue;
     }
+
+    const isScenarioHeader = /^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):/i.test(trimmed);
+    if (isScenarioHeader) {
+      inBackground = false;
+    }
+
+    // Step lines, table rows, docstrings are steps/content, never scenario identity declarations
+    const isStep = /^(?:\*|Given|When|Then|And|But|Dado|Cuando|Entonces|Y|Pero)\b/i.test(trimmed)
+      || trimmed.startsWith('|')
+      || trimmed.startsWith('"""')
+      || trimmed.startsWith("'''");
 
     // Strip comments and @depends_on references so dependencies aren't treated as declared scenario IDs
     const lineWithoutDepends = line.replace(/#.*$/, '').replace(/@depends_on\s*\([^)]*\)/gi, '');
@@ -159,8 +209,26 @@ export function validateTextDocument(
       });
     }
 
+    // Step lines, background lines, feature headers are never scenario declarations.
+    // Specifically, in @bug files, multiple bug scenarios can target the exact same testcase (* set target = ...@tc-02).
+    if (inFeatureHeader || inBackground || isStep) {
+      continue;
+    }
+
+    // A scenario declaration must be on a tag line (starting with '@') or on the Scenario header itself
+    const isTagLine = trimmed.startsWith('@');
+    if (!isTagLine && !isScenarioHeader) {
+      continue;
+    }
+
     const idMatches = findAllIdentityMatchesInLine(lineWithoutDepends, scanner.config.identities);
     for (const idMatch of idMatches) {
+      // In @bug files, only @bg-* tags are declared scenario IDs for the bug file.
+      // In @testcase files, only @tc-* tags are declared scenario IDs, etc.
+      if (fileResourceScope && fileResourceScope !== 'testrun' && idMatch.scope !== fileResourceScope) {
+        continue;
+      }
+
       const tag = idMatch.normalizedTag;
       if (seenTagsInScope.has(tag)) {
         const firstLine = seenTagsInScope.get(tag)!;
@@ -181,18 +249,7 @@ export function validateTextDocument(
     }
   }
 
-  // 5. Validate Resource tags vs configured patterns in main.yml
-  const uri = textDocument.uri.toLowerCase();
-  const tcPattern = scanner.config.scopes.testcase || '*.case.feature';
-  const trPattern = scanner.config.scopes.testrun || '*.run.feature';
-  const tpPattern = scanner.config.scopes.testplan || '*.plan.feature';
-  const bgPattern = scanner.config.scopes.bug || '*.bug.feature';
-
-  const matchesPattern = (pathStr: string, pattern: string) => {
-    const cleanPattern = pattern.replace(/\*/g, '.*');
-    return new RegExp(`${cleanPattern}$`, 'i').test(pathStr);
-  };
-
+  // 6. Validate Resource tags vs configured patterns in main.yml
   const hasSpecialRootTag =
     /@testcase\b/i.test(text) ||
     /@testrun\b/i.test(text) ||

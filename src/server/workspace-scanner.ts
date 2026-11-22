@@ -435,6 +435,16 @@ export class WorkspaceScanner {
     // 4. Index individual scenarios and identity tags
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
+      if (!line || line.startsWith('#')) continue;
+
+      // Skip step lines and content lines: steps never declare scenario identities
+      if (/^(?:\*|Given|When|Then|And|But|Dado|Cuando|Entonces|Y|Pero)\b/i.test(line)
+        || line.startsWith('|')
+        || line.startsWith('"""')
+        || line.startsWith("'''")) {
+        continue;
+      }
+
       const lineWithoutDepends = line.replace(/#.*$/, '').replace(/@depends_on\s*\([^)]*\)/gi, '');
       const idMatches = findAllIdentityMatchesInLine(lineWithoutDepends, this.config.identities, fileScope);
       for (const idMatch of idMatches) {
