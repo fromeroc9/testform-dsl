@@ -109,7 +109,7 @@
       "patterns": [
         {
           "name": "entity.name.tag.scope.testform",
-          "match": "@(testcase|testrun|testplan|bug)\\b"
+          "match": "@(testcase|testrun|testcycle|testplan|bug)\\b"
         },
         {
           "name": "entity.name.tag.identity.testform",
@@ -117,11 +117,11 @@
         },
         {
           "name": "entity.name.tag.directive.testform",
-          "match": "@(module|depends_on|target)\\b"
+          "match": "@(module|depends_on|target|ns)\\b"
         },
         {
           "name": "entity.name.tag.flag.testform",
-          "match": "@(smoke|regression|critical|slow|flaky|e2e|auth|ui|api|security|performance|retry|timeout)\\b"
+          "match": "@(smoke|regression|critical|slow|flaky|e2e|auth|ui|api|security|performance|retry|timeout|blocker|major|minor|trivial|low|medium|high|urgent)\\b"
         }
       ]
     },
@@ -136,7 +136,7 @@
     "dsl-status": {
       "patterns": [
         {
-          "match": "(^\\s*\\*\\s+)?\\b(mark)\\b\\s+\\b(status)\\b\\s*(=)\\s*\\b(passed|failed|skipped|blocked|pending|unexecuted)\\b",
+          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(set|mark)\\b\\s+\\b(status)\\b\\s*(=)\\s*\\b(passed|failed|skipped|blocked|pending|unexecuted|undefined|ambiguous|open|reopened|resolved|closed|in_progress|todo)\\b",
           "captures": {
             "1": { "name": "keyword.control.step.gherkin" },
             "2": { "name": "keyword.control.testform.mark" },
@@ -146,7 +146,27 @@
           }
         },
         {
-          "match": "(^\\s*\\*\\s+)?\\b(mark)\\b\\s+\\b(target|trace|evidence)\\b\\s*(=)\\s*(.*)$",
+          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(set|mark)\\b\\s+\\b(duration)\\b\\s*(=)\\s*([0-9]+(?:\\.[0-9]+)?(?:ms|s|m|h)?)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.step.gherkin" },
+            "2": { "name": "keyword.control.testform.mark" },
+            "3": { "name": "support.type.property-name.testform" },
+            "4": { "name": "keyword.operator.assignment.testform" },
+            "5": { "name": "constant.numeric.duration.testform" }
+          }
+        },
+        {
+          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(set|mark)\\b\\s+\\b(target|trace|attach|evidence)\\b\\s*(=)\\s*(.*)$",
+          "captures": {
+            "1": { "name": "keyword.control.step.gherkin" },
+            "2": { "name": "keyword.control.testform.mark" },
+            "3": { "name": "support.type.property-name.testform" },
+            "4": { "name": "keyword.operator.assignment.testform" },
+            "5": { "name": "string.unquoted.testform" }
+          }
+        },
+        {
+          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(set|mark)\\b\\s+([a-zA-Z0-9_.-]+)\\s*(=)\\s*(.*)$",
           "captures": {
             "1": { "name": "keyword.control.step.gherkin" },
             "2": { "name": "keyword.control.testform.mark" },
