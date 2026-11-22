@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver';
+import { Diagnostic, DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { WorkspaceScanner } from './workspace-scanner';
 import {
@@ -51,7 +51,7 @@ export function validateTextDocument(
     }
   }
 
-  // 3. Check @depends_on("...")
+  // 3. Check @depends_on(...)
   const dependsOnRegex = /@depends_on\s*\(\s*([^)]*)\s*\)/g;
   while ((match = dependsOnRegex.exec(text)) !== null) {
     const argsContent = match[1].trim();
@@ -71,9 +71,11 @@ export function validateTextDocument(
       continue;
     }
 
-    const targetMatches = [...argsContent.matchAll(/["']([^"']*)["']/g)];
+    // Match quoted strings OR unquoted tokens separated by commas
+    const tokenRegex = /(?:["']([^"']*)["']|([^\s,()[\]"']+))/g;
+    const targetMatches = [...argsContent.matchAll(tokenRegex)];
     for (const tm of targetMatches) {
-      const targetAddress = tm[1].trim();
+      const targetAddress = (tm[1] ?? tm[2] ?? '').trim();
 
       if (!targetAddress) {
         const startOffset = matchOffset + (tm.index || 0);
@@ -89,18 +91,57 @@ export function validateTextDocument(
         continue;
       }
 
-      // 3.1 Internal reference (starts with @, e.g. @tc-1) -> must exist in the same feature file
+      const startOffset = matchOffset + (tm.index || 0);
+      const matchLength = tm[0].length;
+
+      // 3.1 Internal reference (starts with @, e.g. @tc-1)
       if (targetAddress.startsWith('@')) {
+        let tagFound = false;
+        // Check in current text
         const tagRegex = new RegExp(`^\\s*${targetAddress.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'm');
-        if (!tagRegex.test(text)) {
-          const startOffset = matchOffset + (tm.index || 0);
+        if (tagRegex.test(text)) {
+          tagFound = true;
+        } else {
+          // Check if enclosing rule points to a feature file containing this tag
+          const linesBeforeMatch = text.substring(0, startOffset).split(/\r?\n/);
+          let ruleTarget = '';
+          for (let li = linesBeforeMatch.length - 1; li >= 0; li--) {
+            const rm = linesBeforeMatch[li].trim().match(/^(?:Rule|Regla):\s*(.+)$/i);
+            if (rm) {
+              ruleTarget = rm[1].trim();
+              break;
+            }
+          }
+          if (ruleTarget) {
+            const normRule = ruleTarget.replace(/\\/g, '/').toLowerCase();
+            const normBase = normRule.split('/').pop() || normRule;
+            for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+              const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+              if ((normSource.endsWith(normRule) || normSource.endsWith(normBase)) && info.tag === targetAddress) {
+                tagFound = true;
+                break;
+              }
+            }
+          }
+          // Also check across workspace scenarios
+          if (!tagFound) {
+            for (const [_, info] of scanner.config.scenarioAddresses.entries()) {
+              if (info.tag === targetAddress) {
+                tagFound = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!tagFound) {
           diagnostics.push({
             severity: DiagnosticSeverity.Warning,
             range: {
               start: textDocument.positionAt(startOffset),
-              end: textDocument.positionAt(startOffset + tm[0].length)
+              end: textDocument.positionAt(startOffset + matchLength)
             },
-            message: `Internal reference not found: tag '${targetAddress}' does not exist in this feature file.`,
+            message: `Target reference not found: tag '${targetAddress}' does not exist in this scope or workspace.`,
             source: 'Testform'
           });
         }
@@ -108,12 +149,11 @@ export function validateTextDocument(
         // 3.2 External reference (contains path or .feature) -> check in workspace addresses
         const targetExists = scanner.config.scenarioAddresses.has(targetAddress);
         if (!targetExists) {
-          const startOffset = matchOffset + (tm.index || 0);
           diagnostics.push({
             severity: DiagnosticSeverity.Warning,
             range: {
               start: textDocument.positionAt(startOffset),
-              end: textDocument.positionAt(startOffset + tm[0].length)
+              end: textDocument.positionAt(startOffset + matchLength)
             },
             message: `Dependency reference not found: '${targetAddress}' does not exist in the workspace.`,
             source: 'Testform'
@@ -229,7 +269,13 @@ export function validateTextDocument(
         continue;
       }
 
-      const tag = idMatch.normalizedTag;
+      let tag = idMatch.normalizedTag;
+      if (fileResourceScope === 'testrun' && !currentRuleName && isScenarioHeader) {
+        const fullScenarioTarget = trimmed.replace(/^(?:Scenario|Scenario Outline|Escenario|Esquema del escenario):\s*/i, '').trim();
+        if (fullScenarioTarget.includes('.feature') || fullScenarioTarget.includes('/')) {
+          tag = fullScenarioTarget.toLowerCase().replace(/\\/g, '/');
+        }
+      }
       if (seenTagsInScope.has(tag)) {
         const firstLine = seenTagsInScope.get(tag)!;
         const tagCol = idMatch.index;
@@ -346,9 +392,7 @@ export function validateTextDocument(
           const cleanE = e.toLowerCase().startsWith('@') ? e.toLowerCase() : `@${e.toLowerCase()}`;
           return tags.has(cleanE);
         });
-        const hasStepFallback = fields.has(lowerName);
-
-        if (!hasTagDirect && !hasEnumMatch && !hasStepFallback) {
+        if (!hasTagDirect && !hasEnumMatch) {
           const sample = rf.enum && rf.enum.length > 0 ? rf.enum.join(' | ') : `@${rf.name}`;
           diagnostics.push({
             severity: DiagnosticSeverity.Warning,
@@ -445,7 +489,7 @@ export function validateTextDocument(
     }
 
     // Attachment validation by resource scope
-    const attachMatch = trimmed.match(/(?:^|\s+)\*?\s*set\s+(?:attach|evidence)\s*=\s*(.+)$/i);
+    const attachMatch = trimmed.match(/(?:^|\s+)\*?\s*set\s+attach\s*=\s*(.+)$/i);
     if (attachMatch) {
       if (currentScenarioLine < 0 && backgroundLineIndex >= 0) {
         if (resourceType === 'bug') {
@@ -474,23 +518,121 @@ export function validateTextDocument(
       }
     }
 
+    // Deprecation check for '* mark'
+    const markMatch = trimmed.match(/(?:^|\s+)\*?\s*mark\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
+    if (markMatch) {
+      const markKey = markMatch[1].trim();
+      const markVal = markMatch[2].trim();
+      const markIdx = rawLine.toLowerCase().indexOf('mark');
+      diagnostics.push({
+        severity: DiagnosticSeverity.Warning,
+        tags: [DiagnosticTag.Deprecated],
+        range: {
+          start: { line: i, character: markIdx >= 0 ? markIdx : 0 },
+          end: { line: i, character: markIdx >= 0 ? markIdx + 4 : rawLine.length }
+        },
+        message: `'mark' is deprecated in favor of 'set'. Use '* set ${markKey} = ${markVal}' instead.`,
+        source: 'Testform'
+      });
+    }
+
     // Validate execution mark names for '* set <mark>'
     const setMatch = trimmed.match(/(?:^|\s+)\*?\s*set\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
     if (setMatch) {
       const setKey = setMatch[1].trim();
+      const setVal = setMatch[2].trim();
       const lowerSetKey = setKey.toLowerCase();
-      const validMarks = ['target', 'status', 'trace', 'attach', 'evidence', 'duration'];
-      if (!validMarks.includes(lowerSetKey)) {
+      let allowedMarks: string[] = [];
+      let scopeNotice = '';
+
+      const isScenario = currentScenarioLine >= 0;
+      const isBackground = currentScenarioLine < 0 && backgroundLineIndex >= 0;
+
+      if (lowerSetKey === 'evidence') {
+        scopeNotice = `'evidence' is deprecated and has been removed in favor of 'attach'. Use '* set attach = ...' instead.`;
+      } else if (resourceType === 'testcase') {
+        allowedMarks = [];
+        scopeNotice = `'set' cannot be used in testcase specifications. Use standard Gherkin steps or '* field ...' for metadata.`;
+      } else if (resourceType === 'testrun') {
+        if (isBackground) {
+          allowedMarks = ['duration', 'attach', 'trace'];
+          if (lowerSetKey === 'status') {
+            scopeNotice = `Suite status in testruns is autocalculated from scenarios. Do not set status manually in Background.`;
+          }
+        } else {
+          allowedMarks = ['status'];
+          if (['duration', 'trace', 'attach'].includes(lowerSetKey)) {
+            scopeNotice = `'set ${setKey}' in testruns belongs at suite level (in Background:). Testrun scenarios only declare '* set status = <veredicto>'.`;
+          }
+        }
+      } else if (resourceType === 'bug') {
+        if (isBackground) {
+          allowedMarks = ['run'];
+          if (lowerSetKey === 'attach') {
+            scopeNotice = `Attachments are prohibited in Background for bug specifications. Defect attachments must be declared at Scenario level.`;
+          }
+        } else {
+          allowedMarks = ['status', 'trace', 'attach', 'target'];
+          if (lowerSetKey === 'duration') {
+            scopeNotice = `'set duration' is only valid in testrun execution specifications.`;
+          }
+        }
+      } else if (resourceType === 'testplan') {
+        if (isBackground) {
+          allowedMarks = ['attach'];
+        } else {
+          allowedMarks = [];
+        }
+        if (['status', 'target', 'duration', 'trace'].includes(lowerSetKey)) {
+          scopeNotice = `'set ${setKey}' is not valid in testplan specifications.`;
+        }
+      } else {
+        allowedMarks = ['target', 'status', 'trace', 'attach', 'duration', 'run'];
+      }
+
+      if (!allowedMarks.includes(lowerSetKey)) {
         const startChar = rawLine.indexOf(setKey);
+        const msg = scopeNotice || `Invalid DSL mark 'set ${setKey}'. 'set' is reserved for execution marks (${allowedMarks.join(', ') || 'none'}). Did you mean '* field ${setKey} = ...'?`;
         diagnostics.push({
           severity: DiagnosticSeverity.Error,
           range: {
             start: { line: i, character: startChar >= 0 ? startChar : 0 },
             end: { line: i, character: startChar >= 0 ? startChar + setKey.length : rawLine.length }
           },
-          message: `Invalid DSL mark 'set ${setKey}'. 'set' is reserved for runtime execution marks (target, status, trace, attach, evidence, duration). Did you mean '* field ${setKey} = ...'?`,
+          message: msg,
           source: 'Testform'
         });
+      } else if (lowerSetKey === 'status') {
+        const cleanVal = setVal.toLowerCase().replace(/^["']|["']$/g, '');
+        if (resourceType === 'testrun') {
+          const validRunStatuses = ['passed', 'failed', 'pending', 'skipped', 'blocked'];
+          if (!validRunStatuses.includes(cleanVal)) {
+            const startChar = rawLine.indexOf(setVal);
+            diagnostics.push({
+              severity: DiagnosticSeverity.Warning,
+              range: {
+                start: { line: i, character: startChar >= 0 ? startChar : 0 },
+                end: { line: i, character: startChar >= 0 ? startChar + setVal.length : rawLine.length }
+              },
+              message: `Unknown status '${setVal}' for testrun. Expected one of: ${validRunStatuses.join(', ')}.`,
+              source: 'Testform'
+            });
+          }
+        } else if (resourceType === 'bug') {
+          const validBugStatuses = ['open', 'in_progress', 'resolved', 'reopened', 'discarded', 'duplicate', 'failed', 'passed', 'pending'];
+          if (!validBugStatuses.includes(cleanVal)) {
+            const startChar = rawLine.indexOf(setVal);
+            diagnostics.push({
+              severity: DiagnosticSeverity.Warning,
+              range: {
+                start: { line: i, character: startChar >= 0 ? startChar : 0 },
+                end: { line: i, character: startChar >= 0 ? startChar + setVal.length : rawLine.length }
+              },
+              message: `Unknown status '${setVal}' for bug. Expected one of: open, in_progress, resolved, reopened, discarded, duplicate.`,
+              source: 'Testform'
+            });
+          }
+        }
       }
     }
 

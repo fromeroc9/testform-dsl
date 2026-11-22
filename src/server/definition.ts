@@ -92,19 +92,55 @@ export function provideDefinition(
 
   const dependsOnMatch = lineText.match(/@depends_on\s*\(\s*([^)]+)\s*\)/);
   if (dependsOnMatch) {
-    const targetMatches = [...dependsOnMatch[1].matchAll(/["']([^"']+)["']/g)];
+    const targetMatches = [...dependsOnMatch[1].matchAll(/(?:["']([^"']*)["']|([^\s,()[\]"']+))/g)];
     for (const tm of targetMatches) {
-      const address = tm[1].trim();
+      const address = (tm[1] ?? tm[2] ?? '').trim();
       if (!address) continue;
 
       if (address.startsWith('@')) {
-        // Internal reference to tag in the current feature file
+        // 1. Internal reference in current feature file
         const lines = document.getText().split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
           if (i !== position.line && new RegExp(`^\\s*${address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(lines[i])) {
             return Location.create(document.uri, {
               start: { line: i, character: 0 },
               end: { line: i, character: 100 }
+            });
+          }
+        }
+
+        // 2. Enclosing Rule feature file
+        const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
+        let enclosingRule = '';
+        for (let i = linesBefore.length - 1; i >= 0; i--) {
+          const m = linesBefore[i].trim().match(/^(?:Rule|Regla):\s*(.+)$/i);
+          if (m) {
+            enclosingRule = m[1].trim();
+            break;
+          }
+        }
+        if (enclosingRule) {
+          const normRule = enclosingRule.replace(/\\/g, '/').toLowerCase();
+          const normBase = normRule.split('/').pop() || normRule;
+          for (const [_, info] of scanner.config.scenarioAddresses.entries()) {
+            const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+            if ((normSource.endsWith(normRule) || normSource.endsWith(normBase)) && info.tag === address) {
+              const uri = pathToFileURL(info.sourceFile).href;
+              return Location.create(uri, {
+                start: { line: info.line, character: 0 },
+                end: { line: info.line, character: 100 }
+              });
+            }
+          }
+        }
+
+        // 3. Workspace-wide scenario search
+        for (const [_, info] of scanner.config.scenarioAddresses.entries()) {
+          if (info.tag === address) {
+            const uri = pathToFileURL(info.sourceFile).href;
+            return Location.create(uri, {
+              start: { line: info.line, character: 0 },
+              end: { line: info.line, character: 100 }
             });
           }
         }
@@ -118,6 +154,44 @@ export function provideDefinition(
             end: { line: targetScenario.line, character: 100 }
           });
         }
+      }
+    }
+  }
+
+  // 2.1 Direct tag association: @bg-01 @tc-01 (jump to testcase if clicking on @tc-XX)
+  const tcTagMatch = lineText.match(/(@(?:tc|TC)(?:-\d+)?)\b/);
+  if (tcTagMatch) {
+    const tcTag = tcTagMatch[1];
+    const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
+    let enclosingRule = '';
+    for (let i = linesBefore.length - 1; i >= 0; i--) {
+      const m = linesBefore[i].trim().match(/^(?:Rule|Regla):\s*(.+)$/i);
+      if (m) {
+        enclosingRule = m[1].trim();
+        break;
+      }
+    }
+    if (enclosingRule) {
+      const normRule = enclosingRule.replace(/\\/g, '/').toLowerCase();
+      const normBase = normRule.split('/').pop() || normRule;
+      for (const [_, info] of scanner.config.scenarioAddresses.entries()) {
+        const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+        if ((normSource.endsWith(normRule) || normSource.endsWith(normBase)) && info.tag === tcTag) {
+          const uri = pathToFileURL(info.sourceFile).href;
+          return Location.create(uri, {
+            start: { line: info.line, character: 0 },
+            end: { line: info.line, character: 100 }
+          });
+        }
+      }
+    }
+    for (const [_, info] of scanner.config.scenarioAddresses.entries()) {
+      if (info.tag === tcTag) {
+        const uri = pathToFileURL(info.sourceFile).href;
+        return Location.create(uri, {
+          start: { line: info.line, character: 0 },
+          end: { line: info.line, character: 100 }
+        });
       }
     }
   }
@@ -208,7 +282,17 @@ export function provideDefinition(
       }
     } else {
       // Direct scenario target lookup without enclosing Rule
-      const targetScenario = scanner.config.scenarioAddresses.get(rawTarget) || scanner.config.scenarios.get(rawTarget);
+      const cleanTarget = rawTarget.replace(/\\/g, '/');
+      let targetScenario = scanner.config.scenarioAddresses.get(cleanTarget) || scanner.config.scenarios.get(cleanTarget);
+      if (!targetScenario) {
+        for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+          const normAddr = addr.replace(/\\/g, '/');
+          if (normAddr.toLowerCase() === cleanTarget.toLowerCase() || normAddr.toLowerCase().endsWith(cleanTarget.toLowerCase())) {
+            targetScenario = info;
+            break;
+          }
+        }
+      }
       if (targetScenario) {
         return Location.create(pathToFileURL(targetScenario.sourceFile).href, {
           start: { line: targetScenario.line, character: 0 },

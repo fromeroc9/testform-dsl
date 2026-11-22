@@ -132,16 +132,16 @@ export function provideHover(
     end: { line: position.line + 1, character: 0 }
   });
 
-  // 2. Hover on @depends_on("...")
+  // 2. Hover on @depends_on(...)
   const dependsOnMatch = lineText.match(/@depends_on\s*\(\s*([^)]+)\s*\)/);
   if (dependsOnMatch) {
-    const targetMatches = [...dependsOnMatch[1].matchAll(/["']([^"']+)["']/g)];
+    const targetMatches = [...dependsOnMatch[1].matchAll(/(?:["']([^"']*)["']|([^\s,()[\]"']+))/g)];
     for (const tm of targetMatches) {
-      const address = tm[1].trim();
+      const address = (tm[1] ?? tm[2] ?? '').trim();
       if (!address) continue;
 
       if (address.startsWith('@')) {
-        // Internal dependency within current feature file
+        // 1. Internal dependency within current feature file
         const lines = document.getText().split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
           if (new RegExp(`^\\s*${address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(lines[i])) {
@@ -157,11 +157,60 @@ export function provideHover(
               contents: {
                 kind: MarkupKind.Markdown,
                 value: [
-                  `### 🔗 Internal Dependency: \`${address}\``,
+                  `### 🔗 Target Dependency: \`${address}\``,
                   `**Scenario:** ${title}`,
                   `**Type:** Internal reference within this feature file`,
                   `---`,
                   `*Location:* Line ${i + 1}`
+                ].join('\n\n')
+              }
+            };
+          }
+        }
+
+        // 2. Enclosing Rule feature file
+        const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
+        let enclosingRule = '';
+        for (let i = linesBefore.length - 1; i >= 0; i--) {
+          const m = linesBefore[i].trim().match(/^(?:Rule|Regla):\s*(.+)$/i);
+          if (m) {
+            enclosingRule = m[1].trim();
+            break;
+          }
+        }
+        if (enclosingRule) {
+          const normRule = enclosingRule.replace(/\\/g, '/').toLowerCase();
+          const normBase = normRule.split('/').pop() || normRule;
+          for (const [_, info] of scanner.config.scenarioAddresses.entries()) {
+            const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+            if ((normSource.endsWith(normRule) || normSource.endsWith(normBase)) && info.tag === address) {
+              const fileName = info.sourceFile.split(/[/\\]/).pop();
+              return {
+                contents: {
+                  kind: MarkupKind.Markdown,
+                  value: [
+                    `### 🧪 Target Test Case: \`${info.tag}\``,
+                    `**Scenario:** ${info.title}`,
+                    `**File:** \`${fileName}\` (line ${info.line + 1})`,
+                    `**Rule:** \`${enclosingRule}\``
+                  ].join('\n\n')
+                }
+              };
+            }
+          }
+        }
+
+        // 3. Workspace-wide scenario search
+        for (const [_, info] of scanner.config.scenarioAddresses.entries()) {
+          if (info.tag === address) {
+            const fileName = info.sourceFile.split(/[/\\]/).pop();
+            return {
+              contents: {
+                kind: MarkupKind.Markdown,
+                value: [
+                  `### 🧪 Target Test Case: \`${info.tag}\``,
+                  `**Scenario:** ${info.title}`,
+                  `**File:** \`${fileName}\` (line ${info.line + 1})`
                 ].join('\n\n')
               }
             };
@@ -181,6 +230,30 @@ export function provideHover(
                 `**Ledger Address:** \`${targetScenario.address}\``,
                 `---`,
                 `*Defined in:* \`${fileName}\` (line ${targetScenario.line + 1})`
+              ].join('\n\n')
+            }
+          };
+        }
+      }
+    }
+  }
+
+  // 2.1 Direct tag hover: @bg-01 @tc-01
+  const tcHoverMatch = lineText.match(/(@(?:tc|TC)(?:-\d+)?)\b/);
+  if (tcHoverMatch) {
+    const tcTag = tcHoverMatch[1];
+    const matchIdx = lineText.indexOf(tcTag);
+    if (position.character >= matchIdx && position.character <= matchIdx + tcTag.length) {
+      for (const [_, info] of scanner.config.scenarioAddresses.entries()) {
+        if (info.tag === tcTag) {
+          const fileName = info.sourceFile.split(/[/\\]/).pop();
+          return {
+            contents: {
+              kind: MarkupKind.Markdown,
+              value: [
+                `### 🧪 Target Test Case: \`${info.tag}\``,
+                `**Scenario:** ${info.title}`,
+                `**File:** \`${fileName}\` (line ${info.line + 1})`
               ].join('\n\n')
             }
           };
@@ -257,7 +330,17 @@ export function provideHover(
       }
     } else {
       // Direct scenario target lookup without Rule:
-      const targetScenario = scanner.config.scenarioAddresses.get(rawTarget) || scanner.config.scenarios.get(rawTarget);
+      let targetScenario = scanner.config.scenarioAddresses.get(rawTarget) || scanner.config.scenarios.get(rawTarget);
+      if (!targetScenario) {
+        const cleanTarget = rawTarget.replace(/\\/g, '/');
+        for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+          const normAddr = addr.replace(/\\/g, '/');
+          if (normAddr.toLowerCase() === cleanTarget.toLowerCase() || normAddr.toLowerCase().endsWith(cleanTarget.toLowerCase())) {
+            targetScenario = info;
+            break;
+          }
+        }
+      }
       if (targetScenario) {
         const fileName = targetScenario.sourceFile.split(/[/\\]/).pop();
         return {
@@ -443,15 +526,15 @@ export function provideHover(
     };
   }
 
-  // 4.2 Hover on mark attach = ... or evidence = ...
-  const attachMatch = lineText.match(/set\s+(?:attach|evidence)\s*=\s*(.+)$/i);
+  // 4.2 Hover on mark attach = ...
+  const attachMatch = lineText.match(/set\s+attach\s*=\s*(.+)$/i);
   if (attachMatch) {
     const attachVal = attachMatch[1].trim().replace(/^["']|["']$/g, '');
     return {
       contents: {
         kind: MarkupKind.Markdown,
         value: [
-          `### 📎 Attachment / Evidence — Canonical Field`,
+          `### 📎 Attachment — Canonical Field`,
           `**Reference:** \`${attachVal}\``,
           `---`,
           `*Effect:* Attaches screenshot, log file, document, or dataset into \`testform.state\` and reports.*`

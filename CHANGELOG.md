@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.5] - 2026-11-22
+
+### Added
+
+- **Strict DSL Mark vs Field Governance Diagnostics (`src/server/diagnostics.ts`):**
+  - Rejects any `* set` step in `testcase` specifications (testcases are pure BDD specifications with `Given`, `When`, `Then` steps and contract `* field` metadata).
+  - Enforces `testrun` section boundaries: `Background:` allows `* set duration`, `* set attach`, `* set trace`, while prohibiting manual `status` (suite status is autocalculated). `Scenario:` strictly allows `* set status`.
+  - Flags step definitions (`* field <name>`) when the field is configured with `source: "tag"` in `main.yml`, guiding users to declare it as `@tag` instead.
+  - Prevents false-positive duplicate scenario ID errors in `testrun` files declared without `Rule:` by scoping direct scenario addresses by their full target path.
+- **Unquoted `@depends_on` & Cross-File Testcase Resolution (`src/server/definition.ts`, `src/server/hover.ts`, `src/server/completions.ts`):**
+  - Full support for unquoted `@depends_on(@tc-01)` and side-by-side tags (`@bg-01 @tc-01`) for Go-to-Definition (F12) and hover previews.
+  - Automatically resolves internal tags against the enclosing `Rule:` file.
+  - Direct scenario target fallback lookup for `testrun` scenarios declared without `Rule:` in both hover and definition providers.
+  - Contextual autocompletions inside `@depends_on(`: suggests testcase tags of the enclosing Rule file, internal tags, and external scenario addresses.
+  - General `@` completion inside `Rule:` for both `@testrun` and `@bug` suggests testcase tags.
+  - Starter scaffolding snippets (`tf-testrun`, `tf-bug`) updated to the new architecture.
+
+---
+
 ## [1.0.4] - 2026-11-21
 
 ### Added

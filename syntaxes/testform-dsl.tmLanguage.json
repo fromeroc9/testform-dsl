@@ -140,9 +140,9 @@
           "captures": {
             "1": { "name": "keyword.control.step.gherkin" },
             "2": { "name": "keyword.control.testform.mark" },
-            "3": { "name": "support.type.property-name.testform" },
+            "3": { "name": "variable.other.member.testform support.type.property-name.testform" },
             "4": { "name": "keyword.operator.assignment.testform" },
-            "5": { "name": "constant.language.status.testform" }
+            "5": { "name": "constant.language.status.testform entity.name.constant.testform" }
           }
         },
         {
@@ -150,29 +150,27 @@
           "captures": {
             "1": { "name": "keyword.control.step.gherkin" },
             "2": { "name": "keyword.control.testform.mark" },
-            "3": { "name": "support.type.property-name.testform" },
+            "3": { "name": "variable.other.member.testform support.type.property-name.testform" },
             "4": { "name": "keyword.operator.assignment.testform" },
             "5": { "name": "constant.numeric.duration.testform" }
           }
         },
         {
-          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(set|mark)\\b\\s+\\b(target|trace|attach|evidence)\\b\\s*(=)\\s*(.*)$",
+          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(set|mark)\\b\\s+\\b(target|trace|attach)\\b\\s*(=)",
           "captures": {
             "1": { "name": "keyword.control.step.gherkin" },
             "2": { "name": "keyword.control.testform.mark" },
-            "3": { "name": "support.type.property-name.testform" },
-            "4": { "name": "keyword.operator.assignment.testform" },
-            "5": { "name": "string.unquoted.testform" }
+            "3": { "name": "variable.other.member.testform support.type.property-name.testform" },
+            "4": { "name": "keyword.operator.assignment.testform" }
           }
         },
         {
-          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(set|mark)\\b\\s+([a-zA-Z0-9_.-]+)\\s*(=)\\s*(.*)$",
+          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(set|mark)\\b\\s+([a-zA-Z0-9_.-]+)\\s*(=)",
           "captures": {
             "1": { "name": "keyword.control.step.gherkin" },
             "2": { "name": "keyword.control.testform.mark" },
-            "3": { "name": "support.type.property-name.testform" },
-            "4": { "name": "keyword.operator.assignment.testform" },
-            "5": { "name": "string.unquoted.testform" }
+            "3": { "name": "variable.other.member.testform support.type.property-name.testform" },
+            "4": { "name": "keyword.operator.assignment.testform" }
           }
         }
       ]
@@ -180,13 +178,12 @@
     "dsl-field": {
       "patterns": [
         {
-          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(field)\\b\\s+([a-zA-Z0-9_.-]+)\\s*(=)\\s*(.*)$",
+          "match": "(^\\s*(?:\\*|Given|When|Then|And|Dado|Cuando|Entonces|Y)\\s+)?\\b(field)\\b\\s+([a-zA-Z0-9_.-]+)\\s*(=)",
           "captures": {
             "1": { "name": "keyword.control.step.gherkin" },
             "2": { "name": "keyword.control.testform.field" },
             "3": { "name": "variable.other.member.testform" },
-            "4": { "name": "keyword.operator.assignment.testform" },
-            "5": { "name": "string.unquoted.testform" }
+            "4": { "name": "keyword.operator.assignment.testform" }
           }
         }
       ]

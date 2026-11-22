@@ -77,6 +77,114 @@ export function provideCodeActions(
   const docScope = detectDocumentScope(document, scanner);
   const inferred = inferContextValues(document.uri);
 
+  // 1. QuickFix for deprecated 'mark' -> 'set'
+  const markDiag = params.context.diagnostics?.find(
+    d => typeof d.message === 'string' && d.message.includes("'mark' is deprecated in favor of 'set'")
+  );
+  if (markDiag) {
+    const markLine = markDiag.range.start.line;
+    const lineText = lines[markLine] || '';
+    const replaced = lineText.replace(/\bmark\b/i, 'set');
+    const fixAction = CodeAction.create(
+      `⚡ Replace deprecated 'mark' with 'set'`,
+      {
+        changes: {
+          [document.uri]: [
+            TextEdit.replace(
+              { start: { line: markLine, character: 0 }, end: { line: markLine, character: lineText.length } },
+              replaced
+            )
+          ]
+        }
+      },
+      CodeActionKind.QuickFix
+    );
+    fixAction.isPreferred = true;
+    actions.push(fixAction);
+  }
+
+  // 1.1 QuickFix for removed 'evidence' -> 'attach'
+  const evidenceDiag = params.context.diagnostics?.find(
+    d => typeof d.message === 'string' && d.message.includes("'evidence' is deprecated")
+  );
+  if (evidenceDiag) {
+    const evLine = evidenceDiag.range.start.line;
+    const lineText = lines[evLine] || '';
+    const replaced = lineText.replace(/\bevidence\b/i, 'attach');
+    const fixAction = CodeAction.create(
+      `⚡ Replace 'evidence' with 'attach'`,
+      {
+        changes: {
+          [document.uri]: [
+            TextEdit.replace(
+              { start: { line: evLine, character: 0 }, end: { line: evLine, character: lineText.length } },
+              replaced
+            )
+          ]
+        }
+      },
+      CodeActionKind.QuickFix
+    );
+    fixAction.isPreferred = true;
+    actions.push(fixAction);
+  }
+
+  // 2. QuickFix for invalid 'set' mark that belongs to a contract field (e.g. set severity -> field severity)
+  const setFieldDiag = params.context.diagnostics?.find(
+    d => typeof d.message === 'string' && d.message.includes("Did you mean '* field")
+  );
+  if (setFieldDiag) {
+    const setLine = setFieldDiag.range.start.line;
+    const lineText = lines[setLine] || '';
+    const replaced = lineText.replace(/\bset\b/i, 'field');
+    const fixAction = CodeAction.create(
+      `⚡ Change 'set' to 'field' (convert execution mark to contract field)`,
+      {
+        changes: {
+          [document.uri]: [
+            TextEdit.replace(
+              { start: { line: setLine, character: 0 }, end: { line: setLine, character: lineText.length } },
+              replaced
+            )
+          ]
+        }
+      },
+      CodeActionKind.QuickFix
+    );
+    fixAction.isPreferred = true;
+    actions.push(fixAction);
+  }
+
+  // 3. QuickFix for tag field written as step (e.g. * field priority = @medium)
+  const tagAsStepDiag = params.context.diagnostics?.find(
+    d => typeof d.message === 'string' && d.message.includes('declared with source: "tag"')
+  );
+  if (tagAsStepDiag) {
+    const stepLine = tagAsStepDiag.range.start.line;
+    const lineText = lines[stepLine] || '';
+    const match = lineText.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
+    if (match) {
+      const fieldVal = match[2].trim().replace(/^["']|["']$/g, '');
+      const tagVal = fieldVal.startsWith('@') ? fieldVal : `@${fieldVal}`;
+      const fixAction = CodeAction.create(
+        `⚡ Convert '* field' to tag '${tagVal}'`,
+        {
+          changes: {
+            [document.uri]: [
+              TextEdit.replace(
+                { start: { line: stepLine, character: 0 }, end: { line: stepLine + 1, character: 0 } },
+                `  ${tagVal}\n`
+              )
+            ]
+          }
+        },
+        CodeActionKind.QuickFix
+      );
+      fixAction.isPreferred = true;
+      actions.push(fixAction);
+    }
+  }
+
   // Check for collision diagnostic or collision quick fix
   const collisionDiag = params.context.diagnostics?.find(
     d => d.code === 'testform-collision-namespace' || (typeof d.message === 'string' && d.message.includes('Collision Warning'))

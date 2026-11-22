@@ -84,7 +84,7 @@ export function provideCompletions(
           value: '### 🚀 Starter Test Run Suite\n\nCreate a new TestRun suite linking testcase feature rules.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: `@testrun @\${1:${nextTrBody}}\nFeature: \${2:Execution Suite}\n\n  Rule: \${3:path/to.case.feature}\n\n    Scenario: \${4:${sampleTcTag}}\n      * set status = \${5|passed,failed,pending,skipped,undefined,ambiguous,blocked|}\n`
+        insertText: `@testrun @\${1:${nextTrBody}}\nFeature: \${2:Execution Suite}\n\n  Background:\n    * set duration = \${3:1m 20s}\n    * set attach = "\${4:attachments/runs/exec.log}"\n\n  Rule: \${5:path/to.case.feature}\n\n    Scenario: \${6:${sampleTcTag}}\n      * set status = \${7|passed,failed,pending,skipped,blocked|}\n`
       },
       {
         label: 'tf-testplan',
@@ -104,7 +104,7 @@ export function provideCompletions(
           value: '### 🐛 Starter Defect / Bug Feature\n\nCreate a new declarative bug report targeting an existing testcase scenario.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: `@bug @\${1:${sampleBgBody}}\nFeature: \${2:Bug Title}\n\n  Scenario: \${3:Defect Description}\n    * set target = \${4:path/to.case.feature.${sampleTcTag}}\n    * set status = \${5|failed,passed,pending|}\n    * field severity = \${6|critical,high,medium,low|}\n`
+        insertText: `@bug @\${1:${sampleBgBody}}\nFeature: \${2:Bug Title}\n\n  Background:\n    * set run = \${3:testruns/example.run.feature}\n\n  Rule: \${4:testcase/example.case.feature}\n\n    @bg-01 @depends_on(\${5:${sampleTcTag}})\n    Scenario: \${6:Defect Description}\n      * set status = \${7|open,in_progress,resolved,reopened,discarded,duplicate|}\n      * set attach = "\${8:attachments/bugs/screenshot.png}"\n      * field severity = \${9|blocker,critical,major,minor|}\n`
       }
     ];
   }
@@ -320,6 +320,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
     const docScope = detectDocumentScope(document, scanner);
     const isTestplan = docScope === 'testplan';
     const isTestrun = docScope === 'testrun';
+    const isBug = docScope === 'bug';
 
     if (isTestplan) {
       // In a testplan, Rule: must suggest testrun suite files (*.run.feature)
@@ -373,7 +374,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
         }
       }
       return items;
-    } else if (isTestrun) {
+    } else if (isTestrun || isBug) {
       // In a testrun, Rule: must suggest testcase feature files (*.case.feature)
       // Stripping scaffold directory (e.g. 'testcase/') so paths are short (e.g. Magento/cart.case.feature)
       const tcScaffold = (scanner.config.scaffoldDirectories?.testcase || 'testcase').replace(/^[/\\]+|[/\\]+$/g, '');
@@ -726,7 +727,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
             : 'Testform DSL: Attach file, mockup or document at feature/suite level',
           sortText: '03_set_attach',
           insertTextFormat: InsertTextFormat.Snippet,
-          filterText: 'set attach attach evidence',
+          filterText: 'set attach attach',
           textEdit: TextEdit.replace(
             { start: { line: position.line, character: prefixCol }, end: position },
             'set attach = "${1:attachments/path}"'
@@ -786,64 +787,111 @@ function inferContextValues(docUri: string): { project: string; module: string }
           });
         }
       }
+
+      // System marks for Background by scope
+      if (docScope === 'testrun') {
+        items.push(
+          {
+            label: 'set duration = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Suite total execution duration (e.g. 1m 20s, 12.5s)',
+            sortText: '01_set_duration',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'set duration duration',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'set duration = ${1:1m 20s}'
+            ),
+            insertText: 'set duration = ${1:1m 20s}'
+          },
+          {
+            label: 'set attach = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Suite consolidated log, video, or execution report',
+            sortText: '02_set_attach',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'set attach attach',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'set attach = "${1:attachments/runs/exec.log}"'
+            ),
+            insertText: 'set attach = "${1:attachments/runs/exec.log}"'
+          },
+          {
+            label: 'set trace = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Suite runner failure trace or abort reason',
+            sortText: '03_set_trace',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'set trace trace',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'set trace = "${1:runner error trace}"'
+            ),
+            insertText: 'set trace = "${1:runner error trace}"'
+          }
+        );
+      } else if (docScope === 'bug') {
+        items.push({
+          label: 'set run = ...',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Origin testrun reference for this bug specification (optional)',
+          sortText: '01_set_run',
+          insertTextFormat: InsertTextFormat.Snippet,
+          filterText: 'set run run',
+          textEdit: TextEdit.replace(
+            { start: { line: position.line, character: prefixCol }, end: position },
+            'set run = ${1:testruns/suite.run.feature}'
+          ),
+          insertText: 'set run = ${1:testruns/suite.run.feature}'
+        });
+      } else if (docScope === 'testplan') {
+        items.push({
+          label: 'set attach = ...',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Test plan global documentation or specification artifact',
+          sortText: '01_set_attach',
+          insertTextFormat: InsertTextFormat.Snippet,
+          filterText: 'set attach attach',
+          textEdit: TextEdit.replace(
+            { start: { line: position.line, character: prefixCol }, end: position },
+            'set attach = "${1:attachments/plans/plan.pdf}"'
+          ),
+          insertText: 'set attach = "${1:attachments/plans/plan.pdf}"'
+        });
+      }
+
       return items;
     }
 
     // Inside Scenario:
     if (gContext.section === 'scenario') {
       const inferred = inferContextValues(document.uri);
-      const isSetTrigger = rest.startsWith('s') || ['status', 'target', 'trace', 'evidence', 'attach', 'duration'].some(k => rest.startsWith(k));
+      const isSetTrigger = rest.startsWith('s') || ['status', 'target', 'trace', 'attach', 'duration'].some(k => rest.startsWith(k));
       const isFieldTrigger = rest.startsWith('f') || rest.startsWith('field');
 
       // ─── 1. DSL Marks (set ...) ───
       if (!isFieldTrigger) {
         if (docScope === 'bug') {
-          const sampleTcTag = formatSampleIdentityTag(scanner.config.identities.testcase, 1, true, true);
           items.push(
-            {
-              label: 'set target = ...',
-              kind: CompletionItemKind.Snippet,
-              detail: 'Testform DSL: Set failing test case canonical target',
-              sortText: '01_set_target',
-              insertTextFormat: InsertTextFormat.Snippet,
-              filterText: 'set target target',
-              textEdit: TextEdit.replace(
-                { start: { line: position.line, character: prefixCol }, end: position },
-                `set target = \${1:testcase/path.case.feature.${sampleTcTag}}`
-              ),
-              insertText: `set target = \${1:testcase/path.case.feature.${sampleTcTag}}`
-            },
             {
               label: 'set status = ...',
               kind: CompletionItemKind.Snippet,
-              detail: 'Testform DSL: Set defect status',
-              sortText: '02_set_status',
+              detail: 'Testform DSL: Set defect lifecycle status',
+              sortText: '01_set_status',
               insertTextFormat: InsertTextFormat.Snippet,
               filterText: 'set status status',
               textEdit: TextEdit.replace(
                 { start: { line: position.line, character: prefixCol }, end: position },
-                'set status = ${1|open,reopened,resolved,closed,failed,passed|}'
+                'set status = ${1|open,in_progress,resolved,reopened,discarded,duplicate|}'
               ),
-              insertText: 'set status = ${1|open,reopened,resolved,closed,failed,passed|}'
-            },
-            {
-              label: 'set trace = ...',
-              kind: CompletionItemKind.Snippet,
-              detail: 'Testform DSL: Record failure trace or error detail',
-              sortText: '03_set_trace',
-              insertTextFormat: InsertTextFormat.Snippet,
-              filterText: 'set trace trace',
-              textEdit: TextEdit.replace(
-                { start: { line: position.line, character: prefixCol }, end: position },
-                'set trace = "${1:trace description or error stack}"'
-              ),
-              insertText: 'set trace = "${1:trace description or error stack}"'
+              insertText: 'set status = ${1|open,in_progress,resolved,reopened,discarded,duplicate|}'
             },
             {
               label: 'set attach = ...',
               kind: CompletionItemKind.Snippet,
               detail: 'Testform DSL: Attach defect screenshot, payload, or file',
-              sortText: '04_set_attach',
+              sortText: '02_set_attach',
               insertTextFormat: InsertTextFormat.Snippet,
               filterText: 'set attach attach',
               textEdit: TextEdit.replace(
@@ -853,48 +901,6 @@ function inferContextValues(docUri: string): { project: string; module: string }
               insertText: 'set attach = "${1:attachments/bugs/screenshot.png}"'
             },
             {
-              label: 'set evidence = ...',
-              kind: CompletionItemKind.Snippet,
-              detail: 'Testform DSL: Attach execution evidence (screenshot, file, URL)',
-              sortText: '05_set_evidence',
-              insertTextFormat: InsertTextFormat.Snippet,
-              filterText: 'set evidence evidence',
-              textEdit: TextEdit.replace(
-                { start: { line: position.line, character: prefixCol }, end: position },
-                'set evidence = "${1:evidence.png or url}"'
-              ),
-              insertText: 'set evidence = "${1:evidence.png or url}"'
-            }
-          );
-        } else if (docScope === 'testrun') {
-          items.push(
-            {
-              label: 'set status = ...',
-              kind: CompletionItemKind.Snippet,
-              detail: 'Testform DSL: Set execution status',
-              sortText: '01_set_status',
-              insertTextFormat: InsertTextFormat.Snippet,
-              filterText: 'set status status',
-              textEdit: TextEdit.replace(
-                { start: { line: position.line, character: prefixCol }, end: position },
-                'set status = ${1|passed,failed,pending,skipped,undefined,ambiguous,blocked|}'
-              ),
-              insertText: 'set status = ${1|passed,failed,pending,skipped,undefined,ambiguous,blocked|}'
-            },
-            {
-              label: 'set duration = ...',
-              kind: CompletionItemKind.Snippet,
-              detail: 'Testform DSL: Record scenario execution duration (e.g. 1.25s, 250ms)',
-              sortText: '02_set_duration',
-              insertTextFormat: InsertTextFormat.Snippet,
-              filterText: 'set duration duration',
-              textEdit: TextEdit.replace(
-                { start: { line: position.line, character: prefixCol }, end: position },
-                'set duration = ${1:1.25s}'
-              ),
-              insertText: 'set duration = ${1:1.25s}'
-            },
-            {
               label: 'set trace = ...',
               kind: CompletionItemKind.Snippet,
               detail: 'Testform DSL: Record failure trace or error detail',
@@ -906,64 +912,40 @@ function inferContextValues(docUri: string): { project: string; module: string }
                 'set trace = "${1:trace description or error stack}"'
               ),
               insertText: 'set trace = "${1:trace description or error stack}"'
-            },
-            {
-              label: 'set attach = ...',
-              kind: CompletionItemKind.Snippet,
-              detail: 'Testform DSL: Attach execution artifact, log, or video',
-              sortText: '04_set_attach',
-              insertTextFormat: InsertTextFormat.Snippet,
-              filterText: 'set attach attach',
-              textEdit: TextEdit.replace(
-                { start: { line: position.line, character: prefixCol }, end: position },
-                'set attach = "${1:attachments/runs/file}"'
-              ),
-              insertText: 'set attach = "${1:attachments/runs/file}"'
-            },
-            {
-              label: 'set evidence = ...',
-              kind: CompletionItemKind.Snippet,
-              detail: 'Testform DSL: Attach execution evidence (screenshot, file, URL)',
-              sortText: '05_set_evidence',
-              insertTextFormat: InsertTextFormat.Snippet,
-              filterText: 'set evidence evidence',
-              textEdit: TextEdit.replace(
-                { start: { line: position.line, character: prefixCol }, end: position },
-                'set evidence = "${1:evidence.png or url}"'
-              ),
-              insertText: 'set evidence = "${1:evidence.png or url}"'
             }
           );
-        } else if (docScope === 'testcase') {
-          items.push({
-            label: 'set attach = ...',
-            kind: CompletionItemKind.Snippet,
-            detail: 'Testform DSL: Attach mock, dataset, or diagram to testcase',
-            sortText: '01_set_attach',
-            insertTextFormat: InsertTextFormat.Snippet,
-            filterText: 'set attach attach',
-            textEdit: TextEdit.replace(
-              { start: { line: position.line, character: prefixCol }, end: position },
-              'set attach = "${1:attachments/cases/file}"'
-            ),
-            insertText: 'set attach = "${1:attachments/cases/file}"'
-          });
-        } else if (isSetTrigger) {
+        } else if (docScope === 'testrun') {
           items.push(
             {
               label: 'set status = ...',
               kind: CompletionItemKind.Snippet,
-              detail: 'Testform DSL: Set execution status',
+              detail: 'Testform DSL: Set scenario execution status',
               sortText: '01_set_status',
               insertTextFormat: InsertTextFormat.Snippet,
               filterText: 'set status status',
               textEdit: TextEdit.replace(
                 { start: { line: position.line, character: prefixCol }, end: position },
-                'set status = ${1|passed,failed,pending,skipped,undefined,ambiguous,blocked|}'
+                'set status = ${1|passed,failed,pending,skipped,blocked|}'
               ),
-              insertText: 'set status = ${1|passed,failed,pending,skipped,undefined,ambiguous,blocked|}'
-            },
-            {
+              insertText: 'set status = ${1|passed,failed,pending,skipped,blocked|}'
+            }
+          );
+        } else if (isSetTrigger && docScope !== 'testcase') {
+          items.push({
+            label: 'set status = ...',
+            kind: CompletionItemKind.Snippet,
+            detail: 'Testform DSL: Set execution status',
+            sortText: '01_set_status',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'set status status',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              'set status = ${1|passed,failed,pending,skipped,undefined,ambiguous,blocked|}'
+            ),
+            insertText: 'set status = ${1|passed,failed,pending,skipped,undefined,ambiguous,blocked|}'
+          });
+          if (docScope !== 'testrun') {
+            items.push({
               label: 'set target = ...',
               kind: CompletionItemKind.Snippet,
               detail: 'Testform DSL: Set target test case',
@@ -975,8 +957,8 @@ function inferContextValues(docUri: string): { project: string; module: string }
                 'set target = ${1:testcase/path.case.feature.@tc-01}'
               ),
               insertText: 'set target = ${1:testcase/path.case.feature.@tc-01}'
-            }
-          );
+            });
+          }
         }
       }
 
@@ -992,7 +974,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
         const requiredFields = applicableFields.filter(f => f.required);
 
         // Offer "⚡ Implement all required fields for this scenario" if any required fields exist
-        if (requiredFields.length > 0 && docScope === 'testcase') {
+        if (requiredFields.length > 0 && (docScope === 'testcase' || docScope === 'bug')) {
           let tabIdx = 1;
           const reqLines = requiredFields.map((f, idx) => {
             const pfx = idx === 0 ? '' : '    * ';
@@ -1023,6 +1005,37 @@ function inferContextValues(docUri: string): { project: string; module: string }
               reqLines
             ),
             insertText: reqLines
+          });
+        }
+
+        // Offer "⚡ Implement all defect fields" for @bug files
+        if (applicableFields.length > 0 && docScope === 'bug') {
+          let tabIdx = 1;
+          const bugFieldLines = applicableFields.map((f, idx) => {
+            const pfx = idx === 0 ? '' : '    * ';
+            let valStr = '';
+            if (f.default !== undefined) {
+              valStr = `\${indexVar:${f.default}}`.replace('indexVar', String(tabIdx++));
+            } else if (f.enum && f.enum.length > 0) {
+              valStr = `\${indexVar|${f.enum.map(e => e.replace(/[,|\\/]/g, '')).join(',')}|}`.replace('indexVar', String(tabIdx++));
+            } else {
+              valStr = `\${indexVar:value}`.replace('indexVar', String(tabIdx++));
+            }
+            return `${pfx}field ${f.name} = ${valStr}`;
+          }).join('\n');
+
+          items.push({
+            label: '⚡ Implement all defect fields',
+            kind: CompletionItemKind.Snippet,
+            detail: `Testform DSL: Implement defect fields (${applicableFields.map(f => f.name).join(', ')})`,
+            sortText: '09_defect_all_fields',
+            insertTextFormat: InsertTextFormat.Snippet,
+            filterText: 'implement all fields defect bug * field',
+            textEdit: TextEdit.replace(
+              { start: { line: position.line, character: prefixCol }, end: position },
+              bugFieldLines
+            ),
+            insertText: bugFieldLines
           });
         }
 
@@ -1323,9 +1336,50 @@ function inferContextValues(docUri: string): { project: string; module: string }
     if (items.length > 0) return items;
   }
 
-  // 7. Depends on addresses completion inside @depends_on("...")
-  if (/@depends_on\([^)]*["'][^"']*$/.test(lineText)) {
-    // 7.1 Internal tags in the current document
+  // 7. Depends on addresses completion inside @depends_on(...)
+  const dependsOnMatch = lineText.match(/@depends_on\(\s*(["']?)([^"')]*)$/i);
+  if (dependsOnMatch) {
+    const quote = dependsOnMatch[1];
+    const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
+    let enclosingRule = '';
+    for (let i = linesBefore.length - 1; i >= 0; i--) {
+      const m = linesBefore[i].trim().match(/^(?:Rule|Regla):\s*(.+)$/i);
+      if (m) {
+        enclosingRule = m[1].trim();
+        break;
+      }
+    }
+
+    // 7.1 If enclosed in a Rule, suggest testcase tags from that Rule file directly
+    if (enclosingRule) {
+      const normRule = enclosingRule.replace(/\\/g, '/').toLowerCase();
+      const normBase = normRule.split('/').pop() || normRule;
+      const seenRuleScenarios = new Set<string>();
+
+      for (const [addr, info] of scanner.config.scenarioAddresses.entries()) {
+        const normSource = info.sourceFile.replace(/\\/g, '/').toLowerCase();
+        const normAddr = addr.replace(/\\/g, '/').toLowerCase();
+
+        if (normSource.endsWith(normRule) || normSource.endsWith(normBase) || normAddr.includes(normBase)) {
+          const dedupKey = `${info.sourceFile}:${info.line}:${info.tag}`;
+          if (seenRuleScenarios.has(dedupKey)) continue;
+          seenRuleScenarios.add(dedupKey);
+
+          items.push({
+            label: info.tag,
+            kind: CompletionItemKind.Unit,
+            detail: `Rule Test Case (${info.title})`,
+            documentation: {
+              kind: MarkupKind.Markdown,
+              value: `### 🧪 Test Case Target\n\n**Title:** ${info.title}\n\n- **Tag:** \`${info.tag}\`\n- **Rule:** \`${enclosingRule}\``
+            },
+            insertText: quote ? `${info.tag}${quote}` : info.tag
+          });
+        }
+      }
+    }
+
+    // 7.2 Internal tags in the current document
     const docText = document.getText();
     const internalTags = [...docText.matchAll(/@(tc|tr|tp|bg)-[0-9]+/gi)].map(m => m[0].toLowerCase());
     const uniqueInternal = [...new Set(internalTags)];
@@ -1334,11 +1388,11 @@ function inferContextValues(docUri: string): { project: string; module: string }
         label: tag,
         kind: CompletionItemKind.Reference,
         detail: `Internal reference in this feature (${tag})`,
-        insertText: tag
+        insertText: quote ? `${tag}${quote}` : tag
       });
     }
 
-    // 7.2 External scenario addresses
+    // 7.3 External scenario addresses
     for (const [address, info] of scanner.config.scenarioAddresses.entries()) {
       if (address.includes('/')) {
         items.push({
@@ -1349,7 +1403,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
             kind: MarkupKind.Markdown,
             value: `### Dependency Target\n\n**Tag:** \`${info.tag}\`\n\n**Title:** ${info.title}\n\n*File:* \`${info.sourceFile}\``
           },
-          insertText: address
+          insertText: quote ? `${address}${quote}` : (address.includes(' ') ? `"${address}"` : address)
         });
       }
     }
@@ -1398,9 +1452,10 @@ function inferContextValues(docUri: string): { project: string; module: string }
     const docText = document.getText();
     const docScope = detectDocumentScope(document, scanner);
     const isTestrun = docScope === 'testrun';
+    const isBug = docScope === 'bug';
 
-    // If inside a testrun Rule, suggest testcases of that specific Rule
-    if (isTestrun) {
+    // If inside a testrun or bug Rule, suggest testcases of that specific Rule
+    if (isTestrun || isBug) {
       const linesBefore = document.getText({ start: { line: 0, character: 0 }, end: position }).split(/\r?\n/);
       let enclosingRule = '';
       for (let i = linesBefore.length - 1; i >= 0; i--) {
@@ -1471,7 +1526,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
         kind: CompletionItemKind.Property,
         detail: 'directive',
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'depends_on("${1:target}")'
+        insertText: 'depends_on(${1:target})'
       }
     );
 

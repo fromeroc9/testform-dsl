@@ -164,7 +164,7 @@ export class AttachmentPasteEditProvider implements vscode.DocumentPasteEditProv
     const lineText = document.lineAt(cursorLine).text;
     let insertText: string;
 
-    if (/\bset\s+(?:attach|evidence)\s*=\s*$/i.test(lineText)) {
+    if (/\bset\s+attach\s*=\s*$/i.test(lineText)) {
       insertText = `"${relPath}"`;
     } else if (/^\s*$/.test(lineText)) {
       insertText = `    * set attach = "${relPath}"`;
