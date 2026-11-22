@@ -104,7 +104,7 @@ export function provideCompletions(
           value: '### 🐛 Starter Defect / Bug Feature\n\nCreate a new declarative bug report targeting an existing testcase scenario.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: `@bug @\${1:${sampleBgBody}}\nFeature: \${2:Bug Title}\n\n  Scenario: \${3:Defect Description}\n    * set target = \${4:path/to.case.feature.${sampleTcTag}}\n    * set status = \${5|failed,passed,pending|}\n    * field severity = \${6|critical,high,medium,low|}\n    * field priority = \${7|urgent,high,normal,low|}\n`
+        insertText: `@bug @\${1:${sampleBgBody}}\nFeature: \${2:Bug Title}\n\n  Scenario: \${3:Defect Description}\n    * set target = \${4:path/to.case.feature.${sampleTcTag}}\n    * set status = \${5|failed,passed,pending|}\n    * field severity = \${6|critical,high,medium,low|}\n`
       }
     ];
   }
@@ -621,8 +621,9 @@ function inferContextValues(docUri: string): { project: string; module: string }
     if (gContext.section === 'background') {
       const inferred = inferContextValues(document.uri);
 
-      // Collect contract fields applicable for this scope
+      // Collect contract fields applicable for this scope (step fields only; tag fields belong in tags)
       const applicableFields = [...scanner.customFields.values()].filter(f => {
+        if (f.source === 'tag') return false;
         if (!f.scopes || f.scopes.length === 0 || f.scopes.includes('global')) return true;
         if (docScope && f.scopes.includes(docScope)) return true;
         return false;
@@ -982,6 +983,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
       // ─── 2. Metadata Fields (field ...) in Scenario ───
       if (!isSetTrigger) {
         const applicableFields = [...scanner.customFields.values()].filter(f => {
+          if (f.source === 'tag') return false;
           if (!f.scopes || f.scopes.length === 0 || f.scopes.includes('global')) return true;
           if (docScope && f.scopes.includes(docScope)) return true;
           return false;
