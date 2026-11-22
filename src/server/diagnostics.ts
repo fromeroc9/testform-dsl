@@ -474,11 +474,57 @@ export function validateTextDocument(
       }
     }
 
+    // Validate execution mark names for '* set <mark>'
+    const setMatch = trimmed.match(/(?:^|\s+)\*?\s*set\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
+    if (setMatch) {
+      const setKey = setMatch[1].trim();
+      const lowerSetKey = setKey.toLowerCase();
+      const validMarks = ['target', 'status', 'trace', 'attach', 'evidence', 'duration'];
+      if (!validMarks.includes(lowerSetKey)) {
+        const startChar = rawLine.indexOf(setKey);
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range: {
+            start: { line: i, character: startChar >= 0 ? startChar : 0 },
+            end: { line: i, character: startChar >= 0 ? startChar + setKey.length : rawLine.length }
+          },
+          message: `Invalid DSL mark 'set ${setKey}'. 'set' is reserved for runtime execution marks (target, status, trace, attach, evidence, duration). Did you mean '* field ${setKey} = ...'?`,
+          source: 'Testform'
+        });
+      }
+    }
+
     const fieldMatch = trimmed.match(/(?:^|\s+)field\s+([a-zA-Z0-9_.-]+)\s*=\s*(.+)$/i);
     if (fieldMatch) {
       const fieldName = fieldMatch[1].trim();
       const rawVal = fieldMatch[2].trim().replace(/^["']|["']$/g, '');
       const lowerField = fieldName.toLowerCase();
+
+      // Check whether field is declared as tag vs step
+      const customDef = scanner.customFields.get(lowerField);
+      if (customDef && customDef.source === 'tag') {
+        const startChar = rawLine.indexOf(fieldName);
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range: {
+            start: { line: i, character: startChar >= 0 ? startChar : 0 },
+            end: { line: i, character: startChar >= 0 ? startChar + fieldName.length : rawLine.length }
+          },
+          message: `Field '${fieldName}' is declared with source: "tag" in main.yml. It cannot be defined as a step ('* field ${fieldName}'). Use a tag (e.g. '@${customDef.enum?.[0]?.replace(/^@/, '') || fieldName}') instead.`,
+          source: 'Testform'
+        });
+      } else if (!customDef && scanner.customFields.size > 0) {
+        const startChar = rawLine.indexOf(fieldName);
+        diagnostics.push({
+          severity: DiagnosticSeverity.Warning,
+          range: {
+            start: { line: i, character: startChar >= 0 ? startChar : 0 },
+            end: { line: i, character: startChar >= 0 ? startChar + fieldName.length : rawLine.length }
+          },
+          message: `Field '${fieldName}' is not declared in workspace configuration (main.yml). Add a 'fields' entry under resource in main.yml.`,
+          source: 'Testform'
+        });
+      }
 
       if (currentScenarioLine >= 0) {
         currentScenarioFields.set(lowerField, rawVal);
@@ -488,7 +534,6 @@ export function validateTextDocument(
       }
 
       // Check allowed enum values if configured
-      const customDef = scanner.customFields.get(lowerField);
       let allowedEnums: string[] | undefined = customDef?.enum;
 
       if (!allowedEnums) {
