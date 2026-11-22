@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.5] - 2026-11-16
+## [1.0.4] - 2026-11-21
 
 ### Added
 
@@ -16,25 +16,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Registered `DocumentPasteEditProvider` allowing developers to paste images from clipboard (`Ctrl+V`) directly into `.feature` files; automatically stores files into the configured attachment directory and inserts `* set attach = "attachments/..."`.
   - Added IntelliSense completions, hover documentation, and syntax diagnostics for `* set attach = ...` according to resource governance rules.
 
----
-
-## [1.0.4] - 2026-11-11
-
-### Added
-
 - **Custom Per-Scope Identity Tag Patterns (`src/shared/identity.ts`, `src/shared/identity-config.ts`, `schemas/testform.schema.json`, `snippets/yaml.json`, `src/server/yaml-completions.ts`):**
   - Added support for configurable `resource.<scope>.identity` tag patterns (e.g. `tc-*`, `tr-*`, `tp-*`, `bg-*`, or custom prefixes) in `main.yml` JSON schema validation, YAML snippets, and autocompletions.
   - Propagated workspace-configured identity pattern matching and normalization across LSP diagnostics, completions, code actions, CodeLens, hover, go-to-definition, references, workspace scanning, State Explorer, and the native Test Controller.
 - **File-Scoped Visual Plan Diff (`testform.showPlanDiffCurrent`):**
   - Added the `testform.showPlanDiffCurrent` command (`package.json`, `src/client/extension.ts`) along with a `File Scope` badge, targeted loading/empty states, and a `Full Plan` toggle inside `PlanDiffPanel`.
+- **First-Class `required_providers` Validation & Autocompletions (`schemas/testform.schema.json`, `src/server/yaml-completions.ts`):**
+  - Added full JSON schema validation and IntelliSense autocompletions for `required_providers` in `main.yml` (both inside `testform:` block and at root level).
+  - Provided ready-to-use declaration snippets for providers from Git repositories (`git::https://...`), NPM packages (`@org/provider`), and local source paths (`./custom-providers/...`).
+- **Dynamic Provider Registry Autocompletions (`src/server/yaml-completions.ts`):**
+  - Dynamically discovers third-party and custom providers declared under `testform.required_providers` in the active document and automatically surfaces them under `provider:` with template parameters.
 
 ### Changed
 
+- **Linear (Scalar) vs Block (Dictionary) Completions for `provider:` and `backend:` (`schemas/testform.schema.json`, `src/server/yaml-completions.ts`):**
+  - **`provider:`**:
+    - Removed legacy `custom` option from `provider:` completion items and schema validation.
+    - Built-in providers are strictly `local`, `github`, and `gitlab`.
+    - Added linear inline completion for `local` (`provider: local`).
+    - Added structured block parameter templates for `github` and `gitlab`.
+  - **`backend:`**:
+    - Supports linear scalar inline completion for `local` (`backend: local`).
+    - Supports full parameter block snippets for all cloud backends (`s3`, `azurerm`, `gcs`, `oci`, `github`, `http`) when completing `backend:`.
+    - Added contextual property autocompletions when indented inside any backend configuration block (`s3.bucket`, `azurerm.container_name`, `oci.namespace`, etc.).
 - **Cucumber Gherkin Status Alignment & `* set duration` Support (`package.json`, `src/client/extension.ts`, `src/client/qa-fast-pass.ts`, `src/server/completions.ts`, `src/server/hover.ts`, `src/server/codelens.ts`):**
   - Added `testform.markUndefined` and `testform.markAmbiguous` QA Fast Pass commands and aligned status picker options, LSP status completions, hover descriptions, and `@testrun`/`@bug` snippet placeholders with Cucumber Gherkin statuses (`passed`, `failed`, `pending`, `skipped`, `undefined`, `ambiguous`) alongside legacy `blocked`.
   - Added `* set duration = ...` snippet and keyword trigger autocompletion (`src/server/completions.ts`), updated status hover/CodeLens matching to support `* set` and `* mark`, and surfaced separate `undefined`, `ambiguous`, and `blocked` summary pills in TestRun CodeLens indicators (`src/server/codelens.ts`).
 
 ### Fixed
+
+- **Multi-Bug Target Support & Diagnostic Step Isolation (`src/server/diagnostics.ts`, `src/server/workspace-scanner.ts`):**
+  - Fixed false-positive `Duplicate scenario ID in this file` error when multiple `@bug` scenarios reference the same target testcase (`* set target = <testcase>.@tc-XX`), honoring the QA architecture where one testcase can have $N$ associated defect scenarios.
+  - Excluded step lines (`*`, `Given`, `When`, `Then`, `And`, `But`, tables, docstrings), `Background:`, and `Feature:` headers from duplicate scenario ID checks.
+  - Enforced resource scope isolation in diagnostics so that in `@bug` files, only bug tags (`@bg-*`) are validated as declared scenario identities.
+  - Prevented `workspace-scanner` from indexing step lines as scenario declarations or inflating identity ID sequences from referenced target paths.
 
 - **Editor Title Visual Plan Diff Scope (`package.json`, `src/client/extension.ts`, `src/client/views/plan-diff-panel.ts`):**
   - Bound the `.feature` editor title bar diff button (`editor/title`) to `testform.showPlanDiffCurrent` so it computes `testform plan -target="<file>" -json` exclusively for the active feature file instead of running a full workspace plan.
