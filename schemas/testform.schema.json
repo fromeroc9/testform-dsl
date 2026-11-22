@@ -17,8 +17,29 @@
           "type": "string",
           "description": "Version constraint string (e.g. >= 1.0.0)"
         },
+        "required_providers": {
+          "type": "object",
+          "description": "Required provider dependencies and version constraints (Terraform parity)",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Source path or package (e.g. git::https://..., @org/provider, ./local.ts)"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "string", "description": "Git URL, NPM package, or local path" },
+                  "version": { "type": "string", "description": "Version constraint (e.g. >= 1.0.0, ~> 1.2)" },
+                  "constraints": { "type": "string", "description": "Optional additional version constraints" }
+                },
+                "required": ["source"]
+              }
+            ]
+          }
+        },
         "backend": {
-          "description": "Backend state storage configuration (string or object)",
+          "description": "Backend state storage configuration (string identifier or object with properties)",
           "oneOf": [
             {
               "type": "string",
@@ -29,41 +50,81 @@
               "properties": {
                 "local": {
                   "type": "object",
+                  "description": "Local offline state ledger (zero configuration)",
                   "properties": {
                     "path": { "type": "string", "default": "testform.state" }
                   }
                 },
                 "s3": {
                   "type": "object",
+                  "description": "AWS S3 state ledger with DynamoDB state locking",
                   "properties": {
-                    "bucket": { "type": "string" },
-                    "key": { "type": "string" },
-                    "region": { "type": "string" },
-                    "dynamodb_table": { "type": "string" }
+                    "bucket": { "type": "string", "description": "S3 bucket name" },
+                    "key": { "type": "string", "description": "State file path in S3", "default": "testform.state" },
+                    "region": { "type": "string", "description": "AWS region (e.g. us-east-1)" },
+                    "dynamodb_table": { "type": "string", "description": "DynamoDB table name for state locking" },
+                    "endpoint": { "type": "string", "description": "Custom S3 endpoint URL (MinIO, LocalStack)" },
+                    "profile": { "type": "string", "description": "AWS credentials profile" },
+                    "encrypt": { "type": "boolean", "description": "Enable server-side encryption" },
+                    "forcePathStyle": { "type": "boolean", "description": "Force path style S3 URLs" }
                   },
                   "required": ["bucket", "key"]
                 },
-                "gcs": {
-                  "type": "object",
-                  "properties": {
-                    "bucket": { "type": "string" },
-                    "prefix": { "type": "string" }
-                  },
-                  "required": ["bucket"]
-                },
                 "azurerm": {
                   "type": "object",
+                  "description": "Azure Blob Storage state ledger with blob lease locking",
                   "properties": {
-                    "storage_account_name": { "type": "string" },
-                    "container_name": { "type": "string" },
-                    "key": { "type": "string" }
+                    "storage_account_name": { "type": "string", "description": "Azure Storage account name" },
+                    "container_name": { "type": "string", "description": "Blob container name" },
+                    "key": { "type": "string", "description": "Blob key name", "default": "testform.state" },
+                    "resource_group_name": { "type": "string", "description": "Azure Resource Group name" },
+                    "connection_string": { "type": "string", "description": "Optional storage connection string" }
                   },
                   "required": ["storage_account_name", "container_name", "key"]
                 },
+                "gcs": {
+                  "type": "object",
+                  "description": "Google Cloud Storage state ledger",
+                  "properties": {
+                    "bucket": { "type": "string", "description": "GCS bucket name" },
+                    "prefix": { "type": "string", "description": "GCS object path prefix", "default": "state" },
+                    "credentials": { "type": "string", "description": "Path to service account credentials JSON" }
+                  },
+                  "required": ["bucket"]
+                },
+                "oci": {
+                  "type": "object",
+                  "description": "Oracle Cloud Infrastructure Object Storage state ledger",
+                  "properties": {
+                    "bucket": { "type": "string", "description": "OCI bucket name" },
+                    "namespace": { "type": "string", "description": "OCI Object Storage tenancy namespace" },
+                    "key": { "type": "string", "description": "Object key name", "default": "testform.state" },
+                    "compartment_id": { "type": "string", "description": "OCI compartment OCID" },
+                    "region": { "type": "string", "description": "OCI region identifier" }
+                  },
+                  "required": ["bucket", "namespace", "key"]
+                },
+                "github": {
+                  "type": "object",
+                  "description": "GitHub Repository state ledger (persists state in branch)",
+                  "properties": {
+                    "branch": { "type": "string", "description": "Branch name for state storage", "default": "testform-state" },
+                    "path": { "type": "string", "description": "File path in repository", "default": "state/testform.state" },
+                    "token_env": { "type": "string", "description": "Environment variable holding GitHub token", "default": "GITHUB_TOKEN" },
+                    "owner": { "type": "string", "description": "GitHub repository owner" },
+                    "repository": { "type": "string", "description": "GitHub repository name" }
+                  }
+                },
                 "http": {
                   "type": "object",
+                  "description": "HTTP REST state ledger with lock/unlock endpoints",
                   "properties": {
-                    "address": { "type": "string" }
+                    "address": { "type": "string", "description": "HTTP GET/POST URL for state" },
+                    "lock_address": { "type": "string", "description": "HTTP POST/PUT URL for lock" },
+                    "unlock_address": { "type": "string", "description": "HTTP DELETE URL for unlock" },
+                    "username": { "type": "string", "description": "HTTP basic auth username" },
+                    "password": { "type": "string", "description": "HTTP basic auth password" },
+                    "headers": { "type": "object", "description": "Custom HTTP request headers" }
                   },
                   "required": ["address"]
                 }
@@ -73,67 +134,18 @@
         }
       }
     },
+    "required_providers": {
+      "$ref": "#/properties/testform/properties/required_providers"
+    },
     "backend": {
-      "description": "Backend state storage configuration. Can be a string identifier ('local') or configuration object.",
-      "oneOf": [
-        {
-          "type": "string",
-          "enum": ["local", "s3", "gcs", "azurerm", "http", "github", "oci", "rest", "custom"],
-          "default": "local"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "local": {
-              "type": "object",
-              "properties": {
-                "path": { "type": "string", "default": "testform.state" }
-              }
-            },
-            "s3": {
-              "type": "object",
-              "properties": {
-                "bucket": { "type": "string" },
-                "key": { "type": "string" },
-                "region": { "type": "string" },
-                "dynamodb_table": { "type": "string" }
-              },
-              "required": ["bucket", "key"]
-            },
-            "gcs": {
-              "type": "object",
-              "properties": {
-                "bucket": { "type": "string" },
-                "prefix": { "type": "string" }
-              },
-              "required": ["bucket"]
-            },
-            "azurerm": {
-              "type": "object",
-              "properties": {
-                "storage_account_name": { "type": "string" },
-                "container_name": { "type": "string" },
-                "key": { "type": "string" }
-              },
-              "required": ["storage_account_name", "container_name", "key"]
-            },
-            "http": {
-              "type": "object",
-              "properties": {
-                "address": { "type": "string" }
-              },
-              "required": ["address"]
-            }
-          }
-        }
-      ]
+      "$ref": "#/properties/testform/properties/backend"
     },
     "provider": {
-      "description": "Configured execution or sync provider. Can be a string identifier ('local', 'github', 'gitlab', 'custom') or configuration object.",
+      "description": "Configured execution or sync provider. Can be a string identifier ('local', 'github', 'gitlab') or configuration object with provider properties.",
       "oneOf": [
         {
           "type": "string",
-          "enum": ["local", "github", "gitlab", "custom"],
+          "enum": ["local", "github", "gitlab"],
           "default": "local"
         },
         {
@@ -141,7 +153,7 @@
           "properties": {
             "local": {
               "type": "object",
-              "description": "Local offline execution provider"
+              "description": "Local offline execution provider (zero configuration)"
             },
             "github": {
               "type": "object",
@@ -153,25 +165,19 @@
                 "project_number": { "type": "integer", "description": "GitHub Projects V2 board number" },
                 "project_id": { "type": "string", "description": "GitHub Projects V2 node ID" },
                 "token_env": { "type": "string", "default": "GITHUB_TOKEN" }
-              }
+              },
+              "required": ["owner", "repository"]
             },
             "gitlab": {
               "type": "object",
               "description": "GitLab Issues provider",
               "properties": {
-                "project_id": { "type": "string" },
-                "base_url": { "type": "string" },
+                "project_id": { "type": "string", "description": "GitLab numeric project ID or URL-encoded path" },
+                "host": { "type": "string", "default": "https://gitlab.com", "description": "GitLab host URL" },
+                "base_url": { "type": "string", "description": "GitLab API base URL" },
                 "token_env": { "type": "string", "default": "GITLAB_TOKEN" }
               },
-              "additionalProperties": true
-            },
-            "custom": {
-              "type": "object",
-              "description": "User-defined custom provider",
-              "properties": {
-                "source": { "type": "string", "description": "Relative file path (./providers/jira.ts) or npm package" }
-              },
-              "required": ["source"],
+              "required": ["project_id"],
               "additionalProperties": true
             }
           },

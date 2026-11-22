@@ -10,7 +10,7 @@ import { WorkspaceScanner } from './workspace-scanner';
 import { BUILTIN_FUNCTIONS } from './completions';
 
 /**
- * Scans the YAML text to discover providers declared under testform.required_providers
+ * Scans the YAML text to discover providers declared under testform.required_providers or required_providers
  */
 function getDeclaredRequiredProviders(documentText: string): string[] {
   const providers: string[] = [];
@@ -26,7 +26,12 @@ function getDeclaredRequiredProviders(documentText: string): string[] {
 
     if (indent === 0) {
       inTestform = /^testform\s*:/i.test(trimmed);
-      inRequiredProviders = false;
+      if (/^required_providers\s*:/i.test(trimmed)) {
+        inRequiredProviders = true;
+        requiredProvidersIndent = indent;
+      } else {
+        inRequiredProviders = false;
+      }
       continue;
     }
 
@@ -36,19 +41,19 @@ function getDeclaredRequiredProviders(documentText: string): string[] {
         requiredProvidersIndent = indent;
         continue;
       }
+    }
 
-      if (inRequiredProviders) {
-        if (indent <= requiredProvidersIndent) {
-          inRequiredProviders = false;
-        } else {
-          const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
-          if (match) {
-            const pName = match[1];
-            const lower = pName.toLowerCase();
-            if (!['source', 'version', 'constraints'].includes(lower)) {
-              if (!providers.includes(pName)) {
-                providers.push(pName);
-              }
+    if (inRequiredProviders) {
+      if (indent <= requiredProvidersIndent) {
+        inRequiredProviders = false;
+      } else {
+        const match = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:/);
+        if (match) {
+          const pName = match[1];
+          const lower = pName.toLowerCase();
+          if (!['source', 'version', 'constraints', 'backend', 'required_version', 'local', 'github', 'gitlab', 'custom'].includes(lower)) {
+            if (!providers.includes(pName)) {
+              providers.push(pName);
             }
           }
         }
@@ -137,9 +142,10 @@ export function provideYamlCompletions(
   }
 
   // 2. Inline completions immediately after a colon on the SAME line
-  const inlineColonMatch = lineText.match(/^\s*([a-zA-Z0-9_-]+)\s*:\s*([a-zA-Z0-9_.-]*)$/);
+  const inlineColonMatch = lineText.match(/^(\s*)([a-zA-Z0-9_-]+)\s*:\s*([a-zA-Z0-9_.-]*)$/);
   if (inlineColonMatch) {
-    const key = inlineColonMatch[1].toLowerCase();
+    const lineIndent = inlineColonMatch[1] || '';
+    const key = inlineColonMatch[2].toLowerCase();
 
     // Scalar or dictionary provider completions
     if (key === 'provider') {
@@ -147,32 +153,24 @@ export function provideYamlCompletions(
       const declared = getDeclaredRequiredProviders(fullDocText);
       const providerItems: CompletionItem[] = [
         {
+          label: 'local',
+          kind: CompletionItemKind.Value,
+          detail: 'Offline Local Provider (linear scalar)',
+          insertText: 'local'
+        },
+        {
           label: 'github',
           kind: CompletionItemKind.Snippet,
           detail: 'GitHub Projects Provider (with parameters)',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '\n  github:\n    owner: "${1:owner}"\n    repository: "${2:repository}"\n    project_id: "${3:PVT_...}"\n    token_env: "${4:GITHUB_TOKEN}"'
+          insertText: `\n${lineIndent}  github:\n${lineIndent}    owner: "\${1:owner}"\n${lineIndent}    repository: "\${2:repository}"\n${lineIndent}    project_id: "\${3:PVT_...}"\n${lineIndent}    token_env: "\${4:GITHUB_TOKEN}"`
         },
         {
           label: 'gitlab',
           kind: CompletionItemKind.Snippet,
           detail: 'GitLab Issues Provider (with parameters)',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '\n  gitlab:\n    host: "${1:https://gitlab.com}"\n    project_id: "${2:12345678}"\n    token_env: "${3:GITLAB_TOKEN}"'
-        },
-        {
-          label: 'local',
-          kind: CompletionItemKind.Snippet,
-          detail: 'Offline Local Provider (zero configuration)',
-          insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '\n  local: {}'
-        },
-        {
-          label: 'custom',
-          kind: CompletionItemKind.Snippet,
-          detail: 'Custom Provider (source path)',
-          insertTextFormat: InsertTextFormat.Snippet,
-          insertText: '\n  custom:\n    source: "${1:./custom-providers/my-provider.ts}"'
+          insertText: `\n${lineIndent}  gitlab:\n${lineIndent}    host: "\${1:https://gitlab.com}"\n${lineIndent}    project_id: "\${2:12345678}"\n${lineIndent}    token_env: "\${3:GITLAB_TOKEN}"`
         }
       ];
 
@@ -183,7 +181,7 @@ export function provideYamlCompletions(
             kind: CompletionItemKind.Snippet,
             detail: `Declared Provider (${p})`,
             insertTextFormat: InsertTextFormat.Snippet,
-            insertText: `\n  ${p}:\n    \${1:param}: "\${2:value}"`
+            insertText: `\n${lineIndent}  ${p}:\n${lineIndent}    \${1:param}: "\${2:value}"`
           });
         }
       }
@@ -193,11 +191,54 @@ export function provideYamlCompletions(
 
     if (key === 'backend') {
       return [
-        { label: 'local', kind: CompletionItemKind.EnumMember, detail: 'Local State Ledger (testform.state)', insertText: 'local' },
-        { label: 's3', kind: CompletionItemKind.EnumMember, detail: 'Amazon S3 Bucket', insertText: 's3' },
-        { label: 'gcs', kind: CompletionItemKind.EnumMember, detail: 'Google Cloud Storage', insertText: 'gcs' },
-        { label: 'azurerm', kind: CompletionItemKind.EnumMember, detail: 'Azure Blob Storage', insertText: 'azurerm' },
-        { label: 'http', kind: CompletionItemKind.EnumMember, detail: 'HTTP REST Ledger', insertText: 'http' }
+        {
+          label: 'local',
+          kind: CompletionItemKind.Value,
+          detail: 'Local State Ledger (linear scalar)',
+          insertText: 'local'
+        },
+        {
+          label: 's3',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Amazon S3 Bucket (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `\n${lineIndent}  s3:\n${lineIndent}    bucket: "\${1:bucket-name}"\n${lineIndent}    key: "\${2:testform.state}"\n${lineIndent}    region: "\${3:us-east-1}"\n${lineIndent}    dynamodb_table: "\${4:table-name}"`
+        },
+        {
+          label: 'azurerm',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Azure Blob Storage (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `\n${lineIndent}  azurerm:\n${lineIndent}    storage_account_name: "\${1:storage_account}"\n${lineIndent}    container_name: "\${2:container}"\n${lineIndent}    key: "\${3:testform.state}"\n${lineIndent}    resource_group_name: "\${4:rg-name}"`
+        },
+        {
+          label: 'gcs',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Google Cloud Storage (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `\n${lineIndent}  gcs:\n${lineIndent}    bucket: "\${1:bucket-name}"\n${lineIndent}    prefix: "\${2:state}"`
+        },
+        {
+          label: 'oci',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Oracle Cloud Storage (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `\n${lineIndent}  oci:\n${lineIndent}    bucket: "\${1:bucket-name}"\n${lineIndent}    namespace: "\${2:namespace}"\n${lineIndent}    key: "\${3:testform.state}"`
+        },
+        {
+          label: 'github',
+          kind: CompletionItemKind.Snippet,
+          detail: 'GitHub Repository State Ledger (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `\n${lineIndent}  github:\n${lineIndent}    branch: "\${1:testform-state}"\n${lineIndent}    path: "\${2:state/testform.state}"\n${lineIndent}    token_env: "\${3:GITHUB_TOKEN}"`
+        },
+        {
+          label: 'http',
+          kind: CompletionItemKind.Snippet,
+          detail: 'HTTP REST Ledger (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: `\n${lineIndent}  http:\n${lineIndent}    address: "\${1:https://my-backend.example.com/state}"\n${lineIndent}    lock_address: "\${2:https://my-backend.example.com/lock}"\n${lineIndent}    unlock_address: "\${3:https://my-backend.example.com/lock}"`
+        }
       ];
     }
 
@@ -268,6 +309,7 @@ export function provideYamlCompletions(
       'testform',
       'provider',
       'required_providers',
+      'backend',
       'variable', 'variables', 'vars',
       'locals', 'local',
       'resource', 'scopes',
@@ -315,7 +357,7 @@ export function provideYamlCompletions(
         kind: CompletionItemKind.Property,
         detail: 'Testform root engine configuration (required_version, backend, required_providers)',
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'testform:\n  required_version: ">= 1.0.0"\n  backend: ${1|local,s3,azurerm,gcs,oci,github|}\n  required_providers:\n    ${2}'
+        insertText: 'testform:\n  required_version: ">= 1.0.0"\n  backend: ${1|local,s3,azurerm,gcs,oci,github,http|}\n  required_providers:\n    ${2}'
       },
       {
         label: 'version: "1.0"',
@@ -326,16 +368,23 @@ export function provideYamlCompletions(
       {
         label: 'provider:',
         kind: CompletionItemKind.Property,
-        detail: 'Provider configuration (local, github, gitlab, custom)',
+        detail: 'Provider configuration (local, github, gitlab)',
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'provider:\n  ${1|local,github,gitlab,custom|}:'
+        insertText: 'provider:\n  ${1|local,github,gitlab|}:'
       },
       {
         label: 'backend:',
         kind: CompletionItemKind.Property,
-        detail: 'State backend ledger configuration (local, s3, gcs, azurerm, http)',
+        detail: 'State backend ledger configuration (local, s3, azurerm, gcs, oci, github, http)',
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'backend: ${1|local,s3,gcs,azurerm,http|}'
+        insertText: 'backend: ${1|local,s3,azurerm,gcs,oci,github,http|}'
+      },
+      {
+        label: 'required_providers:',
+        kind: CompletionItemKind.Property,
+        detail: 'Declare required providers and versions (Terraform parity)',
+        insertTextFormat: InsertTextFormat.Snippet,
+        insertText: 'required_providers:\n  '
       },
       {
         label: 'variable:',
@@ -384,6 +433,185 @@ export function provideYamlCompletions(
     ];
   }
 
+  // Case Backend: Inside "backend" block (root backend: or testform.backend:)
+  if (ancestry.includes('backend') || rootSection === 'backend') {
+    const lastKey = ancestry[ancestry.length - 1].toLowerCase();
+    if (lastKey === 'backend') {
+      return [
+        {
+          label: 'local',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Offline Local State Ledger (zero configuration)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'local: {}'
+        },
+        {
+          label: 's3',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Amazon S3 Bucket (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 's3:\n  bucket: "${1:bucket-name}"\n  key: "${2:testform.state}"\n  region: "${3:us-east-1}"\n  dynamodb_table: "${4:table-name}"'
+        },
+        {
+          label: 'azurerm',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Azure Blob Storage (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'azurerm:\n  storage_account_name: "${1:storage_account}"\n  container_name: "${2:container}"\n  key: "${3:testform.state}"\n  resource_group_name: "${4:rg-name}"'
+        },
+        {
+          label: 'gcs',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Google Cloud Storage (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'gcs:\n  bucket: "${1:bucket-name}"\n  prefix: "${2:state}"'
+        },
+        {
+          label: 'oci',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Oracle Cloud Infrastructure (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'oci:\n  bucket: "${1:bucket-name}"\n  namespace: "${2:namespace}"\n  key: "${3:testform.state}"'
+        },
+        {
+          label: 'github',
+          kind: CompletionItemKind.Snippet,
+          detail: 'GitHub Repository State Ledger (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'github:\n  branch: "${1:testform-state}"\n  path: "${2:state/testform.state}"\n  token_env: "${3:GITHUB_TOKEN}"'
+        },
+        {
+          label: 'http',
+          kind: CompletionItemKind.Snippet,
+          detail: 'HTTP REST Ledger (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'http:\n  address: "${1:https://my-backend.example.com/state}"\n  lock_address: "${2:https://my-backend.example.com/lock}"\n  unlock_address: "${3:https://my-backend.example.com/lock}"'
+        }
+      ];
+    } else {
+      // Indented inside a specific backend type (e.g. backend.s3, backend.azurerm)
+      const backendType = lastKey;
+      if (backendType === 's3') {
+        return [
+          { label: 'bucket:', kind: CompletionItemKind.Property, detail: 'S3 bucket name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'bucket: "${1:bucket-name}"' },
+          { label: 'key:', kind: CompletionItemKind.Property, detail: 'Path to state file in bucket', insertTextFormat: InsertTextFormat.Snippet, insertText: 'key: "${1:testform.state}"' },
+          { label: 'region:', kind: CompletionItemKind.Property, detail: 'AWS region (e.g. us-east-1)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'region: "${1:us-east-1}"' },
+          { label: 'dynamodb_table:', kind: CompletionItemKind.Property, detail: 'DynamoDB table for state locking', insertTextFormat: InsertTextFormat.Snippet, insertText: 'dynamodb_table: "${1:table-name}"' },
+          { label: 'endpoint:', kind: CompletionItemKind.Property, detail: 'Custom S3 endpoint URL (MinIO, LocalStack)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'endpoint: "${1:https://localhost:9000}"' },
+          { label: 'profile:', kind: CompletionItemKind.Property, detail: 'AWS credentials profile name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'profile: "${1:default}"' },
+          { label: 'encrypt:', kind: CompletionItemKind.Property, detail: 'Enable server-side encryption', insertText: 'encrypt: true' },
+          { label: 'forcePathStyle:', kind: CompletionItemKind.Property, detail: 'Enable path-style S3 URLs', insertText: 'forcePathStyle: true' }
+        ];
+      }
+      if (backendType === 'azurerm') {
+        return [
+          { label: 'storage_account_name:', kind: CompletionItemKind.Property, detail: 'Azure Storage account name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'storage_account_name: "${1:storage_account}"' },
+          { label: 'container_name:', kind: CompletionItemKind.Property, detail: 'Blob container name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'container_name: "${1:container}"' },
+          { label: 'key:', kind: CompletionItemKind.Property, detail: 'State blob key name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'key: "${1:testform.state}"' },
+          { label: 'resource_group_name:', kind: CompletionItemKind.Property, detail: 'Azure resource group name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'resource_group_name: "${1:rg-name}"' },
+          { label: 'connection_string:', kind: CompletionItemKind.Property, detail: 'Storage account connection string', insertTextFormat: InsertTextFormat.Snippet, insertText: 'connection_string: "${1:DefaultEndpointsProtocol=https;...}"' }
+        ];
+      }
+      if (backendType === 'gcs') {
+        return [
+          { label: 'bucket:', kind: CompletionItemKind.Property, detail: 'GCS bucket name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'bucket: "${1:bucket-name}"' },
+          { label: 'prefix:', kind: CompletionItemKind.Property, detail: 'GCS path prefix', insertTextFormat: InsertTextFormat.Snippet, insertText: 'prefix: "${1:state}"' },
+          { label: 'credentials:', kind: CompletionItemKind.Property, detail: 'Path to service account JSON key', insertTextFormat: InsertTextFormat.Snippet, insertText: 'credentials: "${1:credentials.json}"' }
+        ];
+      }
+      if (backendType === 'oci') {
+        return [
+          { label: 'bucket:', kind: CompletionItemKind.Property, detail: 'OCI Object Storage bucket name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'bucket: "${1:bucket-name}"' },
+          { label: 'namespace:', kind: CompletionItemKind.Property, detail: 'OCI Object Storage tenancy namespace', insertTextFormat: InsertTextFormat.Snippet, insertText: 'namespace: "${1:namespace}"' },
+          { label: 'key:', kind: CompletionItemKind.Property, detail: 'Object key name in bucket', insertTextFormat: InsertTextFormat.Snippet, insertText: 'key: "${1:testform.state}"' },
+          { label: 'compartment_id:', kind: CompletionItemKind.Property, detail: 'OCI compartment OCID', insertTextFormat: InsertTextFormat.Snippet, insertText: 'compartment_id: "${1:ocid1.compartment.oc1...}"' },
+          { label: 'region:', kind: CompletionItemKind.Property, detail: 'OCI region identifier', insertTextFormat: InsertTextFormat.Snippet, insertText: 'region: "${1:us-ashburn-1}"' }
+        ];
+      }
+      if (backendType === 'github') {
+        return [
+          { label: 'branch:', kind: CompletionItemKind.Property, detail: 'Git branch for state storage', insertTextFormat: InsertTextFormat.Snippet, insertText: 'branch: "${1:testform-state}"' },
+          { label: 'path:', kind: CompletionItemKind.Property, detail: 'State file path in repository', insertTextFormat: InsertTextFormat.Snippet, insertText: 'path: "${1:state/testform.state}"' },
+          { label: 'token_env:', kind: CompletionItemKind.Property, detail: 'Environment variable holding GitHub token', insertTextFormat: InsertTextFormat.Snippet, insertText: 'token_env: "${1:GITHUB_TOKEN}"' },
+          { label: 'owner:', kind: CompletionItemKind.Property, detail: 'GitHub user or organization name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'owner: "${1:owner}"' },
+          { label: 'repository:', kind: CompletionItemKind.Property, detail: 'GitHub repository name', insertTextFormat: InsertTextFormat.Snippet, insertText: 'repository: "${1:repository}"' }
+        ];
+      }
+      if (backendType === 'http') {
+        return [
+          { label: 'address:', kind: CompletionItemKind.Property, detail: 'HTTP REST endpoint URL for state', insertTextFormat: InsertTextFormat.Snippet, insertText: 'address: "${1:https://my-backend.example.com/state}"' },
+          { label: 'lock_address:', kind: CompletionItemKind.Property, detail: 'HTTP endpoint URL for lock', insertTextFormat: InsertTextFormat.Snippet, insertText: 'lock_address: "${1:https://my-backend.example.com/lock}"' },
+          { label: 'unlock_address:', kind: CompletionItemKind.Property, detail: 'HTTP endpoint URL for unlock', insertTextFormat: InsertTextFormat.Snippet, insertText: 'unlock_address: "${1:https://my-backend.example.com/lock}"' },
+          { label: 'username:', kind: CompletionItemKind.Property, detail: 'HTTP Basic Auth username', insertTextFormat: InsertTextFormat.Snippet, insertText: 'username: "${1:username}"' },
+          { label: 'password:', kind: CompletionItemKind.Property, detail: 'HTTP Basic Auth password', insertTextFormat: InsertTextFormat.Snippet, insertText: 'password: "${1:password}"' }
+        ];
+      }
+      if (backendType === 'local') {
+        return [
+          { label: 'path:', kind: CompletionItemKind.Property, detail: 'Local state ledger file path', insertTextFormat: InsertTextFormat.Snippet, insertText: 'path: "${1:testform.state}"' }
+        ];
+      }
+    }
+  }
+
+  // Case Required Providers (both under testform or root)
+  if (ancestry.includes('required_providers') || rootSection === 'required_providers') {
+    const lastKey = ancestry[ancestry.length - 1].toLowerCase();
+    if (lastKey === 'required_providers') {
+      return [
+        {
+          label: 'custom_provider (Git Repository)',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Declare provider from Git repository (with parameters)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: '${1:jira}:\n  source: "git::https://${2:github.com/my-org/testform-provider-${1}.git}"\n  version: "${3:>= 1.0.0}"'
+        },
+        {
+          label: 'custom_provider (NPM Package)',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Declare provider from NPM package or private registry',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: '${1:jira}:\n  source: "@${2:my-org}/testform-provider-${1}"\n  version: "${3:^1.0.0}"'
+        },
+        {
+          label: 'custom_provider (Local File)',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Declare provider from local TypeScript/JS file',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: '${1:my_provider}:\n  source: "${2:./custom-providers/my-provider.ts}"'
+        },
+        {
+          label: 'github',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Official GitHub Provider requirement',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'github:\n  source: "github"\n  version: ">= 1.0.0"'
+        },
+        {
+          label: 'gitlab',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Official GitLab Provider requirement',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'gitlab:\n  source: "gitlab"\n  version: ">= 1.0.0"'
+        },
+        {
+          label: 'local',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Official Local Provider requirement',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'local:\n  source: "local"\n  version: ">= 1.0.0"'
+        }
+      ];
+    } else {
+      // Indent 6+: Inside a declared provider definition under required_providers
+      return [
+        { label: 'source:', kind: CompletionItemKind.Property, detail: 'Git URL, NPM package, or local path', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: "${1:source}"' },
+        { label: 'version:', kind: CompletionItemKind.Property, detail: 'Version constraint (e.g. ">= 1.0.0", "~> 1.2.0")', insertTextFormat: InsertTextFormat.Snippet, insertText: 'version: "${1:>= 1.0.0}"' },
+        { label: 'constraints:', kind: CompletionItemKind.Property, detail: 'Optional additional version constraint', insertTextFormat: InsertTextFormat.Snippet, insertText: 'constraints: "${1:>= 1.0.0}"' }
+      ];
+    }
+  }
+
   // Case T: Inside "testform" root block
   if (rootSection === 'testform') {
     // Indent 2: Properties of testform block
@@ -399,9 +627,9 @@ export function provideYamlCompletions(
         {
           label: 'backend:',
           kind: CompletionItemKind.Property,
-          detail: 'State backend ledger configuration (local, s3, azurerm, gcs, oci, github)',
+          detail: 'State backend ledger configuration (local, s3, azurerm, gcs, oci, github, http)',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'backend: ${1|local,s3,azurerm,gcs,oci,github|}'
+          insertText: 'backend: ${1|local,s3,azurerm,gcs,oci,github,http|}'
         },
         {
           label: 'required_providers:',
@@ -411,57 +639,6 @@ export function provideYamlCompletions(
           insertText: 'required_providers:\n  '
         }
       ];
-    }
-
-    // Inside required_providers:
-    if (ancestry.includes('required_providers')) {
-      const lastKey = ancestry[ancestry.length - 1].toLowerCase();
-      if (lastKey === 'required_providers') {
-        return [
-          {
-            label: 'custom_provider (Git Repository)',
-            kind: CompletionItemKind.Snippet,
-            detail: 'Declare provider from Git repository',
-            insertTextFormat: InsertTextFormat.Snippet,
-            insertText: '${1:jira}:\n  source: "git::https://${2:github.com/my-org/testform-provider-${1}.git}"\n  version: "${3:>= 1.0.0}"'
-          },
-          {
-            label: 'custom_provider (NPM Package)',
-            kind: CompletionItemKind.Snippet,
-            detail: 'Declare provider from NPM or private registry',
-            insertTextFormat: InsertTextFormat.Snippet,
-            insertText: '${1:jira}:\n  source: "@${2:my-org}/testform-provider-${1}"\n  version: "${3:^1.0.0}"'
-          },
-          {
-            label: 'custom_provider (Local File)',
-            kind: CompletionItemKind.Snippet,
-            detail: 'Declare provider from local TypeScript/JS file',
-            insertTextFormat: InsertTextFormat.Snippet,
-            insertText: '${1:my_provider}:\n  source: "${2:./custom-providers/my-provider.ts}"'
-          },
-          {
-            label: 'github',
-            kind: CompletionItemKind.Snippet,
-            detail: 'Official GitHub Provider constraint',
-            insertTextFormat: InsertTextFormat.Snippet,
-            insertText: 'github:\n  source: "github"\n  version: ">= 1.0.0"'
-          },
-          {
-            label: 'gitlab',
-            kind: CompletionItemKind.Snippet,
-            detail: 'Official GitLab Provider constraint',
-            insertTextFormat: InsertTextFormat.Snippet,
-            insertText: 'gitlab:\n  source: "gitlab"\n  version: ">= 1.0.0"'
-          }
-        ];
-      } else {
-        // Indent 6+: Inside a declared provider definition under required_providers
-        return [
-          { label: 'source:', kind: CompletionItemKind.Property, detail: 'Git URL, NPM package, or local path', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: "${1:source}"' },
-          { label: 'version:', kind: CompletionItemKind.Property, detail: 'Version constraint (e.g. ">= 1.0.0", "~> 1.2.0")', insertTextFormat: InsertTextFormat.Snippet, insertText: 'version: "${1:>= 1.0.0}"' },
-          { label: 'constraints:', kind: CompletionItemKind.Property, detail: 'Optional additional version constraint', insertTextFormat: InsertTextFormat.Snippet, insertText: 'constraints: "${1:>= 1.0.0}"' }
-        ];
-      }
     }
   }
 
@@ -473,6 +650,13 @@ export function provideYamlCompletions(
     // Indent 2: Declaring provider name under provider:
     if (ancestry.length === 1) {
       const items: CompletionItem[] = [
+        {
+          label: 'local',
+          kind: CompletionItemKind.Snippet,
+          detail: 'Offline Local Provider (zero configuration)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'local: {}'
+        },
         {
           label: 'github',
           kind: CompletionItemKind.Snippet,
@@ -486,20 +670,6 @@ export function provideYamlCompletions(
           detail: 'GitLab Issues Provider (with parameters)',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: 'gitlab:\n  host: "${1:https://gitlab.com}"\n  project_id: "${2:12345678}"\n  token_env: "${3:GITLAB_TOKEN}"'
-        },
-        {
-          label: 'local',
-          kind: CompletionItemKind.Snippet,
-          detail: 'Offline Local Provider (zero configuration)',
-          insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'local: {}'
-        },
-        {
-          label: 'custom',
-          kind: CompletionItemKind.Snippet,
-          detail: 'Custom Provider (source path)',
-          insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'custom:\n  source: "${1:./custom-providers/my-provider.ts}"'
         }
       ];
 
@@ -536,11 +706,12 @@ export function provideYamlCompletions(
           { label: 'token_env:', kind: CompletionItemKind.Property, detail: 'Environment variable name holding token (default: GITLAB_TOKEN)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'token_env: "${1:GITLAB_TOKEN}"' }
         ];
       }
-      if (targetProvider === 'custom') {
-        return [
-          { label: 'source:', kind: CompletionItemKind.Property, detail: 'Local path, Git URL, or npm package', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: "${1:./custom-providers/my-provider.ts}"' }
-        ];
-      }
+      // If it's a declared provider from required_providers
+      return [
+        { label: 'token_env:', kind: CompletionItemKind.Property, detail: 'Environment variable holding API token', insertTextFormat: InsertTextFormat.Snippet, insertText: 'token_env: "${1:TOKEN}"' },
+        { label: 'url:', kind: CompletionItemKind.Property, detail: 'Service or endpoint URL', insertTextFormat: InsertTextFormat.Snippet, insertText: 'url: "${1:https://api.example.com}"' },
+        { label: 'source:', kind: CompletionItemKind.Property, detail: 'Provider source package or script path', insertTextFormat: InsertTextFormat.Snippet, insertText: 'source: "${1:./provider.ts}"' }
+      ];
     }
   }
 
