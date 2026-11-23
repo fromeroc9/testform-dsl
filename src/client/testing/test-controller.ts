@@ -228,7 +228,7 @@ export class TestformTestController implements vscode.Disposable {
           continue;
         }
 
-        const statusMatch = line.match(/^\*\s+mark\s+status\s*=\s*([a-zA-Z]+)/i);
+        const statusMatch = line.match(/^\*\s+(?:set|mark)\s+status\s*=\s*([a-zA-Z]+)/i);
         if (statusMatch && currentScen) {
           currentScen.status = statusMatch[1].toLowerCase();
         }
@@ -471,8 +471,8 @@ export class TestformTestController implements vscode.Disposable {
           }
         }
 
-        // 4. Status mark step: * set status = passed | failed | pending | skipped | blocked
-        const statusMatch = trimmed.match(/^\*\s+mark\s+status\s*=\s*([a-zA-Z]+)/i);
+        // 4. Status mark step: * set status = passed | failed | pending | skipped | blocked | ambiguous
+        const statusMatch = trimmed.match(/^\*\s+(?:set|mark)\s+status\s*=\s*([a-zA-Z]+)/i);
         if (statusMatch && currentScenarioItem) {
           const status = statusMatch[1].toLowerCase();
           this.scenarioStatusMap.set(currentScenarioItem.id, status);
@@ -658,6 +658,11 @@ export class TestformTestController implements vscode.Disposable {
               status: 'failed'
             },
             {
+              label: '$(question) ambiguous',
+              detail: 'Step definition is ambiguous or conflicting.',
+              status: 'ambiguous'
+            },
+            {
               label: '$(stop) blocked',
               detail: 'Execution blocked due to a preceding dependency failure.',
               status: 'blocked'
@@ -704,6 +709,8 @@ export class TestformTestController implements vscode.Disposable {
             run.passed(item);
           } else if (chosenStatus === 'failed') {
             run.failed(item, new vscode.TestMessage(`Scenario marked as failed by user.`));
+          } else if (chosenStatus === 'ambiguous') {
+            run.failed(item, new vscode.TestMessage(`Scenario marked as ambiguous (conflicting step definitions).`));
           } else if (chosenStatus === 'skipped' || chosenStatus === 'blocked') {
             run.skipped(item);
           } else {
@@ -762,6 +769,9 @@ export class TestformTestController implements vscode.Disposable {
                 } else if (status === 'failed') {
                   hasFailures = true;
                   run.failed(child, new vscode.TestMessage('Testcase failed in Testform run ledger.'));
+                } else if (status === 'ambiguous') {
+                  hasFailures = true;
+                  run.failed(child, new vscode.TestMessage('Testcase marked as ambiguous in Testform run ledger.'));
                 } else if (status === 'skipped' || status === 'blocked') {
                   run.skipped(child);
                 } else {
