@@ -605,7 +605,7 @@ export function validateTextDocument(
       } else if (lowerSetKey === 'status') {
         const cleanVal = setVal.toLowerCase().replace(/^["']|["']$/g, '');
         if (resourceType === 'testrun') {
-          const validRunStatuses = ['passed', 'failed', 'pending', 'skipped', 'blocked'];
+          const validRunStatuses = ['passed', 'failed', 'pending', 'skipped', 'blocked', 'ambiguous', 'undefined'];
           if (!validRunStatuses.includes(cleanVal)) {
             const startChar = rawLine.indexOf(setVal);
             diagnostics.push({

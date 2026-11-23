@@ -84,7 +84,7 @@ export function provideCompletions(
           value: '### 🚀 Starter Test Run Suite\n\nCreate a new TestRun suite linking testcase feature rules.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: `@testrun @\${1:${nextTrBody}}\nFeature: \${2:Execution Suite}\n\n  Background:\n    * set duration = \${3:1m 20s}\n    * set attach = "\${4:attachments/runs/exec.log}"\n\n  Rule: \${5:path/to.case.feature}\n\n    Scenario: \${6:${sampleTcTag}}\n      * set status = \${7|passed,failed,pending,skipped,blocked|}\n`
+        insertText: `@testrun @\${1:${nextTrBody}}\nFeature: \${2:Execution Suite}\n\n  Background:\n    * set duration = \${3:1m 20s}\n    * set attach = "\${4:attachments/runs/exec.log}"\n\n  Rule: \${5:path/to.case.feature}\n\n    Scenario: \${6:${sampleTcTag}}\n      * set status = \${7|passed,failed,pending,skipped,blocked,ambiguous,undefined|}\n`
       },
       {
         label: 'tf-testplan',
@@ -925,9 +925,9 @@ function inferContextValues(docUri: string): { project: string; module: string }
               filterText: 'set status status',
               textEdit: TextEdit.replace(
                 { start: { line: position.line, character: prefixCol }, end: position },
-                'set status = ${1|passed,failed,pending,skipped,blocked|}'
+                'set status = ${1|passed,failed,pending,skipped,blocked,ambiguous,undefined|}'
               ),
-              insertText: 'set status = ${1|passed,failed,pending,skipped,blocked|}'
+              insertText: 'set status = ${1|passed,failed,pending,skipped,blocked,ambiguous,undefined|}'
             }
           );
         } else if (isSetTrigger && docScope !== 'testcase') {
@@ -944,7 +944,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
             ),
             insertText: 'set status = ${1|passed,failed,pending,skipped,undefined,ambiguous,blocked|}'
           });
-          if (docScope !== 'testrun') {
+          if ((docScope as any) !== 'testrun') {
             items.push({
               label: 'set target = ...',
               kind: CompletionItemKind.Snippet,
