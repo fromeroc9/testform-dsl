@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.6] - 2026-11-23
+
+### Changed
+- **Defect Lifecycle Status Harmonization (`src/server/completions.ts`, `src/server/diagnostics.ts`):**
+  - Aligned `@bug` scenario status autocompletion strictly to the 4 essential lifecycle statuses: `open`, `in_progress`, `resolved`, and `closed`.
+  - Purged test execution verdicts (`passed`, `failed`, `pending`) from bug defect IntelliSense completions, eliminating cross-scope leakage between testruns and bugs.
+  - Updated snippets and diagnostics to validate that `* set status = ...` in `@bug` files corresponds to the unified defect lifecycle (`open`, `in_progress`, `resolved`, `closed`).
+
+---
+
 ## [1.0.5] - 2026-11-22
 
 ### Added

@@ -104,7 +104,7 @@ export function provideCompletions(
           value: '### 🐛 Starter Defect / Bug Feature\n\nCreate a new declarative bug report targeting an existing testcase scenario.'
         },
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: `@bug @\${1:${sampleBgBody}}\nFeature: \${2:Bug Title}\n\n  Background:\n    * set run = \${3:testruns/example.run.feature}\n\n  Rule: \${4:testcase/example.case.feature}\n\n    @bg-01 @depends_on(\${5:${sampleTcTag}})\n    Scenario: \${6:Defect Description}\n      * set status = \${7|open,in_progress,resolved,reopened,discarded,duplicate|}\n      * set attach = "\${8:attachments/bugs/screenshot.png}"\n      * field severity = \${9|blocker,critical,major,minor|}\n`
+        insertText: `@bug @\${1:${sampleBgBody}}\nFeature: \${2:Bug Title}\n\n  Background:\n    * set run = \${3:testruns/example.run.feature}\n\n  Rule: \${4:testcase/example.case.feature}\n\n    @bg-01 @depends_on(\${5:${sampleTcTag}})\n    Scenario: \${6:Defect Description}\n      * set status = \${7|open,in_progress,resolved,closed|}\n      * set attach = "\${8:attachments/bugs/screenshot.png}"\n      * field severity = \${9|blocker,critical,major,minor|}\n`
       }
     ];
   }
@@ -883,9 +883,9 @@ function inferContextValues(docUri: string): { project: string; module: string }
               filterText: 'set status status',
               textEdit: TextEdit.replace(
                 { start: { line: position.line, character: prefixCol }, end: position },
-                'set status = ${1|open,in_progress,resolved,reopened,discarded,duplicate|}'
+                'set status = ${1|open,in_progress,resolved,closed|}'
               ),
-              insertText: 'set status = ${1|open,in_progress,resolved,reopened,discarded,duplicate|}'
+              insertText: 'set status = ${1|open,in_progress,resolved,closed|}'
             },
             {
               label: 'set attach = ...',
@@ -1113,7 +1113,7 @@ function inferContextValues(docUri: string): { project: string; module: string }
   if (/(?:set\s+|mark\s+)?status\s*=\s*[a-zA-Z_]*$/i.test(lineText)) {
     const docScope = detectDocumentScope(document, scanner);
     const statuses = docScope === 'bug'
-      ? ['open', 'reopened', 'resolved', 'closed', 'passed', 'failed', 'pending']
+      ? ['open', 'in_progress', 'resolved', 'closed']
       : ['passed', 'failed', 'pending', 'skipped', 'undefined', 'ambiguous', 'blocked'];
     return statuses.map(s => ({
       label: s,

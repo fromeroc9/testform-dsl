@@ -619,7 +619,7 @@ export function validateTextDocument(
             });
           }
         } else if (resourceType === 'bug') {
-          const validBugStatuses = ['open', 'in_progress', 'resolved', 'reopened', 'discarded', 'duplicate', 'failed', 'passed', 'pending'];
+          const validBugStatuses = ['open', 'in_progress', 'resolved', 'closed'];
           if (!validBugStatuses.includes(cleanVal)) {
             const startChar = rawLine.indexOf(setVal);
             diagnostics.push({
@@ -628,7 +628,7 @@ export function validateTextDocument(
                 start: { line: i, character: startChar >= 0 ? startChar : 0 },
                 end: { line: i, character: startChar >= 0 ? startChar + setVal.length : rawLine.length }
               },
-              message: `Unknown status '${setVal}' for bug. Expected one of: open, in_progress, resolved, reopened, discarded, duplicate.`,
+              message: `Unknown status '${setVal}' for bug. Expected one of: open, in_progress, resolved, closed.`,
               source: 'Testform'
             });
           }
