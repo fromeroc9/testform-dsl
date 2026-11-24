@@ -173,11 +173,16 @@
               "description": "GitLab Issues provider",
               "properties": {
                 "project_id": { "type": "string", "description": "GitLab numeric project ID or URL-encoded path" },
-                "host": { "type": "string", "default": "https://gitlab.com", "description": "GitLab host URL" },
+                "projectId": { "type": "string", "description": "GitLab numeric project ID or URL-encoded path" },
+                "host": { "type": "string", "default": "https://gitlab.com", "description": "GitLab host URL (optional, defaults to https://gitlab.com)" },
                 "base_url": { "type": "string", "description": "GitLab API base URL" },
-                "token_env": { "type": "string", "default": "GITLAB_TOKEN" }
+                "token_env": { "type": "string", "default": "GITLAB_TOKEN" },
+                "tokenEnv": { "type": "string", "default": "GITLAB_TOKEN" }
               },
-              "required": ["project_id"],
+              "anyOf": [
+                { "required": ["project_id"] },
+                { "required": ["projectId"] }
+              ],
               "additionalProperties": true
             }
           },

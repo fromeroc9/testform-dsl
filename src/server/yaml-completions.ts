@@ -701,8 +701,9 @@ export function provideYamlCompletions(
       }
       if (targetProvider === 'gitlab') {
         return [
-          { label: 'host:', kind: CompletionItemKind.Property, detail: 'GitLab instance URL (default: https://gitlab.com)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'host: "${1:https://gitlab.com}"' },
           { label: 'project_id:', kind: CompletionItemKind.Property, detail: 'GitLab project numeric ID or URL-encoded path', insertTextFormat: InsertTextFormat.Snippet, insertText: 'project_id: "${1:12345678}"' },
+          { label: 'projectId:', kind: CompletionItemKind.Property, detail: 'GitLab project numeric ID or URL-encoded path', insertTextFormat: InsertTextFormat.Snippet, insertText: 'projectId: "${1:owner/repo}"' },
+          { label: 'host:', kind: CompletionItemKind.Property, detail: 'GitLab instance URL (optional, default: https://gitlab.com)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'host: "${1:https://gitlab.com}"' },
           { label: 'token_env:', kind: CompletionItemKind.Property, detail: 'Environment variable name holding token (default: GITLAB_TOKEN)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'token_env: "${1:GITLAB_TOKEN}"' }
         ];
       }
