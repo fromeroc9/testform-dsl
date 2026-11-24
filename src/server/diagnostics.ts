@@ -605,8 +605,11 @@ export function validateTextDocument(
       } else if (lowerSetKey === 'status') {
         const cleanVal = setVal.toLowerCase().replace(/^["']|["']$/g, '');
         if (resourceType === 'testrun') {
-          const validRunStatuses = ['passed', 'failed', 'pending', 'skipped', 'blocked', 'ambiguous', 'undefined'];
-          if (!validRunStatuses.includes(cleanVal)) {
+          const customList = scanner.customStatuses?.get('testrun');
+          const validRunStatuses = customList && customList.length > 0
+            ? customList
+            : ['passed', 'failed', 'pending', 'skipped', 'blocked', 'ambiguous', 'undefined'];
+          if (!validRunStatuses.map(s => s.toLowerCase()).includes(cleanVal)) {
             const startChar = rawLine.indexOf(setVal);
             diagnostics.push({
               severity: DiagnosticSeverity.Warning,
@@ -619,8 +622,11 @@ export function validateTextDocument(
             });
           }
         } else if (resourceType === 'bug') {
-          const validBugStatuses = ['open', 'in_progress', 'resolved', 'closed'];
-          if (!validBugStatuses.includes(cleanVal)) {
+          const customList = scanner.customStatuses?.get('bug');
+          const validBugStatuses = customList && customList.length > 0
+            ? customList
+            : ['open', 'in_progress', 'resolved', 'closed'];
+          if (!validBugStatuses.map(s => s.toLowerCase()).includes(cleanVal)) {
             const startChar = rawLine.indexOf(setVal);
             diagnostics.push({
               severity: DiagnosticSeverity.Warning,
@@ -628,7 +634,7 @@ export function validateTextDocument(
                 start: { line: i, character: startChar >= 0 ? startChar : 0 },
                 end: { line: i, character: startChar >= 0 ? startChar + setVal.length : rawLine.length }
               },
-              message: `Unknown status '${setVal}' for bug. Expected one of: open, in_progress, resolved, closed.`,
+              message: `Unknown status '${setVal}' for bug. Expected one of: ${validBugStatuses.join(', ')}.`,
               source: 'Testform'
             });
           }

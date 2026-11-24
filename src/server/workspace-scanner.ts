@@ -34,6 +34,7 @@ export class WorkspaceScanner {
     enum?: string[];
     scopes?: Array<'global' | 'testcase' | 'testrun' | 'testplan' | 'bug'>;
   }> = new Map();
+  public customStatuses: Map<string, string[]> = new Map();
   public featureFiles: Map<string, {
     relPath: string;
     fullPath: string;
@@ -194,6 +195,30 @@ export class WorkspaceScanner {
               extractFields(resBlock.testrun?.fields, 'testrun');
               extractFields(resBlock.testplan?.fields, 'testplan');
               extractFields(resBlock.bug?.fields, 'bug');
+
+              const extractCustomStatus = (scopeBlock: any, scope: 'testrun' | 'bug') => {
+                if (!scopeBlock || typeof scopeBlock !== 'object') return;
+                const statusObj = scopeBlock.set?.status || scopeBlock.status;
+                if (!statusObj || typeof statusObj !== 'object') return;
+                const statuses: string[] = [];
+                for (const val of Object.values(statusObj)) {
+                  if (Array.isArray(val)) {
+                    statuses.push(...val.map(String));
+                  } else if (typeof val === 'string') {
+                    statuses.push(val);
+                  }
+                }
+                if (statuses.length > 0) {
+                  const existing = this.customStatuses.get(scope) || [];
+                  for (const s of statuses) {
+                    if (!existing.includes(s)) existing.push(s);
+                  }
+                  this.customStatuses.set(scope, existing);
+                }
+              };
+
+              extractCustomStatus(resBlock.testrun, 'testrun');
+              extractCustomStatus(resBlock.bug, 'bug');
             } else if (parsed.fields) {
               const extractFields = (fObj: any, scope: 'global' | 'testcase' | 'testrun' | 'testplan' | 'bug' = 'global') => {
                 if (!fObj || typeof fObj !== 'object') return;
@@ -290,6 +315,25 @@ export class WorkspaceScanner {
               const targetRes = (resBlock && typeof resBlock === 'object') ? resBlock : (lower.startsWith('resource.') ? parsed : null);
               if (targetRes && typeof targetRes === 'object') {
                 this.applyResourceBlock(targetRes);
+                const extractSplitStatus = (scopeBlock: any, scope: 'testrun' | 'bug') => {
+                  if (!scopeBlock || typeof scopeBlock !== 'object') return;
+                  const statusObj = scopeBlock.set?.status || scopeBlock.status;
+                  if (!statusObj || typeof statusObj !== 'object') return;
+                  const statuses: string[] = [];
+                  for (const val of Object.values(statusObj)) {
+                    if (Array.isArray(val)) statuses.push(...val.map(String));
+                    else if (typeof val === 'string') statuses.push(val);
+                  }
+                  if (statuses.length > 0) {
+                    const existing = this.customStatuses.get(scope) || [];
+                    for (const s of statuses) {
+                      if (!existing.includes(s)) existing.push(s);
+                    }
+                    this.customStatuses.set(scope, existing);
+                  }
+                };
+                extractSplitStatus(targetRes.testrun, 'testrun');
+                extractSplitStatus(targetRes.bug, 'bug');
               }
 
               // 4. Data block (data: or naked object in data.yml)

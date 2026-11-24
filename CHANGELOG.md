@@ -9,7 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.6] - 2026-11-23
 
+### Added
+- **Custom Status Support from `main.yml` (`set.status`) (`src/server/workspace-scanner.ts`, `src/server/completions.ts`, `src/server/diagnostics.ts`):**
+  - Autocompletion for `* set status = ...` now dynamically detects user-defined statuses declared in `main.yml` under `set.status` or `status` (for both `testrun` and `bug` scopes).
+  - Diagnostics engine honors custom statuses configured by the user, suppressing unknown status warnings when custom terms like `exitoso`, `aprobado`, `en_triage`, or `nuevo` are used.
+
 ### Changed
+- **Complete Elimination of `scaffold:` in Autocompletions & Snippets (`snippets/yaml.json`, `src/server/yaml-completions.ts`):**
+  - Purged `scaffold:` property suggestions from YAML resource manifest completions and `tf-init-manifest` snippets.
+  - Resource blocks in `main.yml` now directly and cleanly offer `directory:`, `filename:`, `identity:`, `match:`, `set:`, and `fields:`.
 - **Defect Lifecycle Status Harmonization (`src/server/completions.ts`, `src/server/diagnostics.ts`):**
   - Aligned `@bug` scenario status autocompletion strictly to the 4 essential lifecycle statuses: `open`, `in_progress`, `resolved`, and `closed`.
   - Purged test execution verdicts (`passed`, `failed`, `pending`) from bug defect IntelliSense completions, eliminating cross-scope leakage between testruns and bugs.

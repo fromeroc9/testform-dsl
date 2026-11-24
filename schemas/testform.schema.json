@@ -233,114 +233,136 @@
     "local": { "$ref": "#/properties/locals" },
     "resource": {
       "type": "object",
-      "description": "Resource scope mapping, scaffolding patterns, and custom fields",
+      "description": "Resource scope mapping, directory structure, and custom fields",
       "properties": {
         "testcase": {
           "type": "object",
+          "description": "TestCase pure BDD specification settings (Given, When, Then steps and metadata fields)",
           "properties": {
-            "match": { "type": "string", "default": "*.case.feature" },
+            "directory": { "type": "string", "default": "testcase", "description": "Target directory on disk where testcase specifications live" },
+            "filename": { "type": "string", "default": "{slug}_{YYYYMMDD}.case.feature", "description": "Filename pattern for scaffolding with 'testform spec new'" },
+            "match": { "type": "string", "default": "*.case.feature", "description": "Glob pattern for matching testcase feature files" },
             "identity": {
               "type": "string",
               "default": "tc-*",
-              "description": "Identity tag pattern for testcase scenarios (e.g. 'tc-*' or 'flaviotag-*')"
+              "description": "Identity tag pattern for testcase scenarios (e.g. 'tc-*' or 'custom-*')"
             },
-            "scaffold": {
-              "type": "object",
-              "properties": {
-                "directory": { "type": "string" },
-                "filename": { "type": "string" },
-                "attach": {
-                  "type": "string",
-                  "description": "Directory for attachments (documents, datasets, mocks) for testcases"
-                }
-              }
-            },
-            "fields": { "type": "array" }
+            "fields": { "type": ["array", "object"], "description": "Custom metadata fields definition" }
           }
         },
         "testrun": {
           "type": "object",
+          "description": "TestRun execution suite settings and runtime marks",
           "properties": {
-            "match": { "type": "string", "default": "*.run.feature" },
+            "directory": { "type": "string", "default": "testruns", "description": "Target directory on disk where testrun specifications live" },
+            "filename": { "type": "string", "default": "{slug}_{YYYYMMDD}.run.feature", "description": "Filename pattern for scaffolding with 'testform spec new'" },
+            "match": { "type": "string", "default": "*.run.feature", "description": "Glob pattern for matching testrun feature files" },
             "identity": {
               "type": "string",
               "default": "tr-*",
               "description": "Identity tag pattern for testrun scenarios (e.g. 'tr-*')"
             },
-            "scaffold": {
+            "set": {
               "type": "object",
+              "description": "Configuration for Gherkin runtime execution marks (* set ...)",
               "properties": {
-                "directory": { "type": "string" },
-                "filename": { "type": "string" },
+                "status": {
+                  "type": "object",
+                  "description": "Semantic status categorization for testrun rollup and verdict calculation",
+                  "properties": {
+                    "success": { "type": ["array", "string"], "description": "Statuses that count as passed (approving the suite)" },
+                    "failure": { "type": ["array", "string"], "description": "Statuses that count as failed (marking the suite as failed)" },
+                    "pending": { "type": ["array", "string"], "description": "Statuses that keep the suite in progress" },
+                    "skipped": { "type": ["array", "string"], "description": "Statuses for skipped or omitted cases" }
+                  }
+                },
                 "attach": {
                   "type": "string",
-                  "description": "Directory for attachments (documents, datasets, mocks) for testcases"
-                }
+                  "description": "Directory for testrun execution logs & attachments (* set attach = ...)"
+                },
+                "trace": { "type": ["object", "boolean"], "description": "Error trace options" },
+                "duration": { "type": ["object", "string"], "description": "Duration options" }
               }
             },
-            "fields": { "type": "array" }
+            "fields": { "type": ["array", "object"], "description": "Custom metadata fields definition" }
           }
         },
         "testplan": {
           "type": "object",
+          "description": "TestPlan master plan settings and execution coordination",
           "properties": {
-            "match": { "type": "string", "default": "*.plan.feature" },
+            "directory": { "type": "string", "default": "testplans", "description": "Target directory on disk where testplan specifications live" },
+            "filename": { "type": "string", "default": "{slug}_{YYYYMMDD}.plan.feature", "description": "Filename pattern for scaffolding with 'testform spec new'" },
+            "match": { "type": "string", "default": "*.plan.feature", "description": "Glob pattern for matching testplan feature files" },
             "identity": {
               "type": "string",
               "default": "tp-*",
               "description": "Identity tag pattern for testplan scenarios (e.g. 'tp-*')"
             },
-            "scaffold": {
+            "set": {
               "type": "object",
+              "description": "Configuration for Gherkin runtime execution marks (* set ...)",
               "properties": {
-                "directory": { "type": "string" },
-                "filename": { "type": "string" },
                 "attach": {
                   "type": "string",
-                  "description": "Directory for attachments (documents, datasets, mocks) for testcases"
+                  "description": "Directory for testplan attachments (* set attach = ...)"
                 }
               }
             },
-            "fields": { "type": "array" }
+            "fields": { "type": ["array", "object"], "description": "Custom metadata fields definition" }
           }
         },
         "bug": {
           "type": "object",
+          "description": "Bug defect specification settings and lifecycle marks",
           "properties": {
-            "match": { "type": "string", "default": "*.bug.feature" },
+            "directory": { "type": "string", "default": "bugs", "description": "Target directory on disk where bug specifications live" },
+            "filename": { "type": "string", "default": "{slug}_{YYYYMMDD}.bug.feature", "description": "Filename pattern for scaffolding with 'testform spec new'" },
+            "match": { "type": "string", "default": "*.bug.feature", "description": "Glob pattern for matching bug feature files" },
             "identity": {
               "type": "string",
               "default": "bg-*",
               "description": "Identity tag pattern for bug scenarios (e.g. 'bg-*')"
             },
-            "scaffold": {
+            "set": {
               "type": "object",
+              "description": "Configuration for Gherkin runtime execution marks (* set ...)",
               "properties": {
-                "directory": { "type": "string" },
-                "filename": { "type": "string" },
+                "status": {
+                  "type": "object",
+                  "description": "Semantic status categorization for defect lifecycle and remote issue states",
+                  "properties": {
+                    "open": { "type": ["array", "string"], "description": "Statuses that map to open issue state (e.g. open, nuevo, reportado)" },
+                    "in_progress": { "type": ["array", "string"], "description": "Statuses that map to in-progress open issue state" },
+                    "resolved": { "type": ["array", "string"], "description": "Statuses that map to closed issue state (ready for retest)" },
+                    "closed": { "type": ["array", "string"], "description": "Statuses that map to closed issue state (verified and closed)" }
+                  }
+                },
                 "attach": {
                   "type": "string",
-                  "description": "Directory for attachments (documents, datasets, mocks) for testcases"
-                }
+                  "description": "Directory for defect screenshots & attachments (* set attach = ...)"
+                },
+                "trace": { "type": ["object", "boolean"], "description": "Defect stack trace options" }
               }
             },
-            "fields": { "type": "array" }
+            "fields": { "type": ["array", "object"], "description": "Custom metadata fields definition" }
           }
         },
         "global": {
           "type": "object",
+          "description": "Global definitions across all resources",
           "properties": {
-            "scaffold": {
+            "set": {
               "type": "object",
+              "description": "Global execution mark defaults",
               "properties": {
-                "directory": { "type": "string" },
                 "attach": {
                   "type": "string",
-                  "description": "Default directory for attachments across all resources"
+                  "description": "Default directory for attachments across all execution scopes"
                 }
               }
             },
-            "fields": { "type": "array" }
+            "fields": { "type": ["array", "object"], "description": "Global fields definition across all scopes" }
           }
         }
       }

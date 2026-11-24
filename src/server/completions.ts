@@ -1112,9 +1112,17 @@ function inferContextValues(docUri: string): { project: string; module: string }
 
   if (/(?:set\s+|mark\s+)?status\s*=\s*[a-zA-Z_]*$/i.test(lineText)) {
     const docScope = detectDocumentScope(document, scanner);
-    const statuses = docScope === 'bug'
-      ? ['open', 'in_progress', 'resolved', 'closed']
-      : ['passed', 'failed', 'pending', 'skipped', 'undefined', 'ambiguous', 'blocked'];
+    const customList = docScope ? scanner.customStatuses?.get(docScope) : undefined;
+
+    let statuses: string[];
+    if (customList && customList.length > 0) {
+      statuses = customList;
+    } else if (docScope === 'bug') {
+      statuses = ['open', 'in_progress', 'resolved', 'closed'];
+    } else {
+      statuses = ['passed', 'failed', 'pending', 'skipped', 'undefined', 'ambiguous', 'blocked'];
+    }
+
     return statuses.map(s => ({
       label: s,
       kind: CompletionItemKind.EnumMember,

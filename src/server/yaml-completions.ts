@@ -316,7 +316,7 @@ export function provideYamlCompletions(
       'data',
       'module', 'modules',
       'output', 'outputs',
-      'policy', 'fields', 'scaffold'
+      'policy', 'fields', 'set'
     ]);
     if (DICTIONARY_PARENTS.has(key)) {
       return [];
@@ -401,9 +401,9 @@ export function provideYamlCompletions(
       {
         label: 'resource:',
         kind: CompletionItemKind.Property,
-        detail: 'Resource scopes and scaffolding configuration',
+        detail: 'Resource scopes and execution settings configuration',
         insertTextFormat: InsertTextFormat.Snippet,
-        insertText: 'resource:\n  testcase:\n    match: "${1:*.case.feature}"\n    identity: "${2:tc-*}"\n    scaffold:\n      directory: "testcase"\n      filename: "{slug}.case.feature"\n    fields: {}\n  testrun:\n    match: "${3:*.run.feature}"\n    identity: "${4:tr-*}"\n    scaffold:\n      directory: "testrun"\n      filename: "{slug}.run.feature"\n    fields: {}\n  testplan:\n    match: "${5:*.plan.feature}"\n    identity: "${6:tp-*}"\n    scaffold:\n      directory: "testplan"\n      filename: "{slug}.plan.feature"\n    fields: {}'
+        insertText: 'resource:\n  testcase:\n    directory: "${1:testcase}"\n    filename: "${2:{slug}_{YYYYMMDD}.case.feature}"\n    match: "${3:*.case.feature}"\n    identity: "${4:tc-*}"\n    fields: {}\n  testrun:\n    directory: "${5:testruns}"\n    filename: "${6:{slug}_{YYYYMMDD}.run.feature}"\n    match: "${7:*.run.feature}"\n    identity: "${8:tr-*}"\n    set:\n      status:\n        success: ["passed", "exitoso"]\n        failure: ["failed", "fallido"]\n      attach: "attachments/runs"\n    fields: {}\n  testplan:\n    directory: "${9:testplans}"\n    filename: "${10:{slug}_{YYYYMMDD}.plan.feature}"\n    match: "${11:*.plan.feature}"\n    identity: "${12:tp-*}"\n    set:\n      attach: "attachments/plans"\n    fields: {}'
       },
       {
         label: 'data:',
@@ -777,30 +777,30 @@ export function provideYamlCompletions(
         {
           label: 'testcase:',
           kind: CompletionItemKind.Property,
-          detail: 'TestCase scope mapping and scaffolding',
+          detail: 'TestCase pure BDD specification settings',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'testcase:\n  match: "${1:*.case.feature}"\n  identity: "${2:tc-*}"\n  scaffold:\n    directory: "testcase"\n    filename: "{slug}.case.feature"\n  fields: {}'
+          insertText: 'testcase:\n  directory: "${1:testcase}"\n  filename: "${2:{slug}_{YYYYMMDD}.case.feature}"\n  fields: {}'
         },
         {
           label: 'testrun:',
           kind: CompletionItemKind.Property,
-          detail: 'TestRun scope mapping and scaffolding',
+          detail: 'TestRun execution suite settings and runtime marks',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'testrun:\n  match: "${1:*.run.feature}"\n  identity: "${2:tr-*}"\n  scaffold:\n    directory: "testrun"\n    filename: "{slug}.run.feature"\n  fields: {}'
+          insertText: 'testrun:\n  directory: "${1:testruns}"\n  filename: "${2:{slug}_{YYYYMMDD}.run.feature}"\n  set:\n    status:\n      success: ["passed", "exitoso"]\n      failure: ["failed", "fallido"]\n    attach: "attachments/runs"\n  fields: {}'
         },
         {
           label: 'testplan:',
           kind: CompletionItemKind.Property,
-          detail: 'TestPlan scope mapping and scaffolding',
+          detail: 'TestPlan master plan settings and execution coordination',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'testplan:\n  match: "${1:*.plan.feature}"\n  identity: "${2:tp-*}"\n  scaffold:\n    directory: "testplan"\n    filename: "{slug}.plan.feature"\n  fields: {}'
+          insertText: 'testplan:\n  directory: "${1:testplans}"\n  filename: "${2:{slug}_{YYYYMMDD}.plan.feature}"\n  set:\n    attach: "attachments/plans"\n  fields: {}'
         },
         {
           label: 'bug:',
           kind: CompletionItemKind.Property,
-          detail: 'Bug scope mapping and scaffolding',
+          detail: 'Bug defect specification settings and lifecycle marks',
           insertTextFormat: InsertTextFormat.Snippet,
-          insertText: 'bug:\n  match: "${1:*.bug.feature}"\n  identity: "${2:bg-*}"\n  scaffold:\n    directory: "bugs"\n    filename: "{slug}.bug.feature"\n  fields: {}'
+          insertText: 'bug:\n  directory: "${1:bugs}"\n  filename: "${2:{slug}_{YYYYMMDD}.bug.feature}"\n  set:\n    status:\n      open: ["open", "nuevo"]\n      closed: ["resolved", "closed", "resuelto"]\n    attach: "attachments/bugs"\n  fields: {}'
         },
         {
           label: 'global:',
@@ -828,12 +828,135 @@ export function provideYamlCompletions(
       const defaultDir = scopeName || 'testcase';
       const defaultFile = `{slug}${defaultMatch.replace(/^\*/, '')}`;
 
-      return [
+      const items: CompletionItem[] = [
+        { label: 'directory:', kind: CompletionItemKind.Property, detail: 'Target directory on disk for this resource', insertTextFormat: InsertTextFormat.Snippet, insertText: `directory: "\${1:${defaultDir}}"` },
+        { label: 'filename:', kind: CompletionItemKind.Property, detail: 'Filename template for new specifications (testform spec new)', insertTextFormat: InsertTextFormat.Snippet, insertText: `filename: "\${1:${defaultFile}}"` },
+        { label: 'identity:', kind: CompletionItemKind.Property, detail: 'Custom scenario identity tag pattern (e.g. "tc-*", "tr-*", "bg-*")', insertTextFormat: InsertTextFormat.Snippet, insertText: `identity: "\${1:${defaultIdentity}}"` },
         { label: 'match:', kind: CompletionItemKind.Property, detail: 'Glob pattern for feature files', insertTextFormat: InsertTextFormat.Snippet, insertText: `match: "\${1:${defaultMatch}}"` },
-        { label: 'identity:', kind: CompletionItemKind.Property, detail: 'Custom scenario identity tag pattern (e.g. "tc-*", "flaviotag-*")', insertTextFormat: InsertTextFormat.Snippet, insertText: `identity: "\${1:${defaultIdentity}}"` },
-        { label: 'scaffold:', kind: CompletionItemKind.Property, detail: 'Scaffolding directory and filename pattern', insertTextFormat: InsertTextFormat.Snippet, insertText: `scaffold:\n  directory: "\${1:${defaultDir}}"\n  filename: "\${2:${defaultFile}}"` },
         { label: 'fields:', kind: CompletionItemKind.Property, detail: 'Custom metadata fields definition', insertText: 'fields:\n  ' }
       ];
+
+      // attach and set DO NOT exist for testcases (testcases are pure BDD specifications)
+      if (scopeName === 'testrun') {
+        items.push({
+          label: 'set:',
+          kind: CompletionItemKind.Property,
+          detail: 'Execution runtime marks configuration (* set status, attach, trace)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'set:\n  status:\n    success: ["passed", "exitoso"]\n    failure: ["failed", "fallido"]\n  attach: "attachments/runs"'
+        });
+      } else if (scopeName === 'bug') {
+        items.push({
+          label: 'set:',
+          kind: CompletionItemKind.Property,
+          detail: 'Defect lifecycle marks configuration (* set status, attach, trace)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'set:\n  status:\n    open: ["open", "nuevo"]\n    closed: ["resolved", "closed", "resuelto"]\n  attach: "attachments/bugs"'
+        });
+      } else if (scopeName === 'testplan') {
+        items.push({
+          label: 'set:',
+          kind: CompletionItemKind.Property,
+          detail: 'Testplan execution marks configuration (* set attach)',
+          insertTextFormat: InsertTextFormat.Snippet,
+          insertText: 'set:\n  attach: "attachments/plans"'
+        });
+      }
+
+      return items;
+    }
+
+    // Inside set: (ancestry: ['resource', 'testrun', 'set'] or ['resource', 'bug', 'set'])
+    if (ancestry.includes('set')) {
+      const scopeName = ancestry[1]?.toLowerCase();
+      const lastKey = ancestry[ancestry.length - 1].toLowerCase();
+
+      if (lastKey === 'set') {
+        const setProps: CompletionItem[] = [];
+        if (scopeName === 'testrun') {
+          setProps.push(
+            {
+              label: 'status:',
+              kind: CompletionItemKind.Property,
+              detail: 'Semantic status categorization (success, failure, pending, skipped)',
+              insertTextFormat: InsertTextFormat.Snippet,
+              insertText: 'status:\n  success:\n    - "${1:passed}"\n    - "${2:exitoso}"\n  failure:\n    - "${3:failed}"\n    - "${4:fallido}"'
+            },
+            {
+              label: 'attach:',
+              kind: CompletionItemKind.Property,
+              detail: 'Directory for testrun execution logs & attachments (* set attach = ...)',
+              insertTextFormat: InsertTextFormat.Snippet,
+              insertText: 'attach: "${1:attachments/runs}"'
+            },
+            {
+              label: 'trace:',
+              kind: CompletionItemKind.Property,
+              detail: 'Error trace settings',
+              insertTextFormat: InsertTextFormat.Snippet,
+              insertText: 'trace:\n  required: ${1|false,true|}'
+            },
+            {
+              label: 'duration:',
+              kind: CompletionItemKind.Property,
+              detail: 'Duration settings',
+              insertTextFormat: InsertTextFormat.Snippet,
+              insertText: 'duration:\n  format: "${1:human}"'
+            }
+          );
+        } else if (scopeName === 'bug') {
+          setProps.push(
+            {
+              label: 'status:',
+              kind: CompletionItemKind.Property,
+              detail: 'Defect lifecycle categorization (open, in_progress, resolved, closed)',
+              insertTextFormat: InsertTextFormat.Snippet,
+              insertText: 'status:\n  open:\n    - "${1:open}"\n    - "${2:nuevo}"\n  closed:\n    - "${3:resolved}"\n    - "${4:closed}"'
+            },
+            {
+              label: 'attach:',
+              kind: CompletionItemKind.Property,
+              detail: 'Directory for defect screenshots & attachments (* set attach = ...)',
+              insertTextFormat: InsertTextFormat.Snippet,
+              insertText: 'attach: "${1:attachments/bugs}"'
+            },
+            {
+              label: 'trace:',
+              kind: CompletionItemKind.Property,
+              detail: 'Stack trace settings',
+              insertTextFormat: InsertTextFormat.Snippet,
+              insertText: 'trace:\n  required: ${1|false,true|}'
+            }
+          );
+        } else if (scopeName === 'testplan' || scopeName === 'global') {
+          setProps.push({
+            label: 'attach:',
+            kind: CompletionItemKind.Property,
+            detail: 'Directory for attachments (* set attach = ...)',
+            insertTextFormat: InsertTextFormat.Snippet,
+            insertText: 'attach: "${1:attachments}"'
+          });
+        }
+        return setProps;
+      }
+
+      if (lastKey === 'status') {
+        if (scopeName === 'testrun') {
+          return [
+            { label: 'success:', kind: CompletionItemKind.Property, detail: 'Statuses that count as passed (approving the suite)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'success:\n  - "${1:passed}"\n  - "${2:exitoso}"' },
+            { label: 'failure:', kind: CompletionItemKind.Property, detail: 'Statuses that count as failed', insertTextFormat: InsertTextFormat.Snippet, insertText: 'failure:\n  - "${1:failed}"\n  - "${2:fallido}"' },
+            { label: 'pending:', kind: CompletionItemKind.Property, detail: 'Statuses that keep suite in progress', insertTextFormat: InsertTextFormat.Snippet, insertText: 'pending:\n  - "${1:pending}"\n  - "${2:en_espera}"' },
+            { label: 'skipped:', kind: CompletionItemKind.Property, detail: 'Statuses for skipped or omitted cases', insertTextFormat: InsertTextFormat.Snippet, insertText: 'skipped:\n  - "${1:skipped}"\n  - "${2:omitido}"' }
+          ];
+        } else if (scopeName === 'bug') {
+          return [
+            { label: 'open:', kind: CompletionItemKind.Property, detail: 'Statuses mapped to open issue state (e.g. open, nuevo)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'open:\n  - "${1:open}"\n  - "${2:nuevo}"' },
+            { label: 'in_progress:', kind: CompletionItemKind.Property, detail: 'Statuses mapped to in-progress open issue state', insertTextFormat: InsertTextFormat.Snippet, insertText: 'in_progress:\n  - "${1:in_progress}"\n  - "${2:en_atencion}"' },
+            { label: 'resolved:', kind: CompletionItemKind.Property, detail: 'Statuses mapped to closed issue state (ready for QA)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'resolved:\n  - "${1:resolved}"\n  - "${2:resuelto}"' },
+            { label: 'closed:', kind: CompletionItemKind.Property, detail: 'Statuses mapped to closed issue state (permanently closed)', insertTextFormat: InsertTextFormat.Snippet, insertText: 'closed:\n  - "${1:closed}"\n  - "${2:cerrado}"' }
+          ];
+        }
+      }
     }
 
     // Inside fields: (ancestry: ['resource', 'testcase', 'fields'])
