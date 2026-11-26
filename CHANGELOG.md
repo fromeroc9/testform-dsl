@@ -7,33 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.6] - 2026-11-23
+## [1.0.5] - 2026-11-26
 
 ### Added
 - **Custom Status Support from `main.yml` (`set.status`) (`src/server/workspace-scanner.ts`, `src/server/completions.ts`, `src/server/diagnostics.ts`):**
   - Autocompletion for `* set status = ...` now dynamically detects user-defined statuses declared in `main.yml` under `set.status` or `status` (for both `testrun` and `bug` scopes).
   - Diagnostics engine honors custom statuses configured by the user, suppressing unknown status warnings when custom terms like `exitoso`, `aprobado`, `en_triage`, or `nuevo` are used.
-
-### Changed
-- **Complete Elimination of `scaffold:` in Autocompletions & Snippets (`snippets/yaml.json`, `src/server/yaml-completions.ts`):**
-  - Purged `scaffold:` property suggestions from YAML resource manifest completions and `tf-init-manifest` snippets.
-  - Resource blocks in `main.yml` now directly and cleanly offer `directory:`, `filename:`, `identity:`, `match:`, `set:`, and `fields:`.
-- **Defect Lifecycle Status Harmonization (`src/server/completions.ts`, `src/server/diagnostics.ts`):**
-  - Aligned `@bug` scenario status autocompletion strictly to the 4 essential lifecycle statuses: `open`, `in_progress`, `resolved`, and `closed`.
-  - Purged test execution verdicts (`passed`, `failed`, `pending`) from bug defect IntelliSense completions, eliminating cross-scope leakage between testruns and bugs.
-  - Updated snippets and diagnostics to validate that `* set status = ...` in `@bug` files corresponds to the unified defect lifecycle (`open`, `in_progress`, `resolved`, `closed`).
-
-### Fixed
-
-- **GitLab Provider Manifest Schema & YAML Completions (`schemas/testform.schema.json`, `src/server/yaml-completions.ts`):**
-  - Added camelCase aliases `projectId` and `tokenEnv` alongside `project_id` and `token_env` in `provider.gitlab`, allowing either format via schema `anyOf`.
-  - Marked `host` explicitly as optional (`default: "https://gitlab.com"`) in schema descriptions and YAML completion snippets.
-
----
-
-## [1.0.5] - 2026-11-22
-
-### Added
 - **IntelliSense Autocompletions for Logical Namespace Directive (`@ns` & `@namespace`):**
   - Registered `@ns` and `@namespace` in the general `@` tag completions menu (`src/server/completions.ts`).
   - Added smart namespace auto-detection based on parent directory structure (e.g. suggests `@ns(magento)` when editing inside `testcase/Magento/`).
@@ -55,7 +34,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Contextual autocompletions inside `@depends_on(`: suggests testcase tags of the enclosing Rule file, internal tags, and external scenario addresses.
   - General `@` completion inside `Rule:` for both `@testrun` and `@bug` suggests testcase tags.
   - Starter scaffolding snippets (`tf-testrun`, `tf-bug`) updated to the new architecture.
+### Changed
+- **Complete Elimination of `scaffold:` in Autocompletions & Snippets (`snippets/yaml.json`, `src/server/yaml-completions.ts`):**
+  - Purged `scaffold:` property suggestions from YAML resource manifest completions and `tf-init-manifest` snippets.
+  - Resource blocks in `main.yml` now directly and cleanly offer `directory:`, `filename:`, `identity:`, `match:`, `set:`, and `fields:`.
+- **Defect Lifecycle Status Harmonization (`src/server/completions.ts`, `src/server/diagnostics.ts`):**
+  - Aligned `@bug` scenario status autocompletion strictly to the 4 essential lifecycle statuses: `open`, `in_progress`, `resolved`, and `closed`.
+  - Purged test execution verdicts (`passed`, `failed`, `pending`) from bug defect IntelliSense completions, eliminating cross-scope leakage between testruns and bugs.
+  - Updated snippets and diagnostics to validate that `* set status = ...` in `@bug` files corresponds to the unified defect lifecycle (`open`, `in_progress`, `resolved`, `closed`).
 
+### Fixed
+
+- **GitLab Provider Manifest Schema & YAML Completions (`schemas/testform.schema.json`, `src/server/yaml-completions.ts`):**
+  - Added camelCase aliases `projectId` and `tokenEnv` alongside `project_id` and `token_env` in `provider.gitlab`, allowing either format via schema `anyOf`.
+  - Marked `host` explicitly as optional (`default: "https://gitlab.com"`) in schema descriptions and YAML completion snippets.
 ---
 
 ## [1.0.4] - 2026-11-21
