@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Purged test execution verdicts (`passed`, `failed`, `pending`) from bug defect IntelliSense completions, eliminating cross-scope leakage between testruns and bugs.
   - Updated snippets and diagnostics to validate that `* set status = ...` in `@bug` files corresponds to the unified defect lifecycle (`open`, `in_progress`, `resolved`, `closed`).
 
+### Fixed
+
+- **GitLab Provider Manifest Schema & YAML Completions (`schemas/testform.schema.json`, `src/server/yaml-completions.ts`):**
+  - Added camelCase aliases `projectId` and `tokenEnv` alongside `project_id` and `token_env` in `provider.gitlab`, allowing either format via schema `anyOf`.
+  - Marked `host` explicitly as optional (`default: "https://gitlab.com"`) in schema descriptions and YAML completion snippets.
+
 ---
 
 ## [1.0.5] - 2026-11-22
