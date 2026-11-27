@@ -171,7 +171,7 @@ Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS) and type `Testform`:
 | **Testform: Select Workspace** | `testform.workspace.select` | Switch or create isolated workspace environments. |
 | **Testform: Force Unlock State** | `testform.state.forceUnlock` | Unlocks a stuck state file (`testform force-unlock <ID> -force`). |
 | **Testform: Generate Report** | `testform.report` | Generates exportable quality reports (.md, .docx, .xlsx, .json, .csv). |
-| **Testform: Open Test Cases, Runs & Plans Hub** | `testform.specs.openHub` | Opens the full-screen Specs & Execution Webview Hub. |
+| **Testform: Open Test Cases, Runs & Plans Hub** | `testform.specs.openHub` | Focuses the unified State & Files explorer (`testform.views.state`). |
 | **Testform: Show Providers Tree** | `testform.providers` | Displays configured provider plugins and version constraints. |
 | **Testform: List Declared Modules** | `testform.modules.list` | Lists declared and downloaded feature modules. |
 | **Testform: Update Modules** | `testform.modules.update` | Re-initializes and updates remote Git modules. |
@@ -207,9 +207,9 @@ Customize extension behavior in your `settings.json`:
   "testform.testController.scenarioPlayTarget": "testrun",
 
   // Target insertion format for scenario targets inside TestRun rules
-  // "short" inserts '@tc-01'
-  // "classic" inserts 'Magento/cart.case.feature.@tc-01'
-  "testform.testrun.targetFormat": "short",
+  // "tag" inserts '@tc-01'
+  // "canonical" inserts 'Magento/cart.case.feature.@tc-01'
+  "testform.testrun.targetFormat": "tag",
 
   // Trace communication between VS Code and the Testform Language Server
   "testform.trace.server": "off" // "off" | "messages" | "verbose"

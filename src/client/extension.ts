@@ -24,7 +24,6 @@ import {
   TransportKind
 } from 'vscode-languageclient/node';
 import { runTestformCommand } from './terminal';
-import { SpecsHubPanel } from './views/specs-hub-panel';
 import { PlanDiffPanel } from './views/plan-diff-panel';
 import { StateTimeMachineProvider, StateRevisionContentProvider, TimeMachineCommitItem } from './views/time-machine-view';
 import { StateTreeProvider } from './views/state-view';
@@ -605,10 +604,11 @@ export function activate(context: vscode.ExtensionContext) {
       modulesProvider.refresh();
     }),
     vscode.commands.registerCommand('testform.specs.openHub', (modeArg?: string) => {
-      const activeMode = (typeof modeArg === 'string' && (modeArg === 'state' || modeArg === 'files'))
-        ? modeArg
-        : stateProvider.getMode();
-      SpecsHubPanel.createOrShow(context.extensionUri, activeMode);
+      if (typeof modeArg === 'string' && (modeArg === 'state' || modeArg === 'files')) {
+        stateProvider.setMode(modeArg);
+        updateExplorerContext();
+      }
+      void vscode.commands.executeCommand('testform.views.state.focus');
     }),
     vscode.commands.registerCommand('testform.explorer.switchToFiles', () => {
       stateProvider.setMode('files');

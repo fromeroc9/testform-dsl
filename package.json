@@ -753,11 +753,8 @@
             "basename",
             "namespace",
             "tag-bare",
-            "file-tag",
             "slug-tag",
-            "name",
-            "short",
-            "classic"
+            "name"
           ],
           "enumDescriptions": [
             "Identity tag with at-sign (@tc-01)",
@@ -765,11 +762,8 @@
             "Basename resolution without folder paths (bill_pay.case.feature.@tc-01)",
             "Dot-notation namespace address (pix.bill_pay.case.feature.@tc-01)",
             "Bare identity tag without at-sign (tc-01)",
-            "Specification base filename + tag (bill_pay.case.feature.@tc-01)",
             "Filename slug without extension + tag (bill_pay.@tc-01)",
-            "Scenario name or title (e.g. Valid payment flow)",
-            "Short tag alias (@tc-01)",
-            "Classic canonical address alias"
+            "Scenario name or title (e.g. Valid payment flow)"
           ],
           "default": "tag",
           "description": "Insertion format for target scenarios inside the rules or direct scenarios of a TestRun."
@@ -875,6 +869,7 @@
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "package": "vsce package",
     "update:ide": "powershell -ExecutionPolicy Bypass -File ./update-antigravity.ps1"
   },
@@ -884,6 +879,7 @@
     "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.7.3",
+    "vitest": "^3.2.7",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12",
