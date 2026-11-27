@@ -130,14 +130,6 @@ Located in the dedicated **Testform Activity Bar** tab:
    - One-click triggers for all core Testform reports (`testcase-summary`, `testrun-summary`, `testrun-detailed`, `testplan-summary`, `defects`, `traceability`, `coverage`, `two-dimensional`, `test-case-activity`).
    - Instant export picker for **Markdown**, **Word (.docx)**, **Excel (.xlsx)**, **JSON**, or **CSV**.
 
-
-
-
-
-
-
-
-
 ### 7. 📑 Specs & Execution Hub (Webview Dashboard)
 - Open a full-screen, interactive dashboard via `Testform: Open Test Cases, Runs & Plans Hub`.
 - Search, filter by tags, and visualize all specifications across your repository.

@@ -19,7 +19,7 @@
         },
         "required_providers": {
           "type": "object",
-          "description": "Required provider dependencies and version constraints (Terraform parity)",
+          "description": "Required provider dependencies and version constraints",
           "additionalProperties": {
             "oneOf": [
               {

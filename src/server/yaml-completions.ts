@@ -382,7 +382,7 @@ export function provideYamlCompletions(
       {
         label: 'required_providers:',
         kind: CompletionItemKind.Property,
-        detail: 'Declare required providers and versions (Terraform parity)',
+        detail: 'Declare required providers and versions',
         insertTextFormat: InsertTextFormat.Snippet,
         insertText: 'required_providers:\n  '
       },
@@ -395,7 +395,7 @@ export function provideYamlCompletions(
       {
         label: 'locals:',
         kind: CompletionItemKind.Property,
-        detail: 'Computed local expressions block (Terraform-style)',
+        detail: 'Computed local expressions block',
         insertText: 'locals:\n  '
       },
       {
@@ -634,7 +634,7 @@ export function provideYamlCompletions(
         {
           label: 'required_providers:',
           kind: CompletionItemKind.Property,
-          detail: 'Declare required providers and versions (Terraform parity)',
+          detail: 'Declare required providers and versions',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: 'required_providers:\n  '
         }
@@ -1029,7 +1029,7 @@ export function provideYamlCompletions(
         {
           label: 'module_name:',
           kind: CompletionItemKind.Property,
-          detail: 'Reusable module (native Terraform parity: direct plain variables)',
+          detail: 'Reusable module',
           insertTextFormat: InsertTextFormat.Snippet,
           insertText: '${1:auth_module}:\n  source: "${2:auth/login.case.feature}"\n  ${3:param}: "${4:value}"\n  output:\n    ${5:output_name}:\n      value: "${6:value}"'
         }

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Unit Test Suite & CI Workflow (`vitest.config.ts`, `test/mocks/vscode.ts`, `test/extension-fixes.test.ts`, `.github/workflows/ci.yml`):**
+  - Added Vitest unit tests covering extension CLI execution, QA fast-pass parsing, workspace discovery, and report slug alignment, backed by GitHub Actions CI (`typecheck`, `test`, `build`).
+
+### Changed
+
+- **Unified Native Explorer Instead of Duplicate Webview (`src/client/extension.ts`, `package.json`):**
+  - Removed the redundant 1,481-line `SpecsHubPanel` webview (`src/client/views/specs-hub-panel.ts`); `testform.specs.openHub` now switches explorer mode if provided and focuses the native `testform.views.state` view.
+  - Trimmed duplicate aliases (`file-tag`, `short`, `classic`) from `testform.testrun.targetFormat` configuration options in `package.json` while keeping LSP fallback compatibility.
+
+### Fixed
+
+- **Safe Subprocess CLI Execution (`src/client/terminal.ts`, `src/client/views/plan-diff-panel.ts`):**
+  - Replaced interpolated shell `exec(...)` commands with `execFile`-based `execTestformCli(args, ...)` using `ELECTRON_RUN_AS_NODE=1` and proper executable quoting.
+- **Accurate Test Execution Verdicts (`src/client/testing/test-controller.ts`):**
+  - Scenario and suite runs now await real CLI execution exit codes and output before marking tests as passed or failed in the VS Code Testing view.
+- **QA Fast-Pass, Canonical Report Slug & Workspace Discovery (`src/client/qa-fast-pass.ts`, `src/client/views/reports-view.ts`, `src/client/extension.ts`, `src/client/workspace-manager.ts`):**
+  - Fixed status directive matching to `/^\s*\*?\s*(?:set|mark)\s+status\s*=/i`, aligned canonical `bidimensional` report slug, and updated state directory discovery to `root/testform.state.d`.
+
+---
+
 ## [1.0.5] - 2026-11-26
 
 ### Added

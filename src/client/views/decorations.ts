@@ -94,7 +94,7 @@ export class TestformFileDecorationProvider implements vscode.FileDecorationProv
         };
       }
 
-      // Terraform-style Block Inspection: inspect content for Testform reserved blocks
+      // tf-style Block Inspection: inspect content for Testform reserved blocks
       try {
         const content = fs.readFileSync(uri.fsPath, 'utf8');
         const hasTestformBlock = /^\s*(version|provider|backend|variable|locals|resource|data|module|output|policy)\s*:/m.test(content);

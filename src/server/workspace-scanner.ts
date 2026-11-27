@@ -102,7 +102,7 @@ export class WorkspaceScanner {
     // 1. Root main.yml / testform.yml (Base Level 0)
     const baseFile = this.scanBaseConfig();
 
-    // 2. Terraform-style Block Scanner: Scans all workspace YAMLs reading blocks regardless of filename
+    // 2. tf-style Block Scanner: Scans all workspace YAMLs reading blocks regardless of filename
     this.scanManifestFiles(baseFile);
 
     // 3. Level 3: Auto-loaded *.vars.yml / *.vars.yaml files (sorted alphabetically)
@@ -251,7 +251,7 @@ export class WorkspaceScanner {
   }
 
   /**
-   * Scans all YAML files in the workspace (Terraform style).
+   * Scans all YAML files in the workspace (tf style).
    * Reads and merges blocks (variable, locals, resource, data, module, output, policy)
    * regardless of arbitrary file naming.
    */
@@ -267,7 +267,7 @@ export class WorkspaceScanner {
   }
 
   private scanManifestFiles(baseFile: string | null): void {
-    const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', '.terraform', 'dist', 'coverage', '.system_generated']);
+    const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', 'dist', 'coverage', '.system_generated']);
 
     const walk = (currentDir: string) => {
       try {
@@ -650,7 +650,7 @@ export class WorkspaceScanner {
   }
 
   private scanFeatureFiles(): void {
-    const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', '.terraform', 'dist', 'coverage', '.system_generated']);
+    const IGNORED_DIRS = new Set(['node_modules', '.git', '.testform', 'dist', 'coverage', '.system_generated']);
 
     const walk = (currentDir: string) => {
       try {
