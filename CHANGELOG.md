@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.0.6] - 2026-11-27
 
 ### Added
 
@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.5] - 2026-11-26
 
 ### Added
+
 - **Custom Status Support from `main.yml` (`set.status`) (`src/server/workspace-scanner.ts`, `src/server/completions.ts`, `src/server/diagnostics.ts`):**
   - Autocompletion for `* set status = ...` now dynamically detects user-defined statuses declared in `main.yml` under `set.status` or `status` (for both `testrun` and `bug` scopes).
   - Diagnostics engine honors custom statuses configured by the user, suppressing unknown status warnings when custom terms like `exitoso`, `aprobado`, `en_triage`, or `nuevo` are used.
@@ -58,7 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Contextual autocompletions inside `@depends_on(`: suggests testcase tags of the enclosing Rule file, internal tags, and external scenario addresses.
   - General `@` completion inside `Rule:` for both `@testrun` and `@bug` suggests testcase tags.
   - Starter scaffolding snippets (`tf-testrun`, `tf-bug`) updated to the new architecture.
+
 ### Changed
+
 - **Complete Elimination of `scaffold:` in Autocompletions & Snippets (`snippets/yaml.json`, `src/server/yaml-completions.ts`):**
   - Purged `scaffold:` property suggestions from YAML resource manifest completions and `tf-init-manifest` snippets.
   - Resource blocks in `main.yml` now directly and cleanly offer `directory:`, `filename:`, `identity:`, `match:`, `set:`, and `fields:`.
