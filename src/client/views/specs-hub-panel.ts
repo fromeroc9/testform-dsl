@@ -988,7 +988,7 @@ export class SpecsHubPanel {
           <option value="defects">Defect Backlog (defects)</option>
           <option value="traceability">Traceability Matrix (traceability)</option>
           <option value="coverage">Coverage Matrix (coverage)</option>
-          <option value="two-dimensional">Two-Dimensional Matrix (two-dimensional)</option>
+          <option value="bidimensional">Two-Dimensional Matrix (bidimensional)</option>
           <option value="test-case-activity">Automation & Activity (test-case-activity)</option>
         </select>
       </div>

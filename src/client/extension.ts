@@ -720,7 +720,7 @@ export function activate(context: vscode.ExtensionContext) {
         { label: 'Defect Backlog', description: 'defects' },
         { label: 'Traceability Matrix', description: 'traceability' },
         { label: 'Coverage Matrix', description: 'coverage' },
-        { label: 'Two-Dimensional Matrix', description: 'two-dimensional' },
+        { label: 'Two-Dimensional Matrix', description: 'bidimensional' },
         { label: 'Automation & Activity', description: 'test-case-activity' }
       ];
 

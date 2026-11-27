@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { exec } from 'child_process';
-import { runTestformCommand } from '../terminal';
+import { execTestformCli, runTestformCommand } from '../terminal';
 
 export interface PlanScenarioStep {
   keyword: string;
@@ -179,21 +178,23 @@ export class PlanDiffPanel {
     this._error = null;
     this.updateWebview();
 
-    const config = vscode.workspace.getConfiguration('testform');
-    const executable = config.get<string>('executablePath') || 'testform';
-    const cmd = `"${executable}" plan${this.getTargetFlag()} -json`;
+    const args = ['plan'];
+    if (this._target) {
+      args.push(`-target=${this._target}`);
+    }
+    args.push('-json');
 
-    exec(cmd, { cwd: this._projectRoot, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+    void execTestformCli(args, { cwd: this._projectRoot }).then(res => {
       if (reqId !== this._requestId) return;
       this._loading = false;
-      const combinedOutput = (stdout || '') + (stderr || '');
+      const combinedOutput = (res.stdout || '') + (res.stderr || '');
 
-      const jsonStart = stdout.indexOf('{');
-      const jsonEnd = stdout.lastIndexOf('}');
+      const jsonStart = res.stdout.indexOf('{');
+      const jsonEnd = res.stdout.lastIndexOf('}');
 
       if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
         try {
-          const raw = stdout.substring(jsonStart, jsonEnd + 1);
+          const raw = res.stdout.substring(jsonStart, jsonEnd + 1);
           const parsed = JSON.parse(raw);
           if (parsed && Array.isArray(parsed.changes)) {
             this._planResult = parsed;
@@ -206,8 +207,8 @@ export class PlanDiffPanel {
         }
       }
 
-      if (err) {
-        this._error = combinedOutput.trim() || err.message;
+      if (res.error || res.exitCode !== 0) {
+        this._error = combinedOutput.trim() || res.error?.message || `Exit code ${res.exitCode}`;
         this._planResult = null;
       } else {
         this._planResult = { changes: [] };

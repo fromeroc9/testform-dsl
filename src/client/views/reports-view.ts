@@ -55,7 +55,7 @@ export const CORE_REPORTS: ReportMeta[] = [
     icon: 'pie-chart'
   },
   {
-    slug: 'two-dimensional',
+    slug: 'bidimensional',
     label: 'Two-Dimensional Matrix',
     description: 'Tag distribution across execution statuses',
     icon: 'graph'

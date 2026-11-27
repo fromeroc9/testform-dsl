@@ -65,22 +65,24 @@ export class TestformWorkspaceManager {
     const rootPath = folders[0].uri.fsPath;
     const testformDir = path.join(rootPath, '.testform');
 
-    // Discover existing workspaces
+    // Discover existing workspaces (canonical root/testform.state.d + legacy .testform fallbacks)
     const existingWorkspaces = new Set<string>(['default']);
-    if (fs.existsSync(testformDir)) {
-      const possibleDirs = ['testform.tfstate.d', 'workspaces'];
-      for (const pd of possibleDirs) {
-        const fullDir = path.join(testformDir, pd);
-        if (fs.existsSync(fullDir)) {
-          try {
-            const entries = fs.readdirSync(fullDir, { withFileTypes: true });
-            for (const e of entries) {
-              if (e.isDirectory() && !e.name.startsWith('.')) {
-                existingWorkspaces.add(e.name);
-              }
+    const candidateDirs = [
+      path.join(rootPath, 'testform.state.d'),
+      path.join(testformDir, 'testform.state.d'),
+      path.join(testformDir, 'testform.tfstate.d'),
+      path.join(testformDir, 'workspaces')
+    ];
+    for (const fullDir of candidateDirs) {
+      if (fs.existsSync(fullDir)) {
+        try {
+          const entries = fs.readdirSync(fullDir, { withFileTypes: true });
+          for (const e of entries) {
+            if (e.isDirectory() && !e.name.startsWith('.')) {
+              existingWorkspaces.add(e.name);
             }
-          } catch {}
-        }
+          }
+        } catch {}
       }
     }
 

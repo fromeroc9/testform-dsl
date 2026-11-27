@@ -77,7 +77,7 @@ export async function markCurrentScenarioStatus(status: string): Promise<void> {
     if (/^\s*(?:Scenario|Scenario Outline|Escenario|Esquema del escenario|Rule|Regla):/i.test(lineText)) {
       break;
     }
-    if (/^\s*\*?\s*mark\s+status\s*=/i.test(lineText)) {
+    if (/^\s*\*?\s*(?:set|mark)\s+status\s*=/i.test(lineText)) {
       markStatusLine = i;
       break;
     }

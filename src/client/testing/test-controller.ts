@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { runTestformCommand } from '../terminal';
+import { execTestformCli } from '../terminal';
 import {
   findFirstIdentityMatchInLine,
   IdentityConfigMap,
@@ -694,12 +694,36 @@ export class TestformTestController implements vscode.Disposable {
           // 1. Update the feature file with the chosen status
           await this.updateScenarioMarkInDocument(uri, scenLine, chosenStatus);
 
-          // 2. Dispatch testform apply targeting the testrun
+          // 2. Dispatch testform apply targeting the testrun and await real exit code
           run.appendOutput(`[Testform] Running scenario target: ${effectiveTarget} (status: ${chosenStatus})\r\n`);
           run.started(item);
-          runTestformCommand(`apply -auto-approve -target="${effectiveTarget}"`);
+          const execCwd = rootPath || path.dirname(uri.fsPath);
+          const cliResult = await execTestformCli(
+            ['apply', '-auto-approve', `-target=${effectiveTarget}`],
+            {
+              cwd: execCwd,
+              onOutput: chunk => run.appendOutput(chunk.replace(/\r?\n/g, '\r\n')),
+              cancellationToken: token
+            }
+          );
 
-          // 3. Immediately reflect in memory and UI
+          if (token.isCancellationRequested) {
+            run.skipped(item);
+            continue;
+          }
+
+          if (cliResult.exitCode !== 0) {
+            const detail = (
+              cliResult.stderr ||
+              cliResult.stdout ||
+              cliResult.error?.message ||
+              `Exit code ${cliResult.exitCode}`
+            ).trim();
+            run.failed(item, new vscode.TestMessage(`Testform apply failed (exit ${cliResult.exitCode}): ${detail}`));
+            continue;
+          }
+
+          // 3. Reflect confirmed status in memory and UI
           this.scenarioStatusMap.set(item.id, chosenStatus);
           const runIdentities = loadWorkspaceIdentitiesSync(rootPath);
           const tagPrefix = (findFirstIdentityMatchInLine(item.id, runIdentities)?.rawTag || '').toUpperCase();
@@ -754,9 +778,33 @@ export class TestformTestController implements vscode.Disposable {
           run.appendOutput(`[Testform] Running testrun suite: ${relPathNative}\r\n`);
           run.started(item);
 
-          runTestformCommand(`apply -auto-approve -target="${relPathNative}"`);
+          const suiteExecCwd = rootPath || path.dirname(uri.fsPath);
+          const suiteCliResult = await execTestformCli(
+            ['apply', '-auto-approve', `-target=${relPathNative}`],
+            {
+              cwd: suiteExecCwd,
+              onOutput: chunk => run.appendOutput(chunk.replace(/\r?\n/g, '\r\n')),
+              cancellationToken: token
+            }
+          );
+
+          if (token.isCancellationRequested) {
+            run.skipped(item);
+            continue;
+          }
 
           await this.updateFileTests(uri);
+
+          if (suiteCliResult.exitCode !== 0) {
+            const detail = (
+              suiteCliResult.stderr ||
+              suiteCliResult.stdout ||
+              suiteCliResult.error?.message ||
+              `Exit code ${suiteCliResult.exitCode}`
+            ).trim();
+            run.failed(item, new vscode.TestMessage(`Testform apply failed (exit ${suiteCliResult.exitCode}): ${detail}`));
+            continue;
+          }
 
           let hasFailures = false;
           const reportChildren = (parent: vscode.TestItem) => {
